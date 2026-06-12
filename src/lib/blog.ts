@@ -11,6 +11,15 @@ export interface BlogCategory {
   accent: string;
 }
 
+export type CategoryIcon = 'sun' | 'shield' | 'book' | 'hash';
+
+export const CATEGORY_ICONS: Record<BlogCategoryId, CategoryIcon> = {
+  life: 'sun',
+  src: 'shield',
+  study: 'book',
+  notes: 'hash'
+};
+
 export interface BlogPost {
   id: string;
   slug: string;
@@ -259,4 +268,8 @@ export function filterPosts(posts: BlogPost[], filter: PostFilter = {}): BlogPos
 
 export function getCategory(categoryId: BlogCategoryId): BlogCategory {
   return BLOG_CATEGORIES.find((category) => category.id === categoryId) ?? BLOG_CATEGORIES[0];
+}
+
+export function getCategoryIcon(categoryId: BlogCategoryId): CategoryIcon {
+  return CATEGORY_ICONS[categoryId] ?? CATEGORY_ICONS.life;
 }

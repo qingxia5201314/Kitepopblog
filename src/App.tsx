@@ -7,7 +7,8 @@ import {
   PostStatus,
   calculateReadingMinutes,
   filterPosts,
-  getCategory
+  getCategory,
+  getCategoryIcon
 } from './lib/blog';
 import { createBlogRepository } from './lib/blogStore';
 import { createDraftAutosaveRepository } from './lib/draftAutosave';
@@ -15,6 +16,8 @@ import {
   UploadedImage,
   buildImageMarkdown,
   createImageHostSettingsRepository,
+  normalizeImageUrl,
+  normalizeUploadUrl,
   uploadToImageHost
 } from './lib/imageHost';
 import { MarkdownBlock, parseMarkdown } from './lib/markdown';
@@ -22,6 +25,13 @@ import { MarkdownBlock, parseMarkdown } from './lib/markdown';
 type ViewMode = 'home' | 'admin';
 type EditorTab = 'edit' | 'preview';
 type AdminStatusFilter = 'all' | PostStatus;
+type UiIcon = ReturnType<typeof getCategoryIcon> | 'calendar' | 'clock' | 'tag' | 'spark' | 'grid' | 'draft' | 'edit';
+
+const safeImageAttributes = {
+  decoding: 'async',
+  loading: 'lazy',
+  referrerPolicy: 'no-referrer'
+} as const;
 
 const repository = createBlogRepository();
 const draftRepository = createDraftAutosaveRepository();
@@ -110,9 +120,12 @@ function renderMarkdownBlock(block: MarkdownBlock, index: number) {
     );
   }
 
+  const imageUrl = normalizeImageUrl(block.url);
+  if (!imageUrl) return null;
+
   return (
     <figure className="article-image" key={index}>
-      <img alt={block.alt || '文章图片'} src={block.url} />
+      <img alt={block.alt || '文章图片'} src={imageUrl} {...safeImageAttributes} />
       {block.alt ? <figcaption>{block.alt}</figcaption> : null}
     </figure>
   );
@@ -120,6 +133,14 @@ function renderMarkdownBlock(block: MarkdownBlock, index: number) {
 
 function renderMarkdown(content: string) {
   return parseMarkdown(content).map(renderMarkdownBlock);
+}
+
+function getSafeImageUrl(value?: string): string | undefined {
+  return value ? normalizeImageUrl(value) : undefined;
+}
+
+function Icon({ className = '', name }: { className?: string; name: UiIcon }) {
+  return <span aria-hidden="true" className={`ui-icon icon-${name} ${className}`} />;
 }
 
 function App() {
@@ -147,9 +168,11 @@ function App() {
     [activeCategory, posts, query]
   );
   const selectedPost = posts.find((post) => post.id === selectedPostId) ?? visiblePosts[0];
+  const selectedCoverImage = getSafeImageUrl(selectedPost?.coverImage);
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
+  const formCoverImage = getSafeImageUrl(form.coverImage);
 
   useEffect(() => {
     if (!adminUnlocked || editingId) return;
@@ -211,10 +234,18 @@ function App() {
       return;
     }
 
+    const coverImageInput = form.coverImage?.trim() ?? '';
+    const coverImage = coverImageInput ? normalizeImageUrl(coverImageInput) : '';
+
+    if (coverImageInput && !coverImage) {
+      setFormError('请输入 HTTPS 封面图片 URL（本地调试允许 localhost HTTP）');
+      return;
+    }
+
     const payload = {
       ...form,
       cover: form.category,
-      coverImage: form.coverImage?.trim()
+      coverImage
     };
 
     const saved = editingId ? repository.update(editingId, payload) : repository.create(payload);
@@ -260,16 +291,28 @@ function App() {
   };
 
   const saveImageSettings = () => {
+    if (!normalizeUploadUrl(imageSettings.uploadUrl)) {
+      setFormError('请输入 HTTPS 图床上传接口（本地调试允许 localhost HTTP）');
+      return;
+    }
+
     imageSettingsRepository.save(imageSettings);
     setNotice('图床设置已保存到本地浏览器');
   };
 
   const insertImage = (image: UploadedImage, asCover = false) => {
-    const markdown = buildImageMarkdown(imageAlt, image.url);
+    const imageUrl = normalizeImageUrl(image.url);
+
+    if (!imageUrl) {
+      setFormError('请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
+      return;
+    }
+
+    const markdown = buildImageMarkdown(imageAlt, imageUrl);
     const nextContent = form.content.trim() ? `${form.content}\n\n${markdown}` : markdown;
     updateForm({
       content: nextContent,
-      coverImage: asCover ? image.url : form.coverImage
+      coverImage: asCover ? imageUrl : form.coverImage
     });
     setNotice(asCover ? '图片已插入正文并设为封面' : '图片已插入正文');
   };
@@ -282,10 +325,10 @@ function App() {
   };
 
   const insertManualImage = () => {
-    const url = manualImageUrl.trim();
+    const url = normalizeImageUrl(manualImageUrl);
 
-    if (!/^https?:\/\//.test(url)) {
-      setFormError('请输入以 http 或 https 开头的图片 URL');
+    if (!url) {
+      setFormError('请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
       return;
     }
 
@@ -327,6 +370,11 @@ function App() {
             <strong>Kitepop</strong>
             <small>life / src / study / notes</small>
           </span>
+          <span className="brand-status" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
         </button>
         <nav>
           <button className={mode === 'home' ? 'active' : ''} onClick={() => setMode('home')} type="button">
@@ -353,21 +401,22 @@ function App() {
               </div>
             </div>
             <div className="hero-visual" aria-label="博客内容视觉封面">
-              <div className="visual-card visual-life">Life</div>
-              <div className="visual-card visual-src">SRC</div>
-              <div className="visual-card visual-study">Study</div>
-              <div className="visual-card visual-notes">Notes</div>
+              <div className="visual-card visual-life"><Icon name="sun" />Life</div>
+              <div className="visual-card visual-src"><Icon name="shield" />SRC</div>
+              <div className="visual-card visual-study"><Icon name="book" />Study</div>
+              <div className="visual-card visual-notes"><Icon name="hash" />Notes</div>
             </div>
           </section>
 
           <section className="metrics-strip">
-            <span><strong>{publishedCount}</strong> 已发布</span>
-            <span><strong>{draftCount}</strong> 草稿</span>
-            <span><strong>{BLOG_CATEGORIES.length}</strong> 内容模块</span>
+            <span><Icon name="spark" /><strong>{publishedCount}</strong> 已发布</span>
+            <span><Icon name="draft" /><strong>{draftCount}</strong> 草稿</span>
+            <span><Icon name="grid" /><strong>{BLOG_CATEGORIES.length}</strong> 内容模块</span>
           </section>
 
           <section className="category-grid" aria-label="内容分类">
             <button className={activeCategory === 'all' ? 'category active' : 'category'} onClick={() => setActiveCategory('all')} type="button">
+              <Icon name="grid" className="category-icon" />
               <strong>全部内容</strong>
               <span>查看所有已发布文章</span>
             </button>
@@ -379,6 +428,7 @@ function App() {
                 style={{ '--accent': category.accent } as React.CSSProperties}
                 type="button"
               >
+                <Icon name={getCategoryIcon(category.id)} className="category-icon" />
                 <strong>{category.name}</strong>
                 <span>{category.description}</span>
               </button>
@@ -399,6 +449,7 @@ function App() {
               <div className="post-list">
                 {visiblePosts.map((post) => {
                   const category = getCategory(post.category);
+                  const coverImage = getSafeImageUrl(post.coverImage);
                   return (
                     <button
                       className={selectedPost?.id === post.id ? 'post-item active' : 'post-item'}
@@ -406,14 +457,23 @@ function App() {
                       onClick={() => setSelectedPostId(post.id)}
                       type="button"
                     >
-                      {post.coverImage ? (
-                        <img alt="" className="cover-thumb" src={post.coverImage} />
+                      {coverImage ? (
+                        <img alt="" className="cover-thumb" src={coverImage} {...safeImageAttributes} />
                       ) : (
-                        <span className={`cover-dot cover-${post.cover}`} />
+                        <span className={`cover-dot cover-${post.cover}`}>
+                          <Icon name={getCategoryIcon(post.category)} />
+                        </span>
                       )}
                       <span>
                         <strong>{post.title}</strong>
-                        <small>{category.name} · {post.updatedAt} · {calculateReadingMinutes(post.content)} 分钟</small>
+                        <small>
+                          <Icon name={getCategoryIcon(post.category)} />
+                          {category.name}
+                          <Icon name="calendar" />
+                          {post.updatedAt}
+                          <Icon name="clock" />
+                          {calculateReadingMinutes(post.content)} 分钟
+                        </small>
                       </span>
                     </button>
                   );
@@ -424,18 +484,25 @@ function App() {
             <article className="article-view">
               {selectedPost ? (
                 <>
-                  {selectedPost.coverImage ? (
-                    <img alt={selectedPost.title} className="article-cover-image" src={selectedPost.coverImage} />
+                  {selectedCoverImage ? (
+                    <img alt={selectedPost.title} className="article-cover-image" src={selectedCoverImage} {...safeImageAttributes} />
                   ) : (
                     <div className={`article-cover cover-${selectedPost.cover}`}>
-                      <span>{getCategory(selectedPost.category).name}</span>
+                      <span>
+                        <Icon name={getCategoryIcon(selectedPost.category)} />
+                        {getCategory(selectedPost.category).name}
+                      </span>
                     </div>
                   )}
-                  <p className="eyebrow">{selectedPost.updatedAt} · {calculateReadingMinutes(selectedPost.content)} 分钟阅读</p>
+                  <p className="article-meta">
+                    <span><Icon name="calendar" />{selectedPost.updatedAt}</span>
+                    <span><Icon name="clock" />{calculateReadingMinutes(selectedPost.content)} 分钟阅读</span>
+                    <span><Icon name={getCategoryIcon(selectedPost.category)} />{getCategory(selectedPost.category).name}</span>
+                  </p>
                   <h2>{selectedPost.title}</h2>
                   <p className="summary">{selectedPost.summary}</p>
                   <div className="tag-row">
-                    {selectedPost.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                    {selectedPost.tags.map((tag) => <span key={tag}><Icon name="tag" />{tag}</span>)}
                   </div>
                   <div className="article-body">{renderMarkdown(selectedPost.content)}</div>
                 </>
@@ -575,7 +642,7 @@ function App() {
                     <div className="upload-list">
                       {uploadedImages.map((image) => (
                         <div className="upload-item" key={image.url}>
-                          <img alt={image.filename} src={image.url} />
+                          <img alt={image.filename} src={image.url} {...safeImageAttributes} />
                           <span>{image.filename}</span>
                           <button onClick={() => insertImage(image)} type="button">插入</button>
                           <button onClick={() => insertImage(image, true)} type="button">设封面</button>
@@ -653,14 +720,14 @@ function App() {
                 {editorTab === 'edit' ? (
                   <section className="markdown-editor">
                     <div className="markdown-toolbar" aria-label="Markdown 工具栏">
-                      <button onClick={() => insertMarkdownSnippet('# ')} type="button">H1</button>
-                      <button onClick={() => insertMarkdownSnippet('## ')} type="button">H2</button>
-                      <button onClick={() => insertMarkdownSnippet('**', '**')} type="button">B</button>
-                      <button onClick={() => insertMarkdownSnippet('`', '`', 'code')} type="button">Code</button>
-                      <button onClick={() => insertMarkdownSnippet('> ')} type="button">Quote</button>
-                      <button onClick={() => insertMarkdownSnippet('- ')} type="button">List</button>
-                      <button onClick={() => insertMarkdownSnippet('[', '](https://example.com)', '链接文字')} type="button">Link</button>
-                      <button onClick={() => insertMarkdownSnippet('```bash\n', '\n```', 'npm run build')} type="button">Block</button>
+                      <button aria-label="一级标题" onClick={() => insertMarkdownSnippet('# ')} title="一级标题" type="button">H1</button>
+                      <button aria-label="二级标题" onClick={() => insertMarkdownSnippet('## ')} title="二级标题" type="button">H2</button>
+                      <button aria-label="粗体" onClick={() => insertMarkdownSnippet('**', '**')} title="粗体" type="button">B</button>
+                      <button aria-label="行内代码" onClick={() => insertMarkdownSnippet('`', '`', 'code')} title="行内代码" type="button">&lt;/&gt;</button>
+                      <button aria-label="引用" onClick={() => insertMarkdownSnippet('> ')} title="引用" type="button">“”</button>
+                      <button aria-label="列表" onClick={() => insertMarkdownSnippet('- ')} title="列表" type="button">•</button>
+                      <button aria-label="链接" onClick={() => insertMarkdownSnippet('[', '](https://example.com)', '链接文字')} title="链接" type="button">↗</button>
+                      <button aria-label="代码块" onClick={() => insertMarkdownSnippet('```bash\n', '\n```', 'npm run build')} title="代码块" type="button">▣</button>
                     </div>
                     <label>
                       正文
@@ -675,7 +742,9 @@ function App() {
                   </section>
                 ) : (
                   <div className="editor-preview">
-                    {form.coverImage ? <img alt={form.title || '封面图'} className="article-cover-image" src={form.coverImage} /> : null}
+                    {formCoverImage ? (
+                      <img alt={form.title || '封面图'} className="article-cover-image" src={formCoverImage} {...safeImageAttributes} />
+                    ) : null}
                     <h2>{form.title || '未命名文章'}</h2>
                     <p className="summary">{form.summary || '这里会显示文章摘要。'}</p>
                     <div className="article-body">{renderMarkdown(form.content || '正文预览会显示在这里。')}</div>

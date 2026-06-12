@@ -58,6 +58,7 @@ button {
   border: 0;
   gap: 10px;
   color: inherit;
+  position: relative;
   text-align: left;
 }
 
@@ -79,6 +80,81 @@ button {
   color: #68706a;
   display: block;
   margin-top: 2px;
+}
+
+.brand-status {
+  display: grid;
+  gap: 3px;
+  margin-left: 2px;
+}
+
+.brand-status span {
+  background: #2f7d67;
+  border-radius: 999px;
+  height: 5px;
+  width: 5px;
+}
+
+.brand-status span:nth-child(2) {
+  background: #b6423c;
+}
+
+.brand-status span:nth-child(3) {
+  background: #4266b2;
+}
+
+.ui-icon {
+  align-items: center;
+  border-radius: 5px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.85em;
+  font-weight: 900;
+  height: 1.35em;
+  justify-content: center;
+  line-height: 1;
+  width: 1.35em;
+}
+
+.icon-sun::before {
+  content: "☼";
+}
+
+.icon-shield::before {
+  content: "◆";
+}
+
+.icon-book::before {
+  content: "▤";
+}
+
+.icon-hash::before {
+  content: "#";
+}
+
+.icon-calendar::before {
+  content: "□";
+}
+
+.icon-clock::before {
+  content: "◷";
+}
+
+.icon-tag::before {
+  content: "#";
+}
+
+.icon-spark::before {
+  content: "✦";
+}
+
+.icon-grid::before {
+  content: "▦";
+}
+
+.icon-draft::before,
+.icon-edit::before {
+  content: "✎";
 }
 
 .topbar nav {
@@ -193,6 +269,17 @@ p {
   overflow: hidden;
 }
 
+.visual-card .ui-icon {
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 1rem;
+  height: 34px;
+  position: absolute;
+  right: 16px;
+  top: 16px;
+  width: 34px;
+  z-index: 1;
+}
+
 .visual-card::before {
   background: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.24) 0 2px, transparent 2px 12px);
   content: "";
@@ -235,6 +322,20 @@ p {
   padding: 16px;
 }
 
+.metrics-strip span {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.metrics-strip .ui-icon {
+  background: rgba(255, 250, 243, 0.13);
+  color: #d7b879;
+  font-size: 0.9rem;
+  height: 28px;
+  width: 28px;
+}
+
 .metrics-strip strong {
   font-size: 1.4rem;
   margin-right: 6px;
@@ -255,6 +356,15 @@ p {
   min-height: 116px;
   padding: 16px;
   text-align: left;
+}
+
+.category-icon {
+  background: color-mix(in srgb, var(--accent, #17201d) 14%, transparent);
+  color: var(--accent, #17201d);
+  font-size: 1rem;
+  height: 34px;
+  margin-bottom: 12px;
+  width: 34px;
 }
 
 .category.active {
@@ -334,6 +444,23 @@ textarea {
   text-align: left;
 }
 
+.post-item small {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.post-item small .ui-icon {
+  color: #8a5a19;
+  font-size: 0.8rem;
+  margin-left: 4px;
+}
+
+.post-item small .ui-icon:first-child {
+  margin-left: 0;
+}
+
 .post-item.active,
 .post-item:hover {
   background: #f4efe5;
@@ -341,8 +468,13 @@ textarea {
 }
 
 .cover-dot {
+  align-items: center;
   border-radius: 7px;
+  color: #fffaf3;
+  display: inline-flex;
+  font-weight: 900;
   height: 34px;
+  justify-content: center;
   width: 34px;
 }
 
@@ -385,6 +517,12 @@ textarea {
   padding: 18px;
 }
 
+.article-cover span {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
 .article-cover-image {
   aspect-ratio: 16 / 7;
   border-radius: 8px;
@@ -405,6 +543,29 @@ textarea {
   line-height: 1.75;
 }
 
+.article-meta {
+  align-items: center;
+  color: #8a5a19;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  font-weight: 800;
+  gap: 10px;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.article-meta span {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+}
+
+.article-meta .ui-icon {
+  background: #eee5d7;
+  color: #8a5a19;
+}
+
 .tag-row {
   flex-wrap: wrap;
   gap: 8px;
@@ -412,11 +573,21 @@ textarea {
 }
 
 .tag-row span {
+  align-items: center;
   background: #eee5d7;
   border-radius: 999px;
   color: #38423d;
+  display: inline-flex;
   font-size: 0.85rem;
+  gap: 5px;
   padding: 6px 10px;
+}
+
+.tag-row .ui-icon {
+  color: #8a5a19;
+  font-size: 0.75rem;
+  height: 1em;
+  width: 1em;
 }
 
 .article-body {
@@ -684,14 +855,23 @@ textarea {
 }
 
 .markdown-toolbar button {
+  align-items: center;
   background: #fffaf3;
   border: 1px solid #cfc3b2;
   border-radius: 6px;
   color: #17201d;
+  display: inline-flex;
   font-weight: 800;
+  justify-content: center;
   min-height: 32px;
   min-width: 42px;
   padding: 5px 9px;
+}
+
+.markdown-toolbar button:hover {
+  background: #17201d;
+  border-color: #17201d;
+  color: #fffaf3;
 }
 
 .file-picker {

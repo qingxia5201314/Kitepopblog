@@ -5,6 +5,7 @@ import {
   calculateReadingMinutes,
   createSlug,
   filterPosts,
+  getCategoryIcon,
   sortPostsByDate
 } from './blog';
 
@@ -62,5 +63,10 @@ describe('blog helpers', () => {
 
     expect(sortPostsByDate(posts)[0].id).toBe('new');
     expect(BLOG_CATEGORIES.map((category) => category.id)).toEqual(['life', 'src', 'study', 'notes']);
+  });
+
+  it('provides stable icons for article categories', () => {
+    expect(BLOG_CATEGORIES.map((category) => getCategoryIcon(category.id))).toEqual(['sun', 'shield', 'book', 'hash']);
+    expect(getCategoryIcon('life')).toBe('sun');
   });
 });
