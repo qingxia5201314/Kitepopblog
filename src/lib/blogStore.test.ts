@@ -35,7 +35,8 @@ describe('blog repository', () => {
       tags: ['后台'],
       content: '正文内容',
       status: 'draft',
-      cover: 'study'
+      cover: 'study',
+      coverImage: 'https://img.example.com/cover.png'
     });
 
     const updated = repository.update(created.id, {
@@ -44,6 +45,7 @@ describe('blog repository', () => {
     });
 
     expect(updated?.slug).toBe('hou-tai-fa-bu-ce-shi-geng-xin');
+    expect(updated?.coverImage).toBe('https://img.example.com/cover.png');
     expect(repository.get(created.id)?.status).toBe('published');
     expect(repository.remove(created.id)).toBe(true);
     expect(repository.get(created.id)).toBeUndefined();

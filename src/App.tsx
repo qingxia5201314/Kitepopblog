@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   BLOG_CATEGORIES,
   BlogCategoryId,
@@ -10,10 +10,21 @@ import {
   getCategory
 } from './lib/blog';
 import { createBlogRepository } from './lib/blogStore';
+import { createDraftAutosaveRepository } from './lib/draftAutosave';
+import {
+  UploadedImage,
+  buildImageMarkdown,
+  createImageHostSettingsRepository,
+  uploadToSmms
+} from './lib/imageHost';
 
 type ViewMode = 'home' | 'admin';
+type EditorTab = 'edit' | 'preview';
+type AdminStatusFilter = 'all' | PostStatus;
 
 const repository = createBlogRepository();
+const draftRepository = createDraftAutosaveRepository();
+const imageSettingsRepository = createImageHostSettingsRepository();
 
 const EMPTY_FORM: BlogPostDraft = {
   title: '',
@@ -22,7 +33,8 @@ const EMPTY_FORM: BlogPostDraft = {
   tags: [],
   content: '',
   status: 'draft',
-  cover: 'life'
+  cover: 'life',
+  coverImage: ''
 };
 
 function splitTags(value: string): string[] {
@@ -38,6 +50,17 @@ function formatTags(tags: string[]): string {
 
 function renderMarkdown(content: string) {
   return content.split('\n').map((line, index) => {
+    const imageMatch = line.match(/^!\[(.*)]\((https?:\/\/.+)\)$/);
+
+    if (imageMatch) {
+      return (
+        <figure className="article-image" key={index}>
+          <img alt={imageMatch[1] || '文章图片'} src={imageMatch[2]} />
+          {imageMatch[1] ? <figcaption>{imageMatch[1]}</figcaption> : null}
+        </figure>
+      );
+    }
+
     if (line.startsWith('## ')) {
       return <h3 key={index}>{line.slice(3)}</h3>;
     }
@@ -75,7 +98,16 @@ function App() {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [password, setPassword] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<BlogPostDraft>(EMPTY_FORM);
+  const [form, setForm] = useState<BlogPostDraft>(() => draftRepository.load() ?? EMPTY_FORM);
+  const [editorTab, setEditorTab] = useState<EditorTab>('edit');
+  const [adminStatusFilter, setAdminStatusFilter] = useState<AdminStatusFilter>('all');
+  const [notice, setNotice] = useState('');
+  const [formError, setFormError] = useState('');
+  const [imageSettings, setImageSettings] = useState(() => imageSettingsRepository.load());
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [imageAlt, setImageAlt] = useState('Kitepop 图片');
+  const [manualImageUrl, setManualImageUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query }),
@@ -84,12 +116,32 @@ function App() {
   const selectedPost = posts.find((post) => post.id === selectedPostId) ?? visiblePosts[0];
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
+  const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
+
+  useEffect(() => {
+    if (!adminUnlocked || editingId) return;
+
+    const hasDraftContent =
+      form.title.trim() || form.summary.trim() || form.content.trim() || form.tags.length > 0 || form.coverImage;
+
+    if (hasDraftContent) {
+      draftRepository.save(form);
+      setNotice('草稿已自动保存到本地浏览器');
+    }
+  }, [adminUnlocked, editingId, form]);
 
   const refresh = () => setPosts(repository.list());
 
+  const updateForm = (patch: Partial<BlogPostDraft>) => {
+    setForm((current) => ({ ...current, ...patch }));
+    setFormError('');
+  };
+
   const startCreate = () => {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm(draftRepository.load() ?? EMPTY_FORM);
+    setEditorTab('edit');
+    setNotice('已进入新建文章模式');
   };
 
   const startEdit = (post: BlogPost) => {
@@ -101,18 +153,35 @@ function App() {
       tags: post.tags,
       content: post.content,
       status: post.status,
-      cover: post.cover
+      cover: post.cover,
+      coverImage: post.coverImage ?? ''
     });
+    setEditorTab('edit');
+    setNotice(`正在编辑：${post.title}`);
   };
 
   const savePost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!form.title.trim() || !form.summary.trim() || !form.content.trim()) return;
+    if (!form.title.trim()) {
+      setFormError('请填写文章标题');
+      return;
+    }
+
+    if (!form.summary.trim()) {
+      setFormError('请填写文章摘要');
+      return;
+    }
+
+    if (!form.content.trim()) {
+      setFormError('请填写文章正文');
+      return;
+    }
 
     const payload = {
       ...form,
-      cover: form.category
+      cover: form.category,
+      coverImage: form.coverImage?.trim()
     };
 
     const saved = editingId ? repository.update(editingId, payload) : repository.create(payload);
@@ -121,21 +190,28 @@ function App() {
     if (saved) {
       setSelectedPostId(saved.id);
       setActiveCategory(saved.category);
+      setNotice(saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
+      draftRepository.clear();
       startEdit(saved);
     }
   };
 
-  const removePost = (id: string) => {
-    repository.remove(id);
+  const removePost = (post: BlogPost) => {
+    const confirmed = window.confirm(`确认删除《${post.title}》吗？这个操作不能撤销。`);
+    if (!confirmed) return;
+
+    repository.remove(post.id);
     refresh();
-    if (selectedPostId === id) setSelectedPostId(null);
-    if (editingId === id) startCreate();
+    setNotice('文章已删除');
+    if (selectedPostId === post.id) setSelectedPostId(null);
+    if (editingId === post.id) startCreate();
   };
 
   const updateStatus = (id: string, status: PostStatus) => {
     const updated = repository.update(id, { status });
     refresh();
     if (updated && editingId === id) startEdit(updated);
+    setNotice(status === 'published' ? '文章已发布' : '文章已转为草稿');
   };
 
   const unlockAdmin = (event: FormEvent<HTMLFormElement>) => {
@@ -143,7 +219,63 @@ function App() {
     if (password === 'kitepop') {
       setAdminUnlocked(true);
       setPassword('');
+      setNotice('已进入后台');
+      return;
     }
+
+    setFormError('后台口令不正确');
+  };
+
+  const saveImageSettings = () => {
+    imageSettingsRepository.save(imageSettings);
+    setNotice('图床设置已保存到本地浏览器');
+  };
+
+  const insertImage = (image: UploadedImage, asCover = false) => {
+    const markdown = buildImageMarkdown(imageAlt, image.url);
+    const nextContent = form.content.trim() ? `${form.content}\n\n${markdown}` : markdown;
+    updateForm({
+      content: nextContent,
+      coverImage: asCover ? image.url : form.coverImage
+    });
+    setNotice(asCover ? '图片已插入正文并设为封面' : '图片已插入正文');
+  };
+
+  const insertManualImage = () => {
+    const url = manualImageUrl.trim();
+
+    if (!/^https?:\/\//.test(url)) {
+      setFormError('请输入以 http 或 https 开头的图片 URL');
+      return;
+    }
+
+    insertImage({ url, filename: url.split('/').pop() ?? 'image' });
+    setManualImageUrl('');
+  };
+
+  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setFormError('');
+
+    try {
+      const image = await uploadToSmms(file, imageSettings.token);
+      setUploadedImages((current) => [image, ...current]);
+      insertImage(image);
+      setNotice('图片上传成功');
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : '图片上传失败');
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const copyText = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setNotice('已复制到剪贴板');
   };
 
   return (
@@ -173,7 +305,7 @@ function App() {
               <p className="eyebrow">Kitepop Blog</p>
               <h1>记录生活，也记录每一次专业成长。</h1>
               <p>
-                这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。内容可从后台直接发布，适合长期维护。
+                这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。后台支持图床上传、封面图和图文发布。
               </p>
               <div className="hero-actions">
                 <button onClick={() => setMode('admin')} type="button">发布文章</button>
@@ -234,7 +366,11 @@ function App() {
                       onClick={() => setSelectedPostId(post.id)}
                       type="button"
                     >
-                      <span className={`cover-dot cover-${post.cover}`} />
+                      {post.coverImage ? (
+                        <img alt="" className="cover-thumb" src={post.coverImage} />
+                      ) : (
+                        <span className={`cover-dot cover-${post.cover}`} />
+                      )}
                       <span>
                         <strong>{post.title}</strong>
                         <small>{category.name} · {post.updatedAt} · {calculateReadingMinutes(post.content)} 分钟</small>
@@ -248,9 +384,13 @@ function App() {
             <article className="article-view">
               {selectedPost ? (
                 <>
-                  <div className={`article-cover cover-${selectedPost.cover}`}>
-                    <span>{getCategory(selectedPost.category).name}</span>
-                  </div>
+                  {selectedPost.coverImage ? (
+                    <img alt={selectedPost.title} className="article-cover-image" src={selectedPost.coverImage} />
+                  ) : (
+                    <div className={`article-cover cover-${selectedPost.cover}`}>
+                      <span>{getCategory(selectedPost.category).name}</span>
+                    </div>
+                  )}
                   <p className="eyebrow">{selectedPost.updatedAt} · {calculateReadingMinutes(selectedPost.content)} 分钟阅读</p>
                   <h2>{selectedPost.title}</h2>
                   <p className="summary">{selectedPost.summary}</p>
@@ -279,6 +419,7 @@ function App() {
                 type="password"
                 value={password}
               />
+              {formError ? <p className="form-message error">{formError}</p> : null}
               <button type="submit">进入后台</button>
             </form>
           ) : (
@@ -288,7 +429,19 @@ function App() {
                   <h2>内容管理</h2>
                   <button onClick={startCreate} type="button">新建</button>
                 </div>
-                {posts.map((post) => (
+                <div className="segmented-control">
+                  {(['all', 'published', 'draft'] as AdminStatusFilter[]).map((status) => (
+                    <button
+                      className={adminStatusFilter === status ? 'active' : ''}
+                      key={status}
+                      onClick={() => setAdminStatusFilter(status)}
+                      type="button"
+                    >
+                      {status === 'all' ? '全部' : status === 'published' ? '已发布' : '草稿'}
+                    </button>
+                  ))}
+                </div>
+                {adminPosts.map((post) => (
                   <div className="admin-post" key={post.id}>
                     <button onClick={() => startEdit(post)} type="button">
                       <strong>{post.title}</strong>
@@ -298,7 +451,7 @@ function App() {
                       <button onClick={() => updateStatus(post.id, post.status === 'published' ? 'draft' : 'published')} type="button">
                         {post.status === 'published' ? '设草稿' : '发布'}
                       </button>
-                      <button className="danger" onClick={() => removePost(post.id)} type="button">删除</button>
+                      <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
                     </div>
                   </div>
                 ))}
@@ -307,12 +460,72 @@ function App() {
               <form className="editor-panel" onSubmit={savePost}>
                 <div className="panel-heading">
                   <h2>{editingId ? '编辑文章' : '新建文章'}</h2>
-                  <button type="submit">{editingId ? '保存更新' : '发布保存'}</button>
+                  <button type="submit">{editingId ? '保存更新' : '保存文章'}</button>
                 </div>
+                {notice ? <p className="form-message">{notice}</p> : null}
+                {formError ? <p className="form-message error">{formError}</p> : null}
+
+                <section className="tool-panel">
+                  <div className="panel-heading">
+                    <h3>图床设置</h3>
+                    <button onClick={saveImageSettings} type="button">保存设置</button>
+                  </div>
+                  <div className="form-grid">
+                    <label>
+                      图床
+                      <select
+                        onChange={(event) => setImageSettings({ ...imageSettings, provider: event.target.value as 'smms' })}
+                        value={imageSettings.provider}
+                      >
+                        <option value="smms">SM.MS</option>
+                      </select>
+                    </label>
+                    <label>
+                      Token
+                      <input
+                        onChange={(event) => setImageSettings({ ...imageSettings, token: event.target.value })}
+                        placeholder="只保存在本地浏览器"
+                        type="password"
+                        value={imageSettings.token}
+                      />
+                    </label>
+                  </div>
+                  <div className="image-tools">
+                    <label className="file-picker">
+                      {uploading ? '上传中...' : '上传图片'}
+                      <input accept="image/*" disabled={uploading} onChange={uploadImage} type="file" />
+                    </label>
+                    <input
+                      onChange={(event) => setImageAlt(event.target.value)}
+                      placeholder="图片描述"
+                      value={imageAlt}
+                    />
+                    <input
+                      onChange={(event) => setManualImageUrl(event.target.value)}
+                      placeholder="手动输入图片 URL"
+                      value={manualImageUrl}
+                    />
+                    <button onClick={insertManualImage} type="button">插入 URL</button>
+                  </div>
+                  {uploadedImages.length > 0 ? (
+                    <div className="upload-list">
+                      {uploadedImages.map((image) => (
+                        <div className="upload-item" key={image.url}>
+                          <img alt={image.filename} src={image.url} />
+                          <span>{image.filename}</span>
+                          <button onClick={() => insertImage(image)} type="button">插入</button>
+                          <button onClick={() => insertImage(image, true)} type="button">设封面</button>
+                          <button onClick={() => copyText(image.url)} type="button">复制 URL</button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+
                 <label>
                   标题
                   <input
-                    onChange={(event) => setForm({ ...form, title: event.target.value })}
+                    onChange={(event) => updateForm({ title: event.target.value })}
                     placeholder="例如：一次越权风险复盘"
                     value={form.title}
                   />
@@ -320,7 +533,7 @@ function App() {
                 <label>
                   摘要
                   <textarea
-                    onChange={(event) => setForm({ ...form, summary: event.target.value })}
+                    onChange={(event) => updateForm({ summary: event.target.value })}
                     placeholder="用一两句话说明这篇文章的价值"
                     rows={3}
                     value={form.summary}
@@ -330,7 +543,7 @@ function App() {
                   <label>
                     分类
                     <select
-                      onChange={(event) => setForm({ ...form, category: event.target.value as BlogCategoryId, cover: event.target.value as BlogCategoryId })}
+                      onChange={(event) => updateForm({ category: event.target.value as BlogCategoryId, cover: event.target.value as BlogCategoryId })}
                       value={form.category}
                     >
                       {BLOG_CATEGORIES.map((category) => (
@@ -341,7 +554,7 @@ function App() {
                   <label>
                     状态
                     <select
-                      onChange={(event) => setForm({ ...form, status: event.target.value as PostStatus })}
+                      onChange={(event) => updateForm({ status: event.target.value as PostStatus })}
                       value={form.status}
                     >
                       <option value="draft">草稿</option>
@@ -350,23 +563,48 @@ function App() {
                   </label>
                 </div>
                 <label>
+                  封面图 URL
+                  <input
+                    onChange={(event) => updateForm({ coverImage: event.target.value })}
+                    placeholder="可由图床上传后自动填入"
+                    value={form.coverImage ?? ''}
+                  />
+                </label>
+                <label>
                   标签
                   <input
-                    onChange={(event) => setForm({ ...form, tags: splitTags(event.target.value) })}
+                    onChange={(event) => updateForm({ tags: splitTags(event.target.value) })}
                     placeholder="用逗号或空格分隔"
                     value={formatTags(form.tags)}
                   />
                 </label>
-                <label>
-                  正文
-                  <textarea
-                    className="content-editor"
-                    onChange={(event) => setForm({ ...form, content: event.target.value })}
-                    placeholder="支持简单 Markdown：# 标题、## 小节、- 列表"
-                    rows={16}
-                    value={form.content}
-                  />
-                </label>
+                <div className="segmented-control editor-tabs">
+                  <button className={editorTab === 'edit' ? 'active' : ''} onClick={() => setEditorTab('edit')} type="button">
+                    编辑
+                  </button>
+                  <button className={editorTab === 'preview' ? 'active' : ''} onClick={() => setEditorTab('preview')} type="button">
+                    预览
+                  </button>
+                </div>
+                {editorTab === 'edit' ? (
+                  <label>
+                    正文
+                    <textarea
+                      className="content-editor"
+                      onChange={(event) => updateForm({ content: event.target.value })}
+                      placeholder="支持简单 Markdown：# 标题、## 小节、- 列表、![描述](图片URL)"
+                      rows={16}
+                      value={form.content}
+                    />
+                  </label>
+                ) : (
+                  <div className="editor-preview">
+                    {form.coverImage ? <img alt={form.title || '封面图'} className="article-cover-image" src={form.coverImage} /> : null}
+                    <h2>{form.title || '未命名文章'}</h2>
+                    <p className="summary">{form.summary || '这里会显示文章摘要。'}</p>
+                    <div className="article-body">{renderMarkdown(form.content || '正文预览会显示在这里。')}</div>
+                  </div>
+                )}
               </form>
             </>
           )}

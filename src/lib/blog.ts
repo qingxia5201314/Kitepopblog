@@ -23,6 +23,7 @@ export interface BlogPost {
   createdAt: string;
   updatedAt: string;
   cover: CoverTone;
+  coverImage?: string;
 }
 
 export type BlogPostDraft = Omit<BlogPost, 'id' | 'slug' | 'createdAt' | 'updatedAt'>;
@@ -132,7 +133,8 @@ export const SAMPLE_POSTS: BlogPost[] = [
     status: 'published',
     createdAt: '2026-06-01',
     updatedAt: '2026-06-01',
-    cover: 'life'
+    cover: 'life',
+    coverImage: ''
   },
   {
     id: 'seed-src-1',
@@ -158,7 +160,8 @@ export const SAMPLE_POSTS: BlogPost[] = [
     status: 'published',
     createdAt: '2026-06-03',
     updatedAt: '2026-06-03',
-    cover: 'src'
+    cover: 'src',
+    coverImage: ''
   },
   {
     id: 'seed-study-1',
@@ -177,7 +180,8 @@ export const SAMPLE_POSTS: BlogPost[] = [
     status: 'published',
     createdAt: '2026-06-05',
     updatedAt: '2026-06-05',
-    cover: 'study'
+    cover: 'study',
+    coverImage: ''
   },
   {
     id: 'seed-notes-1',
@@ -204,7 +208,8 @@ npm test -- --run
     status: 'published',
     createdAt: '2026-06-07',
     updatedAt: '2026-06-07',
-    cover: 'notes'
+    cover: 'notes',
+    coverImage: ''
   }
 ];
 
