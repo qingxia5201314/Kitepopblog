@@ -428,6 +428,64 @@ textarea {
   margin-top: 26px;
 }
 
+.article-body h4 {
+  margin: 22px 0 8px;
+}
+
+.article-body a {
+  color: #4266b2;
+  font-weight: 700;
+}
+
+.article-body code {
+  background: #eee5d7;
+  border-radius: 5px;
+  color: #9e2f28;
+  padding: 2px 5px;
+}
+
+.article-body blockquote {
+  background: #f4efe5;
+  border-left: 4px solid #4266b2;
+  border-radius: 6px;
+  color: #38423d;
+  margin: 18px 0;
+  padding: 12px 14px;
+}
+
+.article-md-list {
+  background: #f8f3ea;
+  border-radius: 8px;
+  line-height: 1.8;
+  margin: 18px 0;
+  padding: 14px 22px 14px 34px;
+}
+
+.article-code {
+  background: #17201d;
+  border-radius: 8px;
+  color: #f5efe5;
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+  overflow-x: auto;
+  padding: 14px;
+}
+
+.article-code span {
+  color: #d7b879;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.article-code code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  white-space: pre;
+}
+
 .article-image {
   margin: 22px 0;
 }
@@ -608,6 +666,32 @@ textarea {
   display: grid;
   gap: 10px;
   grid-template-columns: 128px 1fr 1fr auto;
+}
+
+.markdown-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.markdown-toolbar {
+  background: #f4efe5;
+  border: 1px solid #e3d7c6;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+}
+
+.markdown-toolbar button {
+  background: #fffaf3;
+  border: 1px solid #cfc3b2;
+  border-radius: 6px;
+  color: #17201d;
+  font-weight: 800;
+  min-height: 32px;
+  min-width: 42px;
+  padding: 5px 9px;
 }
 
 .file-picker {

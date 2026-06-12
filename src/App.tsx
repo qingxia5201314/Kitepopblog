@@ -15,8 +15,9 @@ import {
   UploadedImage,
   buildImageMarkdown,
   createImageHostSettingsRepository,
-  uploadToSmms
+  uploadToImageHost
 } from './lib/imageHost';
+import { MarkdownBlock, parseMarkdown } from './lib/markdown';
 
 type ViewMode = 'home' | 'admin';
 type EditorTab = 'edit' | 'preview';
@@ -48,45 +49,77 @@ function formatTags(tags: string[]): string {
   return tags.join('，');
 }
 
-function renderMarkdown(content: string) {
-  return content.split('\n').map((line, index) => {
-    const imageMatch = line.match(/^!\[(.*)]\((https?:\/\/.+)\)$/);
+function renderInlineMarkdown(text: string) {
+  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+]\(https?:\/\/[^)]+\))/g);
 
-    if (imageMatch) {
+  return parts.map((part, index) => {
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={index}>{part.slice(1, -1)}</code>;
+    }
+
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+
+    const linkMatch = part.match(/^\[([^\]]+)]\((https?:\/\/[^)]+)\)$/);
+    if (linkMatch) {
       return (
-        <figure className="article-image" key={index}>
-          <img alt={imageMatch[1] || '文章图片'} src={imageMatch[2]} />
-          {imageMatch[1] ? <figcaption>{imageMatch[1]}</figcaption> : null}
-        </figure>
+        <a href={linkMatch[2]} key={index} rel="noreferrer" target="_blank">
+          {linkMatch[1]}
+        </a>
       );
     }
 
-    if (line.startsWith('## ')) {
-      return <h3 key={index}>{line.slice(3)}</h3>;
-    }
-
-    if (line.startsWith('# ')) {
-      return <h2 key={index}>{line.slice(2)}</h2>;
-    }
-
-    if (line.startsWith('- ')) {
-      return <p key={index} className="article-list-line">{line}</p>;
-    }
-
-    if (/^\d+\.\s/.test(line)) {
-      return <p key={index} className="article-list-line">{line}</p>;
-    }
-
-    if (line.trim().startsWith('```')) {
-      return <div key={index} className="code-rule" />;
-    }
-
-    if (!line.trim()) {
-      return <div key={index} className="paragraph-gap" />;
-    }
-
-    return <p key={index}>{line}</p>;
+    return part;
   });
+}
+
+function renderMarkdownBlock(block: MarkdownBlock, index: number) {
+  if (block.type === 'heading') {
+    const content = renderInlineMarkdown(block.text);
+    if (block.level === 1) return <h2 key={index}>{content}</h2>;
+    if (block.level === 2) return <h3 key={index}>{content}</h3>;
+    return <h4 key={index}>{content}</h4>;
+  }
+
+  if (block.type === 'paragraph') {
+    return <p key={index}>{renderInlineMarkdown(block.text)}</p>;
+  }
+
+  if (block.type === 'blockquote') {
+    return <blockquote key={index}>{renderInlineMarkdown(block.text)}</blockquote>;
+  }
+
+  if (block.type === 'list') {
+    const Tag = block.ordered ? 'ol' : 'ul';
+    return (
+      <Tag className="article-md-list" key={index}>
+        {block.items.map((item) => (
+          <li key={item}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </Tag>
+    );
+  }
+
+  if (block.type === 'code') {
+    return (
+      <pre className="article-code" key={index}>
+        {block.language ? <span>{block.language}</span> : null}
+        <code>{block.code}</code>
+      </pre>
+    );
+  }
+
+  return (
+    <figure className="article-image" key={index}>
+      <img alt={block.alt || '文章图片'} src={block.url} />
+      {block.alt ? <figcaption>{block.alt}</figcaption> : null}
+    </figure>
+  );
+}
+
+function renderMarkdown(content: string) {
+  return parseMarkdown(content).map(renderMarkdownBlock);
 }
 
 function App() {
@@ -241,6 +274,13 @@ function App() {
     setNotice(asCover ? '图片已插入正文并设为封面' : '图片已插入正文');
   };
 
+  const insertMarkdownSnippet = (before: string, after = '', placeholder = '内容') => {
+    const snippet = `${before}${placeholder}${after}`;
+    const nextContent = form.content.trim() ? `${form.content}\n\n${snippet}` : snippet;
+    updateForm({ content: nextContent });
+    setNotice('Markdown 片段已插入正文');
+  };
+
   const insertManualImage = () => {
     const url = manualImageUrl.trim();
 
@@ -261,7 +301,7 @@ function App() {
     setFormError('');
 
     try {
-      const image = await uploadToSmms(file, imageSettings.token);
+      const image = await uploadToImageHost(file, imageSettings);
       setUploadedImages((current) => [image, ...current]);
       insertImage(image);
       setNotice('图片上传成功');
@@ -472,21 +512,45 @@ function App() {
                   </div>
                   <div className="form-grid">
                     <label>
-                      图床
+                      图床类型
                       <select
-                        onChange={(event) => setImageSettings({ ...imageSettings, provider: event.target.value as 'smms' })}
+                        onChange={(event) => setImageSettings({ ...imageSettings, provider: event.target.value as 'custom' })}
                         value={imageSettings.provider}
                       >
-                        <option value="smms">SM.MS</option>
+                        <option value="custom">自定义接口 / SM.MS</option>
                       </select>
                     </label>
                     <label>
-                      Token
+                      Token / Authorization
                       <input
                         onChange={(event) => setImageSettings({ ...imageSettings, token: event.target.value })}
-                        placeholder="只保存在本地浏览器"
+                        placeholder="例如 SM.MS Token，只保存在本地浏览器"
                         type="password"
                         value={imageSettings.token}
+                      />
+                    </label>
+                    <label>
+                      上传接口 URL
+                      <input
+                        onChange={(event) => setImageSettings({ ...imageSettings, uploadUrl: event.target.value })}
+                        placeholder="https://sm.ms/api/v2/upload"
+                        value={imageSettings.uploadUrl}
+                      />
+                    </label>
+                    <label>
+                      文件字段名
+                      <input
+                        onChange={(event) => setImageSettings({ ...imageSettings, fileFieldName: event.target.value })}
+                        placeholder="smfile / file / image"
+                        value={imageSettings.fileFieldName}
+                      />
+                    </label>
+                    <label>
+                      返回 URL 路径
+                      <input
+                        onChange={(event) => setImageSettings({ ...imageSettings, urlPath: event.target.value })}
+                        placeholder="data.url / result.url"
+                        value={imageSettings.urlPath}
                       />
                     </label>
                   </div>
@@ -587,16 +651,28 @@ function App() {
                   </button>
                 </div>
                 {editorTab === 'edit' ? (
-                  <label>
-                    正文
-                    <textarea
-                      className="content-editor"
-                      onChange={(event) => updateForm({ content: event.target.value })}
-                      placeholder="支持简单 Markdown：# 标题、## 小节、- 列表、![描述](图片URL)"
-                      rows={16}
-                      value={form.content}
-                    />
-                  </label>
+                  <section className="markdown-editor">
+                    <div className="markdown-toolbar" aria-label="Markdown 工具栏">
+                      <button onClick={() => insertMarkdownSnippet('# ')} type="button">H1</button>
+                      <button onClick={() => insertMarkdownSnippet('## ')} type="button">H2</button>
+                      <button onClick={() => insertMarkdownSnippet('**', '**')} type="button">B</button>
+                      <button onClick={() => insertMarkdownSnippet('`', '`', 'code')} type="button">Code</button>
+                      <button onClick={() => insertMarkdownSnippet('> ')} type="button">Quote</button>
+                      <button onClick={() => insertMarkdownSnippet('- ')} type="button">List</button>
+                      <button onClick={() => insertMarkdownSnippet('[', '](https://example.com)', '链接文字')} type="button">Link</button>
+                      <button onClick={() => insertMarkdownSnippet('```bash\n', '\n```', 'npm run build')} type="button">Block</button>
+                    </div>
+                    <label>
+                      正文
+                      <textarea
+                        className="content-editor"
+                        onChange={(event) => updateForm({ content: event.target.value })}
+                        placeholder="支持 Markdown：标题、粗体、行内代码、链接、引用、列表、代码块、图片。"
+                        rows={16}
+                        value={form.content}
+                      />
+                    </label>
+                  </section>
                 ) : (
                   <div className="editor-preview">
                     {form.coverImage ? <img alt={form.title || '封面图'} className="article-cover-image" src={form.coverImage} /> : null}

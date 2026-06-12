@@ -21,6 +21,7 @@
 - `src/lib/blogStore.ts`: localStorage repository functions.
 - `src/lib/imageHost.ts`: SM.MS image host settings, response parsing, markdown image helper, and upload client.
 - `src/lib/draftAutosave.ts`: local editor draft persistence.
+- `src/lib/markdown.ts`: testable Markdown block parsing for preview and article rendering.
 - `src/lib/blog.test.ts`: pure content model tests.
 - `src/lib/blogStore.test.ts`: local persistence tests.
 
@@ -56,3 +57,12 @@
 - [ ] Add admin image host settings, upload input, manual URL insertion, uploaded image actions, and Markdown image rendering.
 - [ ] Add editor preview, autosaved new draft, status filter, delete confirmation, and visible validation messages.
 - [ ] Run tests and production build before committing.
+
+### Task 6: Markdown Editor And Configurable Image Host
+
+- [ ] Add tests for Markdown headings, blockquotes, lists, fenced code, and images.
+- [ ] Add tests for configurable image host upload URL, file field name, and response URL path.
+- [ ] Replace ad hoc Markdown preview parsing with `src/lib/markdown.ts`.
+- [ ] Add Markdown toolbar actions for headings, bold, inline code, blockquote, lists, links, and code blocks.
+- [ ] Expand image host settings UI with upload endpoint, file field name, and returned URL path.
+- [ ] Run tests and production build before committing and pushing to GitHub.

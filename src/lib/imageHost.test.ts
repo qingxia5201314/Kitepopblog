@@ -34,10 +34,36 @@ describe('image host helpers', () => {
   it('persists image host settings without leaking defaults', () => {
     const settings = createImageHostSettingsRepository('kitepop-image-host-test');
 
-    expect(settings.load()).toEqual({ provider: 'smms', token: '' });
+    expect(settings.load()).toEqual({
+      provider: 'custom',
+      token: '',
+      uploadUrl: 'https://sm.ms/api/v2/upload',
+      fileFieldName: 'smfile',
+      urlPath: 'data.url'
+    });
 
-    settings.save({ provider: 'smms', token: 'secret-token' });
+    settings.save({
+      provider: 'custom',
+      token: 'secret-token',
+      uploadUrl: 'https://image.example.com/api/upload',
+      fileFieldName: 'file',
+      urlPath: 'result.url'
+    });
 
-    expect(settings.load()).toEqual({ provider: 'smms', token: 'secret-token' });
+    expect(settings.load()).toEqual({
+      provider: 'custom',
+      token: 'secret-token',
+      uploadUrl: 'https://image.example.com/api/upload',
+      fileFieldName: 'file',
+      urlPath: 'result.url'
+    });
+  });
+
+  it('reads nested url values by configured response path', async () => {
+    const { readValueByPath } = await import('./imageHost');
+
+    expect(readValueByPath({ result: { url: 'https://img.example.com/a.png' } }, 'result.url')).toBe(
+      'https://img.example.com/a.png'
+    );
   });
 });
