@@ -41,25 +41,70 @@ export interface ImageHostSettingsRepository {
   save(settings: ImageHostSettings): void;
 }
 
+const LOCAL_HTTP_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+const URL_UNSAFE_WHITESPACE = /[\s\u0000-\u001f\u007f]/;
+
+function normalizeHttpsUrl(value: string, allowLocalHttp: boolean): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed || URL_UNSAFE_WHITESPACE.test(trimmed)) return undefined;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return undefined;
+  }
+
+  if (parsed.username || parsed.password) return undefined;
+  if (parsed.protocol === 'https:') return parsed.toString();
+  if (allowLocalHttp && parsed.protocol === 'http:' && LOCAL_HTTP_HOSTS.has(parsed.hostname)) {
+    return parsed.toString();
+  }
+
+  return undefined;
+}
+
+export function normalizeImageUrl(value: string): string | undefined {
+  return normalizeHttpsUrl(value, true);
+}
+
+export function normalizeUploadUrl(value: string): string | undefined {
+  return normalizeHttpsUrl(value, true);
+}
+
+function sanitizeImageAlt(alt: string): string {
+  return alt.trim().replace(/[\r\n]+/g, ' ') || 'image';
+}
+
 export function buildImageMarkdown(alt: string, url: string): string {
-  const safeAlt = alt.trim() || 'image';
-  return `![${safeAlt}](${url.trim()})`;
+  const safeUrl = normalizeImageUrl(url);
+  if (!safeUrl) {
+    throw new Error('请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
+  }
+
+  return `![${sanitizeImageAlt(alt)}](${safeUrl})`;
 }
 
 export function parseSmmsUploadResponse(response: unknown): UploadedImage {
   const data = response as SmmsResponse;
 
   if (data.success) {
+    const url = normalizeImageUrl(data.data.url);
+    if (!url) throw new Error('图床返回了不安全的图片 URL');
+
     return {
-      url: data.data.url,
+      url,
       filename: data.data.filename ?? data.data.storename ?? 'image'
     };
   }
 
   if ('code' in data && data.code === 'image_repeated') {
+    const url = normalizeImageUrl(data.images);
+    if (!url) throw new Error('图床返回了不安全的图片 URL');
+
     return {
-      url: data.images,
-      filename: data.images.split('/').pop() ?? 'image'
+      url,
+      filename: url.split('/').pop() ?? 'image'
     };
   }
 
@@ -85,8 +130,14 @@ export function readValueByPath(source: unknown, path: string): unknown {
 }
 
 export async function uploadToImageHost(file: File, settings: ImageHostSettings): Promise<UploadedImage> {
+  const uploadUrl = normalizeUploadUrl(settings.uploadUrl);
+
   if (!settings.uploadUrl.trim()) {
     throw new Error('请先配置图床上传接口');
+  }
+
+  if (!uploadUrl) {
+    throw new Error('请输入 HTTPS 图床上传接口（本地调试允许 localhost HTTP）');
   }
 
   const formData = new FormData();
@@ -97,7 +148,7 @@ export async function uploadToImageHost(file: File, settings: ImageHostSettings)
     headers.Authorization = settings.token.trim();
   }
 
-  const response = await fetch(settings.uploadUrl.trim(), {
+  const response = await fetch(uploadUrl, {
     method: 'POST',
     headers,
     body: formData
@@ -107,9 +158,12 @@ export async function uploadToImageHost(file: File, settings: ImageHostSettings)
   const configuredUrl = readValueByPath(payload, settings.urlPath.trim() || 'data.url');
 
   if (typeof configuredUrl === 'string' && configuredUrl) {
+    const url = normalizeImageUrl(configuredUrl);
+    if (!url) throw new Error('图床返回了不安全的图片 URL');
+
     return {
-      url: configuredUrl,
-      filename: configuredUrl.split('/').pop() ?? file.name
+      url,
+      filename: url.split('/').pop() ?? file.name
     };
   }
 

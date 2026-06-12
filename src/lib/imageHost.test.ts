@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   buildImageMarkdown,
   createImageHostSettingsRepository,
+  normalizeImageUrl,
   parseSmmsUploadResponse
 } from './imageHost';
 
@@ -13,6 +14,20 @@ describe('image host helpers', () => {
   it('builds markdown image syntax from an uploaded image', () => {
     expect(buildImageMarkdown('Kitepop 封面', 'https://img.example.com/kite.png')).toBe(
       '![Kitepop 封面](https://img.example.com/kite.png)'
+    );
+  });
+
+  it('normalizes image urls and rejects unsafe protocols', () => {
+    expect(normalizeImageUrl(' https://img.example.com/kite.png ')).toBe('https://img.example.com/kite.png');
+    expect(normalizeImageUrl('http://localhost:5173/kite.png')).toBe('http://localhost:5173/kite.png');
+    expect(normalizeImageUrl('http://img.example.com/kite.png')).toBeUndefined();
+    expect(normalizeImageUrl('javascript:alert(1)')).toBeUndefined();
+    expect(normalizeImageUrl('data:image/svg+xml,<svg></svg>')).toBeUndefined();
+  });
+
+  it('rejects unsafe generated markdown image urls', () => {
+    expect(() => buildImageMarkdown('Kitepop', 'http://img.example.com/kite.png')).toThrow(
+      '请输入 HTTPS 图片 URL'
     );
   });
 
@@ -65,5 +80,19 @@ describe('image host helpers', () => {
     expect(readValueByPath({ result: { url: 'https://img.example.com/a.png' } }, 'result.url')).toBe(
       'https://img.example.com/a.png'
     );
+  });
+
+  it('rejects insecure upload endpoints before sending a file or token', async () => {
+    const { uploadToImageHost } = await import('./imageHost');
+
+    await expect(
+      uploadToImageHost(new File(['image'], 'kite.png'), {
+        provider: 'custom',
+        token: 'secret-token',
+        uploadUrl: 'http://image.example.com/api/upload',
+        fileFieldName: 'file',
+        urlPath: 'result.url'
+      })
+    ).rejects.toThrow('请输入 HTTPS 图床上传接口');
   });
 });
