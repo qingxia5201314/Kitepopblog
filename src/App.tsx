@@ -278,16 +278,30 @@ function App() {
     setNotice(status === 'published' ? '文章已发布' : '文章已转为草稿');
   };
 
-  const unlockAdmin = (event: FormEvent<HTMLFormElement>) => {
+  const unlockAdmin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (password === 'kitepop') {
+
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ password })
+      });
+      const result = (await response.json()) as { ok?: boolean; message?: string };
+
+      if (!response.ok || !result.ok) {
+        setFormError(result.message || '后台口令不正确');
+        return;
+      }
+
       setAdminUnlocked(true);
       setPassword('');
       setNotice('已进入后台');
-      return;
+    } catch {
+      setFormError('无法连接后台登录接口');
     }
-
-    setFormError('后台口令不正确');
   };
 
   const saveImageSettings = () => {
@@ -522,7 +536,7 @@ function App() {
               <input
                 aria-label="后台口令"
                 onChange={(event) => setPassword(event.target.value)}
-                placeholder="默认口令 kitepop"
+                placeholder="输入后台口令"
                 type="password"
                 value={password}
               />

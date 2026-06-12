@@ -24,7 +24,7 @@
 
 使用 Vite + React + TypeScript 构建单页应用。核心内容模型放在 `src/lib/blog.ts`，本地仓库操作放在 `src/lib/blogStore.ts`，Markdown 解析逻辑放在 `src/lib/markdown.ts`，图床配置和上传辅助逻辑放在 `src/lib/imageHost.ts`，自动草稿逻辑放在 `src/lib/draftAutosave.ts`。页面由 `src/App.tsx` 统一组织，样式集中在 `src/App.css`。
 
-路由采用轻量状态切换，不引入路由库。后台入口在同一个应用内，初始以简单口令解锁，默认口令为 `kitepop`，仅用于本地管理体验，不作为安全边界。
+路由采用轻量状态切换，不引入路由库。后台入口在同一个应用内，登录表单通过 `/api/admin/login` 调用服务端校验。真实后台口令由部署环境变量 `ADMIN_PASSWORD` 提供，不写入前端源码、HTML 或构建产物。
 
 图床 Token 和上传接口配置只保存在浏览器本地存储，不写入仓库。SM.MS 上传失败时保留手动图片 URL 插入能力，避免发布流程被图床配置阻断。
 
