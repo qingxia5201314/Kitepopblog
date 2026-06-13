@@ -191,35 +191,56 @@ button {
 
 .toast {
   align-items: center;
+  animation: toast-drop-in 260ms cubic-bezier(0.2, 0.9, 0.25, 1.1) both;
+  backdrop-filter: blur(10px);
   border: 1px solid #d6ccb9;
   border-radius: 8px;
-  box-shadow: 0 14px 36px rgba(24, 33, 31, 0.16);
+  box-shadow: 0 18px 44px rgba(24, 33, 31, 0.18);
   display: flex;
   gap: 12px;
   justify-content: space-between;
+  left: 50%;
   line-height: 1.5;
   max-width: min(420px, calc(100vw - 24px));
+  min-width: min(360px, calc(100vw - 24px));
+  overflow: hidden;
   padding: 12px 14px;
   position: fixed;
-  right: 20px;
-  top: 78px;
+  top: 26px;
+  transform: translate(var(--toast-x, -50%), 0);
   z-index: 20;
 }
 
+.toast::after {
+  animation: toast-progress var(--toast-duration, 3000ms) linear forwards;
+  background: currentColor;
+  bottom: 0;
+  content: "";
+  height: 3px;
+  left: 0;
+  opacity: 0.35;
+  position: absolute;
+  transform-origin: left center;
+  width: 100%;
+}
+
 .toast-success {
-  background: #ecf5ef;
+  background: rgba(236, 245, 239, 0.96);
   border-color: #acd2bc;
   color: #235d3e;
 }
 
 .toast-error {
-  background: #fff5f2;
+  animation:
+    toast-drop-in 260ms cubic-bezier(0.2, 0.9, 0.25, 1.1) both,
+    toast-shake 320ms ease-out 120ms both;
+  background: rgba(255, 245, 242, 0.97);
   border-color: #e4b2aa;
   color: #982f29;
 }
 
 .toast-info {
-  background: #f2f5ff;
+  background: rgba(242, 245, 255, 0.96);
   border-color: #bccbeb;
   color: #304875;
 }
@@ -234,6 +255,43 @@ button {
   min-height: 28px;
   min-width: 28px;
   padding: 0;
+}
+
+@keyframes toast-drop-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--toast-x, -50%), -18px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(var(--toast-x, -50%), 0) scale(1);
+  }
+}
+
+@keyframes toast-shake {
+  0%,
+  100% {
+    margin-left: 0;
+  }
+
+  30% {
+    margin-left: -5px;
+  }
+
+  60% {
+    margin-left: 4px;
+  }
+}
+
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
 }
 
 .hero-band {
@@ -1046,9 +1104,10 @@ textarea {
   }
 
   .toast {
+    --toast-x: 0;
     left: 12px;
     right: 12px;
-    top: 92px;
+    top: 82px;
   }
 
   .hero-band {

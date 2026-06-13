@@ -416,7 +416,12 @@ function App() {
       </header>
 
       {notification ? (
-        <div className={`toast toast-${notification.type}`} role="alert">
+        <div
+          className={`toast toast-${notification.type}`}
+          key={notification.id}
+          role="alert"
+          style={{ '--toast-duration': `${notification.durationMs}ms` } as React.CSSProperties}
+        >
           <span>{notification.message}</span>
           <button aria-label="关闭提示" onClick={() => setNotification(null)} type="button">×</button>
         </div>
