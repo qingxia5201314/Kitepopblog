@@ -10,7 +10,7 @@ import {
   getCategory,
   getCategoryIcon
 } from './lib/blog';
-import { createBlogRepository } from './lib/blogStore';
+import { createPost, deletePost, listPosts, updatePost } from './lib/blogApi';
 import { createDraftAutosaveRepository } from './lib/draftAutosave';
 import {
   UploadedImage,
@@ -34,7 +34,6 @@ const safeImageAttributes = {
   referrerPolicy: 'no-referrer'
 } as const;
 
-const repository = createBlogRepository();
 const draftRepository = createDraftAutosaveRepository();
 const imageSettingsRepository = createImageHostSettingsRepository();
 
@@ -145,12 +144,13 @@ function Icon({ className = '', name }: { className?: string; name: UiIcon }) {
 }
 
 function App() {
-  const [posts, setPosts] = useState<BlogPost[]>(() => repository.list());
+  const [posts, setPosts] = useState<BlogPost[]>([]);
   const [mode, setMode] = useState<ViewMode>('home');
   const [activeCategory, setActiveCategory] = useState<BlogCategoryId | 'all'>('all');
   const [query, setQuery] = useState('');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminToken, setAdminToken] = useState('');
   const [password, setPassword] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BlogPostDraft>(() => draftRepository.load() ?? EMPTY_FORM);
@@ -201,7 +201,18 @@ function App() {
     setNotification(createNotification(type, message, durationMs));
   };
 
-  const refresh = () => setPosts(repository.list());
+  const loadPosts = async (includeDrafts = adminUnlocked, token = adminToken) => {
+    try {
+      const nextPosts = await listPosts({ includeDrafts, token });
+      setPosts(nextPosts);
+    } catch {
+      notify('error', '文章加载失败，请稍后重试');
+    }
+  };
+
+  useEffect(() => {
+    void loadPosts(false, '');
+  }, []);
 
   const updateForm = (patch: Partial<BlogPostDraft>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -215,7 +226,7 @@ function App() {
     notify('info', '已进入新建文章模式');
   };
 
-  const startEdit = (post: BlogPost) => {
+  const startEdit = (post: BlogPost, showNotice = true) => {
     setEditingId(post.id);
     setForm({
       title: post.title,
@@ -228,10 +239,10 @@ function App() {
       coverImage: post.coverImage ?? ''
     });
     setEditorTab('edit');
-    notify('info', `正在编辑：${post.title}`);
+    if (showNotice) notify('info', `正在编辑：${post.title}`);
   };
 
-  const savePost = (event: FormEvent<HTMLFormElement>) => {
+  const savePost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!form.title.trim()) {
@@ -263,34 +274,43 @@ function App() {
       coverImage
     };
 
-    const saved = editingId ? repository.update(editingId, payload) : repository.create(payload);
-    refresh();
-
-    if (saved) {
+    try {
+      const saved = editingId ? await updatePost(editingId, payload, adminToken) : await createPost(payload, adminToken);
+      await loadPosts(true, adminToken);
       setSelectedPostId(saved.id);
       setActiveCategory(saved.category);
       notify('success', saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
       draftRepository.clear();
-      startEdit(saved);
+      startEdit(saved, false);
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文章保存失败');
     }
   };
 
-  const removePost = (post: BlogPost) => {
+  const removePost = async (post: BlogPost) => {
     const confirmed = window.confirm(`确认删除《${post.title}》吗？这个操作不能撤销。`);
     if (!confirmed) return;
 
-    repository.remove(post.id);
-    refresh();
-    notify('success', '文章已删除');
-    if (selectedPostId === post.id) setSelectedPostId(null);
-    if (editingId === post.id) startCreate();
+    try {
+      await deletePost(post.id, adminToken);
+      await loadPosts(true, adminToken);
+      notify('success', '文章已删除');
+      if (selectedPostId === post.id) setSelectedPostId(null);
+      if (editingId === post.id) startCreate();
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文章删除失败');
+    }
   };
 
-  const updateStatus = (id: string, status: PostStatus) => {
-    const updated = repository.update(id, { status });
-    refresh();
-    if (updated && editingId === id) startEdit(updated);
-    notify('success', status === 'published' ? '文章已发布' : '文章已转为草稿');
+  const updateStatus = async (id: string, status: PostStatus) => {
+    try {
+      const updated = await updatePost(id, { status }, adminToken);
+      await loadPosts(true, adminToken);
+      if (updated && editingId === id) startEdit(updated, false);
+      notify('success', status === 'published' ? '文章已发布' : '文章已转为草稿');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '状态更新失败');
+    }
   };
 
   const unlockAdmin = async (event: FormEvent<HTMLFormElement>) => {
@@ -304,15 +324,17 @@ function App() {
         },
         body: JSON.stringify({ password })
       });
-      const result = (await response.json()) as { ok?: boolean; message?: string };
+      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string };
 
-      if (!response.ok || !result.ok) {
+      if (!response.ok || !result.ok || !result.token) {
         notify('error', result.message || '后台口令不正确');
         return;
       }
 
       setAdminUnlocked(true);
+      setAdminToken(result.token);
       setPassword('');
+      await loadPosts(true, result.token);
       notify('success', '已进入后台');
     } catch {
       notify('error', '无法连接后台登录接口');

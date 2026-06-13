@@ -12,19 +12,21 @@
 - 后台管理：支持文章新增、编辑、删除、草稿/发布切换、标签与摘要维护。
 - 图文发布：支持可配置图床上传接口、Token、文件字段名、返回 URL 字段路径、图片上传、手动图片 URL 插入、正文图片渲染和文章封面图。默认配置兼容 SM.MS。
 - 编辑优化：支持 Markdown 工具栏、编辑/预览切换、新建文章自动保存草稿、文章状态筛选、删除确认和可见表单校验。
-- 本地持久化：第一版使用 `localStorage` 保存内容，避免引入数据库和账号系统。
-- 初始内容：内置示例文章，第一次访问时写入本地存储，方便直接看到站点形态。
+- 服务端持久化：文章保存到服务端 SQLite 数据库，电脑和手机访问同一份内容；未发布编辑草稿仍在当前浏览器自动暂存，避免误关闭丢稿。
+- 初始内容：服务端数据库为空时写入内置示例文章，方便直接看到站点形态。
 
 ## 非目标
 
-- 不做真实多用户登录、服务端数据库、图片上传、评论系统、搜索引擎收录优化。
+- 不做真实多用户登录、评论系统、搜索引擎收录优化。
 - 不处理真实 SRC 敏感细节发布审批流程。示例内容只使用脱敏描述。
 
 ## 架构
 
-使用 Vite + React + TypeScript 构建单页应用。核心内容模型放在 `src/lib/blog.ts`，本地仓库操作放在 `src/lib/blogStore.ts`，Markdown 解析逻辑放在 `src/lib/markdown.ts`，图床配置和上传辅助逻辑放在 `src/lib/imageHost.ts`，自动草稿逻辑放在 `src/lib/draftAutosave.ts`。页面由 `src/App.tsx` 统一组织，样式集中在 `src/App.css`。
+使用 Vite + React + TypeScript 构建单页应用。核心内容模型放在 `src/lib/blog.ts`，前端文章接口放在 `src/lib/blogApi.ts`，Markdown 解析逻辑放在 `src/lib/markdown.ts`，图床配置和上传辅助逻辑放在 `src/lib/imageHost.ts`，自动草稿逻辑放在 `src/lib/draftAutosave.ts`。页面由 `src/App.tsx` 统一组织，样式集中在 `src/App.css`。
 
 路由采用轻量状态切换，不引入路由库。后台入口在同一个应用内，登录表单通过 `/api/admin/login` 调用服务端校验。真实后台口令由部署环境变量 `ADMIN_PASSWORD` 提供，不写入前端源码、HTML 或构建产物。
+
+服务端由 `server/index.mjs` 提供静态资源和 `/api/posts` 接口，文章存储逻辑在 `server/postStore.mjs`，数据库路径由 `POST_DB_PATH` 配置。后台登录成功后返回临时 token，发布、编辑、删除和读取草稿都需要该 token。
 
 图床 Token 和上传接口配置只保存在浏览器本地存储，不写入仓库。SM.MS 上传失败时保留手动图片 URL 插入能力，避免发布流程被图床配置阻断。
 
@@ -34,6 +36,6 @@
 
 ## 验证
 
-- 使用 Vitest 覆盖内容模型、本地仓库、Markdown 解析、图床响应解析与本地图床配置行为。
+- 使用 Vitest 覆盖内容模型、文章接口客户端、服务端文章存储、后台会话、Markdown 解析、图床响应解析与本地图床配置行为。
 - 使用 TypeScript 与 Vite build 验证前端编译。
 - 手动启动本地开发服务器，确认首页、文章详情、分类切换和后台表单可操作。

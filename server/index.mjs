@@ -2,12 +2,16 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { createServer } from 'node:http';
+import { createAdminSessions } from './adminSession.mjs';
 import { verifyAdminPassword } from './auth.mjs';
+import { createPostStore } from './postStore.mjs';
 
 const root = resolve('dist');
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
 const adminPassword = process.env.ADMIN_PASSWORD || '';
+const postDbPath = process.env.POST_DB_PATH || './data/blog.sqlite';
+const bodyLimitBytes = Number(process.env.REQUEST_BODY_LIMIT || 1024 * 1024);
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -35,7 +39,7 @@ async function readJsonBody(request) {
 
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > 2048) {
+    if (size > bodyLimitBytes) {
       throw new Error('Request body too large');
     }
     chunks.push(chunk);
@@ -44,7 +48,7 @@ async function readJsonBody(request) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 }
 
-async function handleLogin(request, response) {
+async function handleLogin(request, response, sessions) {
   if (request.method !== 'POST') {
     sendJson(response, 405, { ok: false, message: 'Method not allowed' });
     return;
@@ -58,10 +62,75 @@ async function handleLogin(request, response) {
   try {
     const body = await readJsonBody(request);
     const ok = verifyAdminPassword(String(body.password || ''), adminPassword);
-    sendJson(response, ok ? 200 : 401, { ok });
+    sendJson(response, ok ? 200 : 401, ok ? { ok, token: sessions.issue() } : { ok });
   } catch {
     sendJson(response, 400, { ok: false, message: 'Invalid request body' });
   }
+}
+
+function isAdmin(request, sessions) {
+  return sessions.verify(request.headers.authorization || '');
+}
+
+function getPostId(pathname) {
+  const match = pathname.match(/^\/api\/posts\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+async function handlePosts(request, response, store, sessions) {
+  const url = new URL(request.url || '/', 'http://localhost');
+  const admin = isAdmin(request, sessions);
+
+  if (url.pathname === '/api/posts' && request.method === 'GET') {
+    const includeDrafts = url.searchParams.get('includeDrafts') === '1' && admin;
+    sendJson(response, 200, { posts: store.list({ includeDrafts }) });
+    return;
+  }
+
+  if (url.pathname === '/api/posts' && request.method === 'POST') {
+    if (!admin) {
+      sendJson(response, 401, { ok: false, message: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(request);
+      sendJson(response, 201, { post: store.create(body) });
+    } catch {
+      sendJson(response, 400, { ok: false, message: 'Invalid request body' });
+    }
+    return;
+  }
+
+  const postId = getPostId(url.pathname);
+  if (!postId) {
+    sendJson(response, 404, { ok: false, message: 'Not found' });
+    return;
+  }
+
+  if (!admin) {
+    sendJson(response, 401, { ok: false, message: 'Unauthorized' });
+    return;
+  }
+
+  if (request.method === 'PUT') {
+    try {
+      const body = await readJsonBody(request);
+      const post = store.update(postId, body);
+      sendJson(response, post ? 200 : 404, post ? { post } : { ok: false, message: 'Post not found' });
+    } catch {
+      sendJson(response, 400, { ok: false, message: 'Invalid request body' });
+    }
+    return;
+  }
+
+  if (request.method === 'DELETE') {
+    const removed = store.remove(postId);
+    sendJson(response, removed ? 200 : 404, removed ? { ok: true } : { ok: false, message: 'Post not found' });
+    return;
+  }
+
+  sendJson(response, 405, { ok: false, message: 'Method not allowed' });
 }
 
 function sendStatic(request, response) {
@@ -85,9 +154,17 @@ function sendStatic(request, response) {
   createReadStream(filePath).pipe(response);
 }
 
+const sessions = createAdminSessions();
+const store = await createPostStore({ dbPath: postDbPath });
+
 createServer(async (request, response) => {
   if (request.url?.startsWith('/api/admin/login')) {
-    await handleLogin(request, response);
+    await handleLogin(request, response, sessions);
+    return;
+  }
+
+  if (request.url?.startsWith('/api/posts')) {
+    await handlePosts(request, response, store, sessions);
     return;
   }
 
