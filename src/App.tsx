@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   BLOG_CATEGORIES,
   BlogCategoryId,
@@ -12,14 +12,7 @@ import {
 } from './lib/blog';
 import { createPost, deletePost, listPosts, updatePost } from './lib/blogApi';
 import { createDraftAutosaveRepository } from './lib/draftAutosave';
-import {
-  UploadedImage,
-  buildImageMarkdown,
-  createImageHostSettingsRepository,
-  normalizeImageUrl,
-  normalizeUploadUrl,
-  uploadToImageHost
-} from './lib/imageHost';
+import { normalizeImageUrl } from './lib/imageUrl';
 import { MarkdownBlock, parseMarkdown } from './lib/markdown';
 import { AppNotification, NotificationType, createNotification } from './lib/notification';
 
@@ -35,7 +28,6 @@ const safeImageAttributes = {
 } as const;
 
 const draftRepository = createDraftAutosaveRepository();
-const imageSettingsRepository = createImageHostSettingsRepository();
 
 const EMPTY_FORM: BlogPostDraft = {
   title: '',
@@ -158,11 +150,6 @@ function App() {
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminStatusFilter>('all');
   const [notification, setNotification] = useState<AppNotification | null>(null);
   const [autosaveNote, setAutosaveNote] = useState('');
-  const [imageSettings, setImageSettings] = useState(() => imageSettingsRepository.load());
-  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
-  const [imageAlt, setImageAlt] = useState('Kitepop 图片');
-  const [manualImageUrl, setManualImageUrl] = useState('');
-  const [uploading, setUploading] = useState(false);
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query }),
@@ -341,75 +328,11 @@ function App() {
     }
   };
 
-  const saveImageSettings = () => {
-    if (!normalizeUploadUrl(imageSettings.uploadUrl)) {
-      notify('error', '请输入 HTTPS 图床上传接口（本地调试允许 localhost HTTP）');
-      return;
-    }
-
-    imageSettingsRepository.save(imageSettings);
-    notify('success', '图床设置已保存到本地浏览器');
-  };
-
-  const insertImage = (image: UploadedImage, asCover = false) => {
-    const imageUrl = normalizeImageUrl(image.url);
-
-    if (!imageUrl) {
-      notify('error', '请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
-      return;
-    }
-
-    const markdown = buildImageMarkdown(imageAlt, imageUrl);
-    const nextContent = form.content.trim() ? `${form.content}\n\n${markdown}` : markdown;
-    updateForm({
-      content: nextContent,
-      coverImage: asCover ? imageUrl : form.coverImage
-    });
-    notify('success', asCover ? '图片已插入正文并设为封面' : '图片已插入正文');
-  };
-
   const insertMarkdownSnippet = (before: string, after = '', placeholder = '内容') => {
     const snippet = `${before}${placeholder}${after}`;
     const nextContent = form.content.trim() ? `${form.content}\n\n${snippet}` : snippet;
     updateForm({ content: nextContent });
     notify('info', 'Markdown 片段已插入正文');
-  };
-
-  const insertManualImage = () => {
-    const url = normalizeImageUrl(manualImageUrl);
-
-    if (!url) {
-      notify('error', '请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
-      return;
-    }
-
-    insertImage({ url, filename: url.split('/').pop() ?? 'image' });
-    setManualImageUrl('');
-  };
-
-  const uploadImage = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setUploading(true);
-    setNotification((current) => (current?.type === 'error' ? null : current));
-
-    try {
-      const image = await uploadToImageHost(file, imageSettings);
-      setUploadedImages((current) => [image, ...current]);
-      insertImage(image);
-      notify('success', '图片上传成功');
-    } catch (error) {
-      notify('error', error instanceof Error ? error.message : '图片上传失败');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
-    }
-  };
-
-  const copyText = async (text: string) => {
-    await navigator.clipboard.writeText(text);
-    notify('success', '已复制到剪贴板');
   };
 
   return (
@@ -456,7 +379,7 @@ function App() {
               <p className="eyebrow">Kitepop Blog</p>
               <h1>记录生活，也记录每一次专业成长。</h1>
               <p>
-                这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。后台支持图床上传、封面图和图文发布。
+                这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。后台支持 Markdown、封面图和图文发布。
               </p>
               <div className="hero-actions">
                 <button onClick={() => setMode('admin')} type="button">发布文章</button>
@@ -633,87 +556,6 @@ function App() {
                 </div>
                 {autosaveNote ? <p className="autosave-note">{autosaveNote}</p> : null}
 
-                <section className="tool-panel">
-                  <div className="panel-heading">
-                    <h3>图床设置</h3>
-                    <button onClick={saveImageSettings} type="button">保存设置</button>
-                  </div>
-                  <div className="form-grid">
-                    <label>
-                      图床类型
-                      <select
-                        onChange={(event) => setImageSettings({ ...imageSettings, provider: event.target.value as 'custom' })}
-                        value={imageSettings.provider}
-                      >
-                        <option value="custom">自定义接口 / SM.MS</option>
-                      </select>
-                    </label>
-                    <label>
-                      Token / Authorization
-                      <input
-                        onChange={(event) => setImageSettings({ ...imageSettings, token: event.target.value })}
-                        placeholder="例如 SM.MS Token，只保存在本地浏览器"
-                        type="password"
-                        value={imageSettings.token}
-                      />
-                    </label>
-                    <label>
-                      上传接口 URL
-                      <input
-                        onChange={(event) => setImageSettings({ ...imageSettings, uploadUrl: event.target.value })}
-                        placeholder="https://sm.ms/api/v2/upload"
-                        value={imageSettings.uploadUrl}
-                      />
-                    </label>
-                    <label>
-                      文件字段名
-                      <input
-                        onChange={(event) => setImageSettings({ ...imageSettings, fileFieldName: event.target.value })}
-                        placeholder="smfile / file / image"
-                        value={imageSettings.fileFieldName}
-                      />
-                    </label>
-                    <label>
-                      返回 URL 路径
-                      <input
-                        onChange={(event) => setImageSettings({ ...imageSettings, urlPath: event.target.value })}
-                        placeholder="data.url / result.url"
-                        value={imageSettings.urlPath}
-                      />
-                    </label>
-                  </div>
-                  <div className="image-tools">
-                    <label className="file-picker">
-                      {uploading ? '上传中...' : '上传图片'}
-                      <input accept="image/*" disabled={uploading} onChange={uploadImage} type="file" />
-                    </label>
-                    <input
-                      onChange={(event) => setImageAlt(event.target.value)}
-                      placeholder="图片描述"
-                      value={imageAlt}
-                    />
-                    <input
-                      onChange={(event) => setManualImageUrl(event.target.value)}
-                      placeholder="手动输入图片 URL"
-                      value={manualImageUrl}
-                    />
-                    <button onClick={insertManualImage} type="button">插入 URL</button>
-                  </div>
-                  {uploadedImages.length > 0 ? (
-                    <div className="upload-list">
-                      {uploadedImages.map((image) => (
-                        <div className="upload-item" key={image.url}>
-                          <img alt={image.filename} src={image.url} {...safeImageAttributes} />
-                          <span>{image.filename}</span>
-                          <button onClick={() => insertImage(image)} type="button">插入</button>
-                          <button onClick={() => insertImage(image, true)} type="button">设封面</button>
-                          <button onClick={() => copyText(image.url)} type="button">复制 URL</button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </section>
-
                 <label>
                   标题
                   <input
@@ -758,7 +600,7 @@ function App() {
                   封面图 URL
                   <input
                     onChange={(event) => updateForm({ coverImage: event.target.value })}
-                    placeholder="可由图床上传后自动填入"
+                    placeholder="请输入 HTTPS 图片 URL"
                     value={form.coverImage ?? ''}
                   />
                 </label>

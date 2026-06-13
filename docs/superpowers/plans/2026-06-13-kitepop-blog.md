@@ -19,7 +19,7 @@
 - `src/App.css`: responsive visual design.
 - `src/lib/blog.ts`: category metadata, sample posts, slug/read-time helpers.
 - `src/lib/blogStore.ts`: localStorage repository functions.
-- `src/lib/imageHost.ts`: SM.MS image host settings, response parsing, markdown image helper, and upload client.
+- `src/lib/imageUrl.ts`: safe image URL normalization for covers and Markdown-rendered images.
 - `src/lib/draftAutosave.ts`: local editor draft persistence.
 - `src/lib/markdown.ts`: testable Markdown block parsing for preview and article rendering.
 - `src/lib/blog.test.ts`: pure content model tests.
@@ -52,17 +52,15 @@
 
 ### Task 5: Image Publishing Workflow
 
-- [ ] Add tests for SM.MS response parsing, image markdown creation, image host settings, and draft autosave.
+- [ ] Add tests for safe image URL normalization and draft autosave.
 - [ ] Add `coverImage` support to the post model.
-- [ ] Add admin image host settings, upload input, manual URL insertion, uploaded image actions, and Markdown image rendering.
+- [ ] Add Markdown image rendering and cover image URL support.
 - [ ] Add editor preview, autosaved new draft, status filter, delete confirmation, and visible validation messages.
 - [ ] Run tests and production build before committing.
 
-### Task 6: Markdown Editor And Configurable Image Host
+### Task 6: Markdown Editor
 
 - [ ] Add tests for Markdown headings, blockquotes, lists, fenced code, and images.
-- [ ] Add tests for configurable image host upload URL, file field name, and response URL path.
 - [ ] Replace ad hoc Markdown preview parsing with `src/lib/markdown.ts`.
 - [ ] Add Markdown toolbar actions for headings, bold, inline code, blockquote, lists, links, and code blocks.
-- [ ] Expand image host settings UI with upload endpoint, file field name, and returned URL path.
 - [ ] Run tests and production build before committing and pushing to GitHub.
