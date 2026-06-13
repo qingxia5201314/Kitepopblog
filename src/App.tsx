@@ -11,14 +11,37 @@ import {
   getCategoryIcon
 } from './lib/blog';
 import { createPost, deletePost, listPosts, updatePost } from './lib/blogApi';
+import {
+  ACCOUNTING_CATEGORIES,
+  AccountingCategoryId,
+  AccountingEntry,
+  AccountingEntryDraft,
+  AccountingEntryType,
+  AccountingMonthData,
+  AccountingSettingsDraft,
+  currentMonthInput,
+  formatMoney,
+  getAccountingCategory,
+  todayDateInput
+} from './lib/accounting';
+import {
+  createAccountingEntry,
+  deleteAccountingEntry,
+  getAccountingMonth,
+  loginAccounting,
+  updateAccountingEntry,
+  updateAccountingSettings
+} from './lib/accountingApi';
 import { createDraftAutosaveRepository } from './lib/draftAutosave';
 import { normalizeImageUrl } from './lib/imageUrl';
 import { MarkdownBlock, parseMarkdown } from './lib/markdown';
 import { AppNotification, NotificationType, createNotification } from './lib/notification';
 
-type ViewMode = 'home' | 'admin';
+type ViewMode = 'home' | 'accounting' | 'admin';
 type EditorTab = 'edit' | 'preview';
 type AdminStatusFilter = 'all' | PostStatus;
+type AccountingTypeFilter = 'all' | AccountingEntryType;
+type AccountingCategoryFilter = 'all' | AccountingCategoryId;
 type UiIcon = ReturnType<typeof getCategoryIcon> | 'calendar' | 'clock' | 'tag' | 'spark' | 'grid' | 'draft' | 'edit';
 
 const safeImageAttributes = {
@@ -28,6 +51,7 @@ const safeImageAttributes = {
 } as const;
 
 const draftRepository = createDraftAutosaveRepository();
+const ACCOUNTING_SESSION_KEY = 'kitepop-accounting-session';
 
 const EMPTY_FORM: BlogPostDraft = {
   title: '',
@@ -39,6 +63,53 @@ const EMPTY_FORM: BlogPostDraft = {
   cover: 'life',
   coverImage: ''
 };
+
+const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
+  type: 'expense',
+  amountYuan: '',
+  category: 'food',
+  account: '支付宝',
+  spentAt: todayDateInput(),
+  note: ''
+};
+
+const EMPTY_ACCOUNTING_SETTINGS: AccountingSettingsDraft = {
+  monthlyBudgetYuan: '',
+  savingGoal: {
+    name: '本月存钱目标',
+    targetYuan: '',
+    savedYuan: '',
+    startDate: `${currentMonthInput()}-01`,
+    endDate: `${currentMonthInput()}-30`
+  }
+};
+
+function loadAccountingSession(): { token: string; expiresAt: string } | null {
+  try {
+    const raw = window.localStorage.getItem(ACCOUNTING_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { token?: string; expiresAt?: string };
+    if (!parsed.token || !parsed.expiresAt || Date.parse(parsed.expiresAt) <= Date.now()) {
+      window.localStorage.removeItem(ACCOUNTING_SESSION_KEY);
+      return null;
+    }
+    return { token: parsed.token, expiresAt: parsed.expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+function saveAccountingSession(session: { token: string; expiresAt: string }) {
+  window.localStorage.setItem(ACCOUNTING_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearAccountingSession() {
+  window.localStorage.removeItem(ACCOUNTING_SESSION_KEY);
+}
+
+function centsToInput(cents = 0): string {
+  return cents > 0 ? String(cents / 100) : '';
+}
 
 function splitTags(value: string): string[] {
   return value
@@ -150,6 +221,16 @@ function App() {
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminStatusFilter>('all');
   const [notification, setNotification] = useState<AppNotification | null>(null);
   const [autosaveNote, setAutosaveNote] = useState('');
+  const [accountingSession, setAccountingSession] = useState(() => loadAccountingSession());
+  const [accountingPassword, setAccountingPassword] = useState('');
+  const [accountingMonth, setAccountingMonth] = useState(currentMonthInput());
+  const [accountingTypeFilter, setAccountingTypeFilter] = useState<AccountingTypeFilter>('all');
+  const [accountingCategoryFilter, setAccountingCategoryFilter] = useState<AccountingCategoryFilter>('all');
+  const [accountingData, setAccountingData] = useState<AccountingMonthData | null>(null);
+  const [accountingForm, setAccountingForm] = useState<AccountingEntryDraft>(EMPTY_ACCOUNTING_ENTRY);
+  const [editingAccountingId, setEditingAccountingId] = useState<string | null>(null);
+  const [accountingSettingsForm, setAccountingSettingsForm] =
+    useState<AccountingSettingsDraft>(EMPTY_ACCOUNTING_SETTINGS);
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query }),
@@ -161,6 +242,10 @@ function App() {
   const draftCount = posts.filter((post) => post.status === 'draft').length;
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const formCoverImage = getSafeImageUrl(form.coverImage);
+  const accountingToken = accountingSession?.token ?? '';
+  const accountingCategories = ACCOUNTING_CATEGORIES.filter(
+    (category) => category.type === 'both' || category.type === accountingForm.type
+  );
 
   useEffect(() => {
     if (!adminUnlocked || editingId) return;
@@ -197,9 +282,57 @@ function App() {
     }
   };
 
+  const syncAccountingSettingsForm = (data: AccountingMonthData) => {
+    setAccountingSettingsForm({
+      monthlyBudgetYuan: centsToInput(data.settings.monthlyBudgetCents),
+      savingGoal: data.savingGoal
+        ? {
+            name: data.savingGoal.name,
+            targetYuan: centsToInput(data.savingGoal.targetCents),
+            savedYuan: centsToInput(data.savingGoal.savedCents),
+            startDate: data.savingGoal.startDate,
+            endDate: data.savingGoal.endDate
+          }
+        : EMPTY_ACCOUNTING_SETTINGS.savingGoal
+    });
+  };
+
+  const expireAccountingSession = () => {
+    clearAccountingSession();
+    setAccountingSession(null);
+    setAccountingData(null);
+    notify('error', '记账登录已过期，请重新登录');
+  };
+
+  const loadAccountingData = async (
+    token = accountingToken,
+    month = accountingMonth,
+    type = accountingTypeFilter,
+    category = accountingCategoryFilter
+  ) => {
+    if (!token) return;
+    try {
+      const data = await getAccountingMonth({ token, month, type, category });
+      setAccountingData(data);
+      syncAccountingSettingsForm(data);
+    } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes('session')) {
+        expireAccountingSession();
+        return;
+      }
+      notify('error', error instanceof Error ? error.message : '记账数据加载失败');
+    }
+  };
+
   useEffect(() => {
     void loadPosts(false, '');
   }, []);
+
+  useEffect(() => {
+    if (accountingToken) {
+      void loadAccountingData(accountingToken, accountingMonth, accountingTypeFilter, accountingCategoryFilter);
+    }
+  }, [accountingToken, accountingMonth, accountingTypeFilter, accountingCategoryFilter]);
 
   const updateForm = (patch: Partial<BlogPostDraft>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -335,6 +468,104 @@ function App() {
     notify('info', 'Markdown 片段已插入正文');
   };
 
+  const unlockAccounting = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      const session = await loginAccounting(accountingPassword);
+      saveAccountingSession(session);
+      setAccountingSession(session);
+      setAccountingPassword('');
+      await loadAccountingData(session.token);
+      notify('success', '记账会话已保持 30 天');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '记账口令不正确');
+    }
+  };
+
+  const logoutAccounting = () => {
+    clearAccountingSession();
+    setAccountingSession(null);
+    setAccountingData(null);
+    notify('info', '已退出记账');
+  };
+
+  const updateAccountingForm = (patch: Partial<AccountingEntryDraft>) => {
+    setAccountingForm((current) => ({ ...current, ...patch }));
+    setNotification((current) => (current?.type === 'error' ? null : current));
+  };
+
+  const resetAccountingForm = () => {
+    setEditingAccountingId(null);
+    setAccountingForm({ ...EMPTY_ACCOUNTING_ENTRY, spentAt: todayDateInput() });
+  };
+
+  const startEditAccountingEntry = (entry: AccountingEntry) => {
+    setEditingAccountingId(entry.id);
+    setAccountingForm({
+      type: entry.type,
+      amountYuan: centsToInput(entry.amountCents),
+      category: entry.category,
+      account: entry.account,
+      spentAt: entry.spentAt,
+      note: entry.note
+    });
+  };
+
+  const saveAccountingEntry = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!accountingToken) return;
+    if (!accountingForm.amountYuan.trim()) {
+      notify('error', '请填写金额');
+      return;
+    }
+    if (!accountingForm.account.trim()) {
+      notify('error', '请填写账户');
+      return;
+    }
+
+    try {
+      if (editingAccountingId) {
+        await updateAccountingEntry(editingAccountingId, accountingForm, accountingToken);
+      } else {
+        await createAccountingEntry(accountingForm, accountingToken);
+      }
+      resetAccountingForm();
+      await loadAccountingData();
+      notify('success', editingAccountingId ? '流水已更新' : '流水已保存');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '流水保存失败');
+    }
+  };
+
+  const removeAccountingEntry = async (entry: AccountingEntry) => {
+    if (!accountingToken) return;
+    const confirmed = window.confirm(`确认删除这笔 ${formatMoney(entry.amountCents)} 的流水吗？`);
+    if (!confirmed) return;
+
+    try {
+      await deleteAccountingEntry(entry.id, accountingToken);
+      await loadAccountingData();
+      notify('success', '流水已删除');
+      if (editingAccountingId === entry.id) resetAccountingForm();
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '流水删除失败');
+    }
+  };
+
+  const saveAccountingSettings = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!accountingToken) return;
+
+    try {
+      await updateAccountingSettings(accountingSettingsForm, accountingToken);
+      await loadAccountingData();
+      notify('success', '预算和存钱目标已保存');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '设置保存失败');
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -353,6 +584,9 @@ function App() {
         <nav>
           <button className={mode === 'home' ? 'active' : ''} onClick={() => setMode('home')} type="button">
             阅读
+          </button>
+          <button className={mode === 'accounting' ? 'active' : ''} onClick={() => setMode('accounting')} type="button">
+            记账
           </button>
           <button className={mode === 'admin' ? 'active' : ''} onClick={() => setMode('admin')} type="button">
             后台
@@ -498,6 +732,278 @@ function App() {
             </article>
           </section>
         </>
+      ) : mode === 'accounting' ? (
+        <section className="accounting-page">
+          {!accountingSession ? (
+            <form className="unlock-panel" onSubmit={unlockAccounting}>
+              <p className="eyebrow">Private Ledger</p>
+              <h1>记账中心</h1>
+              <p>输入管理口令后，可以查看和维护个人流水、月预算和一个月存钱目标。未登录用户不会看到任何金额数据。</p>
+              <input
+                aria-label="记账口令"
+                onChange={(event) => setAccountingPassword(event.target.value)}
+                placeholder="输入记账口令"
+                type="password"
+                value={accountingPassword}
+              />
+              <button type="submit">进入记账</button>
+            </form>
+          ) : (
+            <>
+              <section className="accounting-hero">
+                <div>
+                  <p className="eyebrow">Private Ledger</p>
+                  <h1>本月收支和存钱目标</h1>
+                  <p>会话已保持到 {new Date(accountingSession.expiresAt).toLocaleDateString('zh-CN')}，数据只从服务端读取。</p>
+                </div>
+                <div className="accounting-actions">
+                  <input
+                    aria-label="选择月份"
+                    onChange={(event) => setAccountingMonth(event.target.value)}
+                    type="month"
+                    value={accountingMonth}
+                  />
+                  <button className="ghost" onClick={logoutAccounting} type="button">退出记账</button>
+                </div>
+              </section>
+
+              <section className="accounting-metrics">
+                <div>
+                  <span>本月收入</span>
+                  <strong>{formatMoney(accountingData?.summary.incomeCents ?? 0)}</strong>
+                </div>
+                <div>
+                  <span>本月支出</span>
+                  <strong>{formatMoney(accountingData?.summary.expenseCents ?? 0)}</strong>
+                </div>
+                <div>
+                  <span>结余</span>
+                  <strong>{formatMoney(accountingData?.summary.balanceCents ?? 0)}</strong>
+                </div>
+                <div>
+                  <span>预算剩余</span>
+                  <strong>{formatMoney(accountingData?.summary.budgetRemainingCents ?? 0)}</strong>
+                </div>
+              </section>
+
+              <section className="accounting-layout">
+                <form className="accounting-card accounting-form" onSubmit={saveAccountingEntry}>
+                  <div className="panel-heading">
+                    <h2>{editingAccountingId ? '编辑流水' : '快速记一笔'}</h2>
+                    {editingAccountingId ? <button onClick={resetAccountingForm} type="button">取消编辑</button> : null}
+                  </div>
+                  <div className="segmented-control">
+                    {(['expense', 'income'] as AccountingEntryType[]).map((type) => (
+                      <button
+                        className={accountingForm.type === type ? 'active' : ''}
+                        key={type}
+                        onClick={() =>
+                          updateAccountingForm({
+                            type,
+                            category: type === 'income' ? 'salary' : 'food'
+                          })
+                        }
+                        type="button"
+                      >
+                        {type === 'expense' ? '支出' : '收入'}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="form-grid">
+                    <label>
+                      金额
+                      <input
+                        inputMode="decimal"
+                        onChange={(event) => updateAccountingForm({ amountYuan: event.target.value })}
+                        placeholder="0.00"
+                        value={accountingForm.amountYuan}
+                      />
+                    </label>
+                    <label>
+                      分类
+                      <select
+                        onChange={(event) => updateAccountingForm({ category: event.target.value as AccountingCategoryId })}
+                        value={accountingForm.category}
+                      >
+                        {accountingCategories.map((category) => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="form-grid">
+                    <label>
+                      日期
+                      <input
+                        onChange={(event) => updateAccountingForm({ spentAt: event.target.value })}
+                        type="date"
+                        value={accountingForm.spentAt}
+                      />
+                    </label>
+                    <label>
+                      账户
+                      <input
+                        onChange={(event) => updateAccountingForm({ account: event.target.value })}
+                        placeholder="支付宝 / 微信 / 银行卡"
+                        value={accountingForm.account}
+                      />
+                    </label>
+                  </div>
+                  <label>
+                    备注
+                    <input
+                      onChange={(event) => updateAccountingForm({ note: event.target.value })}
+                      placeholder="例如：午饭、课程、工资"
+                      value={accountingForm.note}
+                    />
+                  </label>
+                  <button type="submit">{editingAccountingId ? '保存更新' : '保存流水'}</button>
+                </form>
+
+                <section className="accounting-card">
+                  <div className="panel-heading">
+                    <h2>流水筛选</h2>
+                  </div>
+                  <div className="form-grid">
+                    <label>
+                      类型
+                      <select
+                        onChange={(event) => setAccountingTypeFilter(event.target.value as AccountingTypeFilter)}
+                        value={accountingTypeFilter}
+                      >
+                        <option value="all">全部</option>
+                        <option value="expense">支出</option>
+                        <option value="income">收入</option>
+                      </select>
+                    </label>
+                    <label>
+                      分类
+                      <select
+                        onChange={(event) => setAccountingCategoryFilter(event.target.value as AccountingCategoryFilter)}
+                        value={accountingCategoryFilter}
+                      >
+                        <option value="all">全部分类</option>
+                        {ACCOUNTING_CATEGORIES.map((category) => (
+                          <option key={category.id} value={category.id}>{category.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="entry-list">
+                    {(accountingData?.entries ?? []).map((entry) => {
+                      const category = getAccountingCategory(entry.category);
+                      return (
+                        <div className="entry-item" key={entry.id}>
+                          <span className={`entry-type entry-${entry.type}`}>{entry.type === 'expense' ? '支' : '收'}</span>
+                          <span>
+                            <strong>{category.name} · {entry.account}</strong>
+                            <small>{entry.spentAt}{entry.note ? ` · ${entry.note}` : ''}</small>
+                          </span>
+                          <strong className={entry.type === 'expense' ? 'money-expense' : 'money-income'}>
+                            {entry.type === 'expense' ? '-' : '+'}{formatMoney(entry.amountCents)}
+                          </strong>
+                          <button onClick={() => startEditAccountingEntry(entry)} type="button">编辑</button>
+                          <button className="danger" onClick={() => removeAccountingEntry(entry)} type="button">删除</button>
+                        </div>
+                      );
+                    })}
+                    {accountingData && accountingData.entries.length === 0 ? (
+                      <div className="empty-state">这个筛选条件下还没有流水。</div>
+                    ) : null}
+                  </div>
+                </section>
+
+                <form className="accounting-card saving-panel" onSubmit={saveAccountingSettings}>
+                  <div className="panel-heading">
+                    <h2>预算和存钱目标</h2>
+                    <button type="submit">保存设置</button>
+                  </div>
+                  <label>
+                    月预算
+                    <input
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setAccountingSettingsForm((current) => ({ ...current, monthlyBudgetYuan: event.target.value }))
+                      }
+                      placeholder="例如：3000"
+                      value={accountingSettingsForm.monthlyBudgetYuan}
+                    />
+                  </label>
+                  <div className="progress-track">
+                    <span style={{ width: `${Math.min(accountingData?.summary.budgetUsedPercent ?? 0, 100)}%` }} />
+                  </div>
+                  <p>预算已用 {accountingData?.summary.budgetUsedPercent ?? 0}%</p>
+                  {accountingSettingsForm.savingGoal ? (
+                    <>
+                      <div className="form-grid">
+                        <label>
+                          目标名称
+                          <input
+                            onChange={(event) =>
+                              setAccountingSettingsForm((current) => ({
+                                ...current,
+                                savingGoal: { ...current.savingGoal!, name: event.target.value }
+                              }))
+                            }
+                            value={accountingSettingsForm.savingGoal.name}
+                          />
+                        </label>
+                        <label>
+                          目标金额
+                          <input
+                            inputMode="decimal"
+                            onChange={(event) =>
+                              setAccountingSettingsForm((current) => ({
+                                ...current,
+                                savingGoal: { ...current.savingGoal!, targetYuan: event.target.value }
+                              }))
+                            }
+                            placeholder="5000"
+                            value={accountingSettingsForm.savingGoal.targetYuan}
+                          />
+                        </label>
+                      </div>
+                      <div className="form-grid">
+                        <label>
+                          已存金额
+                          <input
+                            inputMode="decimal"
+                            onChange={(event) =>
+                              setAccountingSettingsForm((current) => ({
+                                ...current,
+                                savingGoal: { ...current.savingGoal!, savedYuan: event.target.value }
+                              }))
+                            }
+                            placeholder="1200"
+                            value={accountingSettingsForm.savingGoal.savedYuan}
+                          />
+                        </label>
+                        <label>
+                          结束日期
+                          <input
+                            onChange={(event) =>
+                              setAccountingSettingsForm((current) => ({
+                                ...current,
+                                savingGoal: { ...current.savingGoal!, endDate: event.target.value }
+                              }))
+                            }
+                            type="date"
+                            value={accountingSettingsForm.savingGoal.endDate}
+                          />
+                        </label>
+                      </div>
+                    </>
+                  ) : null}
+                  <div className="saving-summary">
+                    <strong>{accountingData?.savingGoal?.progressPercent ?? 0}%</strong>
+                    <span>还需 {formatMoney(accountingData?.savingGoal?.remainingCents ?? 0)}</span>
+                    <span>建议每天存 {formatMoney(accountingData?.savingGoal?.dailyRequiredCents ?? 0)}</span>
+                  </div>
+                </form>
+              </section>
+            </>
+          )}
+        </section>
       ) : (
         <section className="admin-layout">
           {!adminUnlocked ? (

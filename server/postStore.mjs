@@ -1,8 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
-import initSqlJs from 'sql.js';
 import { createId, sortPostsByDate, today, uniqueSlug } from './blogModel.mjs';
 import { seedPosts } from './seedPosts.mjs';
+import { createSqliteDatabase } from './sqliteDatabase.mjs';
 
 function rowToPost(row) {
   return {
@@ -49,11 +47,6 @@ function selectAll(db) {
   });
 }
 
-function persist(db, dbPath) {
-  mkdirSync(dirname(dbPath), { recursive: true });
-  writeFileSync(dbPath, Buffer.from(db.export()));
-}
-
 function initSchema(db) {
   db.run(`
     CREATE TABLE IF NOT EXISTS posts (
@@ -82,15 +75,15 @@ function insertPost(db, post) {
   );
 }
 
-export async function createPostStore({ dbPath = './data/blog.sqlite' } = {}) {
-  const SQL = await initSqlJs();
-  const db = existsSync(dbPath) ? new SQL.Database(readFileSync(dbPath)) : new SQL.Database();
+export async function createPostStore({ dbPath = './data/blog.sqlite', database } = {}) {
+  const sqlite = database ?? (await createSqliteDatabase({ dbPath }));
+  const { db } = sqlite;
 
   initSchema(db);
 
   if (selectAll(db).length === 0) {
     seedPosts.forEach((post) => insertPost(db, post));
-    persist(db, dbPath);
+    sqlite.persist();
   }
 
   return {
@@ -114,7 +107,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite' } = {}) {
       };
 
       insertPost(db, post);
-      persist(db, dbPath);
+      sqlite.persist();
       return post;
     },
 
@@ -149,7 +142,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite' } = {}) {
           id
         ]
       );
-      persist(db, dbPath);
+      sqlite.persist();
       return updated;
     },
 
@@ -157,7 +150,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite' } = {}) {
       const existing = this.get(id);
       if (!existing) return false;
       db.run('DELETE FROM posts WHERE id = ?', [id]);
-      persist(db, dbPath);
+      sqlite.persist();
       return true;
     }
   };

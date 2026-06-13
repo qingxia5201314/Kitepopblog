@@ -3,8 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve } from 'node:path';
 import { createServer } from 'node:http';
 import { createAdminSessions } from './adminSession.mjs';
+import { createAccountingSessions } from './accountingSession.mjs';
+import { createAccountingStore } from './accountingStore.mjs';
 import { verifyAdminPassword } from './auth.mjs';
 import { createPostStore } from './postStore.mjs';
+import { createSqliteDatabase } from './sqliteDatabase.mjs';
 
 const root = resolve('dist');
 const port = Number(process.env.PORT || 3000);
@@ -77,6 +80,11 @@ function getPostId(pathname) {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+function getAccountingEntryId(pathname) {
+  const match = pathname.match(/^\/api\/accounting\/entries\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 async function handlePosts(request, response, store, sessions) {
   const url = new URL(request.url || '/', 'http://localhost');
   const admin = isAdmin(request, sessions);
@@ -133,6 +141,96 @@ async function handlePosts(request, response, store, sessions) {
   sendJson(response, 405, { ok: false, message: 'Method not allowed' });
 }
 
+async function handleAccounting(request, response, accountingStore, accountingSessions) {
+  const url = new URL(request.url || '/', 'http://localhost');
+
+  if (url.pathname === '/api/accounting/login') {
+    if (request.method !== 'POST') {
+      sendJson(response, 405, { ok: false, message: 'Method not allowed' });
+      return;
+    }
+
+    if (!adminPassword) {
+      sendJson(response, 503, { ok: false, message: '服务端未配置 ADMIN_PASSWORD' });
+      return;
+    }
+
+    try {
+      const body = await readJsonBody(request);
+      const ok = verifyAdminPassword(String(body.password || ''), adminPassword);
+      if (!ok) {
+        sendJson(response, 401, { ok: false, message: '记账口令不正确' });
+        return;
+      }
+      sendJson(response, 200, { ok: true, ...accountingSessions.issue() });
+    } catch {
+      sendJson(response, 400, { ok: false, message: 'Invalid request body' });
+    }
+    return;
+  }
+
+  const authenticated = accountingSessions.verify(request.headers.authorization || '');
+  if (!authenticated) {
+    sendJson(response, 401, { ok: false, message: 'Accounting session expired' });
+    return;
+  }
+
+  if (url.pathname === '/api/accounting/session' && request.method === 'GET') {
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+
+  if (url.pathname === '/api/accounting/month' && request.method === 'GET') {
+    sendJson(response, 200, accountingStore.getMonthData({
+      month: url.searchParams.get('month') || undefined,
+      type: url.searchParams.get('type') || 'all',
+      category: url.searchParams.get('category') || 'all'
+    }));
+    return;
+  }
+
+  if (url.pathname === '/api/accounting/entries' && request.method === 'POST') {
+    try {
+      const body = await readJsonBody(request);
+      sendJson(response, 201, { entry: accountingStore.createEntry(body) });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Invalid request body' });
+    }
+    return;
+  }
+
+  const entryId = getAccountingEntryId(url.pathname);
+  if (entryId && request.method === 'PUT') {
+    try {
+      const body = await readJsonBody(request);
+      const entry = accountingStore.updateEntry(entryId, body);
+      sendJson(response, entry ? 200 : 404, entry ? { entry } : { ok: false, message: 'Entry not found' });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Invalid request body' });
+    }
+    return;
+  }
+
+  if (entryId && request.method === 'DELETE') {
+    const removed = accountingStore.removeEntry(entryId);
+    sendJson(response, removed ? 200 : 404, removed ? { ok: true } : { ok: false, message: 'Entry not found' });
+    return;
+  }
+
+  if (url.pathname === '/api/accounting/settings' && request.method === 'PUT') {
+    try {
+      const body = await readJsonBody(request);
+      accountingStore.updateSettings(body);
+      sendJson(response, 200, accountingStore.getMonthData({ month: body.month }));
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Invalid request body' });
+    }
+    return;
+  }
+
+  sendJson(response, 404, { ok: false, message: 'Not found' });
+}
+
 function sendStatic(request, response) {
   const url = new URL(request.url || '/', 'http://localhost');
   const requestedPath = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
@@ -155,7 +253,10 @@ function sendStatic(request, response) {
 }
 
 const sessions = createAdminSessions();
-const store = await createPostStore({ dbPath: postDbPath });
+const database = await createSqliteDatabase({ dbPath: postDbPath });
+const store = await createPostStore({ database });
+const accountingStore = createAccountingStore({ database });
+const accountingSessions = createAccountingSessions({ store: accountingStore });
 
 createServer(async (request, response) => {
   if (request.url?.startsWith('/api/admin/login')) {
@@ -165,6 +266,11 @@ createServer(async (request, response) => {
 
   if (request.url?.startsWith('/api/posts')) {
     await handlePosts(request, response, store, sessions);
+    return;
+  }
+
+  if (request.url?.startsWith('/api/accounting')) {
+    await handleAccounting(request, response, accountingStore, accountingSessions);
     return;
   }
 

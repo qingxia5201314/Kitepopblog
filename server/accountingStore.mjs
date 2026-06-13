@@ -1,0 +1,244 @@
+import {
+  assertEntryDraft,
+  calculateSavingGoal,
+  createAccountingId,
+  monthOf,
+  parseMoneyToCents,
+  summarizeEntries,
+  today
+} from './accountingModel.mjs';
+
+function rowObject(columns, value) {
+  return Object.fromEntries(columns.map((column, index) => [column, value[index]]));
+}
+
+function selectRows(db, sql, params = []) {
+  const statement = db.prepare(sql);
+  try {
+    statement.bind(params);
+    const rows = [];
+    while (statement.step()) rows.push(statement.getAsObject());
+    return rows;
+  } finally {
+    statement.free();
+  }
+}
+
+function initSchema(db) {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS accounting_sessions (
+      token_hash TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_entries (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      category TEXT NOT NULL,
+      account TEXT NOT NULL,
+      spent_at TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS accounting_settings (
+      id TEXT PRIMARY KEY,
+      monthly_budget_cents INTEGER NOT NULL DEFAULT 0,
+      saving_goal_json TEXT NOT NULL DEFAULT ''
+    );
+  `);
+}
+
+function rowToEntry(row) {
+  return {
+    id: row.id,
+    type: row.type,
+    amountCents: Number(row.amount_cents),
+    category: row.category,
+    account: row.account,
+    spentAt: row.spent_at,
+    note: row.note || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function normalizeEntryDraft(draft) {
+  assertEntryDraft(draft);
+  return {
+    type: draft.type,
+    amountCents: draft.amountCents ?? parseMoneyToCents(draft.amountYuan),
+    category: draft.category,
+    account: String(draft.account || '').trim(),
+    spentAt: draft.spentAt,
+    note: String(draft.note || '').trim()
+  };
+}
+
+function normalizeSavingGoal(goal) {
+  if (!goal) return null;
+  return {
+    name: String(goal.name || '存钱目标').trim(),
+    targetCents: goal.targetCents ?? parseMoneyToCents(goal.targetYuan),
+    savedCents: goal.savedCents ?? parseMoneyToCents(goal.savedYuan ?? '0'),
+    startDate: goal.startDate,
+    endDate: goal.endDate
+  };
+}
+
+function parseSettings(row) {
+  const goal = row?.saving_goal_json ? JSON.parse(row.saving_goal_json) : null;
+  return {
+    monthlyBudgetCents: Number(row?.monthly_budget_cents || 0),
+    savingGoal: goal
+  };
+}
+
+export function createAccountingStore({ database }) {
+  const { db } = database;
+  initSchema(db);
+  database.persist();
+
+  function getSettings() {
+    const row = selectRows(db, 'SELECT * FROM accounting_settings WHERE id = ?', ['default'])[0];
+    if (row) return parseSettings(row);
+    return { monthlyBudgetCents: 0, savingGoal: null };
+  }
+
+  return {
+    createSession({ tokenHash, createdAt, expiresAt }) {
+      db.run('INSERT OR REPLACE INTO accounting_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)', [
+        tokenHash,
+        createdAt,
+        expiresAt
+      ]);
+      database.persist();
+    },
+
+    getSession(tokenHash) {
+      return selectRows(db, 'SELECT token_hash AS tokenHash, created_at AS createdAt, expires_at AS expiresAt FROM accounting_sessions WHERE token_hash = ?', [
+        tokenHash
+      ])[0];
+    },
+
+    removeExpiredSessions(nowIso) {
+      db.run('DELETE FROM accounting_sessions WHERE expires_at <= ?', [nowIso]);
+      database.persist();
+    },
+
+    debugListSessions() {
+      return selectRows(db, 'SELECT token_hash AS tokenHash, created_at AS createdAt, expires_at AS expiresAt FROM accounting_sessions');
+    },
+
+    createEntry(draft) {
+      const normalized = normalizeEntryDraft(draft);
+      const now = today();
+      const entry = {
+        id: createAccountingId(),
+        ...normalized,
+        createdAt: now,
+        updatedAt: now
+      };
+      db.run(
+        `INSERT INTO accounting_entries (
+          id, type, amount_cents, category, account, spent_at, note, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.id,
+          entry.type,
+          entry.amountCents,
+          entry.category,
+          entry.account,
+          entry.spentAt,
+          entry.note,
+          entry.createdAt,
+          entry.updatedAt
+        ]
+      );
+      database.persist();
+      return entry;
+    },
+
+    updateEntry(id, patch) {
+      const current = selectRows(db, 'SELECT * FROM accounting_entries WHERE id = ?', [id]).map(rowToEntry)[0];
+      if (!current) return undefined;
+      const normalized = normalizeEntryDraft({
+        type: patch.type ?? current.type,
+        amountCents: patch.amountCents ?? (patch.amountYuan ? parseMoneyToCents(patch.amountYuan) : current.amountCents),
+        category: patch.category ?? current.category,
+        account: patch.account ?? current.account,
+        spentAt: patch.spentAt ?? current.spentAt,
+        note: patch.note ?? current.note
+      });
+      const updated = { ...current, ...normalized, updatedAt: today() };
+
+      db.run(
+        `UPDATE accounting_entries SET
+          type = ?, amount_cents = ?, category = ?, account = ?, spent_at = ?, note = ?, updated_at = ?
+        WHERE id = ?`,
+        [
+          updated.type,
+          updated.amountCents,
+          updated.category,
+          updated.account,
+          updated.spentAt,
+          updated.note,
+          updated.updatedAt,
+          id
+        ]
+      );
+      database.persist();
+      return updated;
+    },
+
+    removeEntry(id) {
+      const existing = selectRows(db, 'SELECT id FROM accounting_entries WHERE id = ?', [id])[0];
+      if (!existing) return false;
+      db.run('DELETE FROM accounting_entries WHERE id = ?', [id]);
+      database.persist();
+      return true;
+    },
+
+    listEntries({ month = monthOf(today()), type = 'all', category = 'all' } = {}) {
+      return selectRows(db, 'SELECT * FROM accounting_entries WHERE substr(spent_at, 1, 7) = ? ORDER BY spent_at DESC, created_at DESC', [
+        month
+      ])
+        .map(rowToEntry)
+        .filter((entry) => (type === 'all' || entry.type === type) && (category === 'all' || entry.category === category));
+    },
+
+    updateSettings(settings) {
+      const current = getSettings();
+      const next = {
+        monthlyBudgetCents:
+          settings.monthlyBudgetCents ?? parseMoneyToCents(settings.monthlyBudgetYuan ?? String(current.monthlyBudgetCents / 100)),
+        savingGoal: settings.savingGoal === undefined ? current.savingGoal : normalizeSavingGoal(settings.savingGoal)
+      };
+      db.run(
+        `INSERT INTO accounting_settings (id, monthly_budget_cents, saving_goal_json)
+         VALUES ('default', ?, ?)
+         ON CONFLICT(id) DO UPDATE SET monthly_budget_cents = excluded.monthly_budget_cents,
+           saving_goal_json = excluded.saving_goal_json`,
+        [next.monthlyBudgetCents, next.savingGoal ? JSON.stringify(next.savingGoal) : '']
+      );
+      database.persist();
+      return next;
+    },
+
+    getSettings,
+
+    getMonthData(options = {}) {
+      const settings = getSettings();
+      const entries = this.listEntries(options);
+      return {
+        entries,
+        settings,
+        summary: summarizeEntries(entries, settings),
+        savingGoal: calculateSavingGoal(settings.savingGoal, { today: options.today })
+      };
+    }
+  };
+}
