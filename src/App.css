@@ -189,6 +189,53 @@ button {
   color: #fffaf3;
 }
 
+.toast {
+  align-items: center;
+  border: 1px solid #d6ccb9;
+  border-radius: 8px;
+  box-shadow: 0 14px 36px rgba(24, 33, 31, 0.16);
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  line-height: 1.5;
+  max-width: min(420px, calc(100vw - 24px));
+  padding: 12px 14px;
+  position: fixed;
+  right: 20px;
+  top: 78px;
+  z-index: 20;
+}
+
+.toast-success {
+  background: #ecf5ef;
+  border-color: #acd2bc;
+  color: #235d3e;
+}
+
+.toast-error {
+  background: #fff5f2;
+  border-color: #e4b2aa;
+  color: #982f29;
+}
+
+.toast-info {
+  background: #f2f5ff;
+  border-color: #bccbeb;
+  color: #304875;
+}
+
+.toast button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
 .hero-band {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
@@ -833,6 +880,12 @@ textarea {
   color: #9e2f28;
 }
 
+.autosave-note {
+  color: #68706a;
+  font-size: 0.9rem;
+  margin: -4px 0 0;
+}
+
 .image-tools {
   display: grid;
   gap: 10px;
@@ -990,6 +1043,12 @@ textarea {
 
   .topbar nav button {
     flex: 1;
+  }
+
+  .toast {
+    left: 12px;
+    right: 12px;
+    top: 92px;
   }
 
   .hero-band {

@@ -21,6 +21,7 @@ import {
   uploadToImageHost
 } from './lib/imageHost';
 import { MarkdownBlock, parseMarkdown } from './lib/markdown';
+import { AppNotification, NotificationType, createNotification } from './lib/notification';
 
 type ViewMode = 'home' | 'admin';
 type EditorTab = 'edit' | 'preview';
@@ -155,8 +156,8 @@ function App() {
   const [form, setForm] = useState<BlogPostDraft>(() => draftRepository.load() ?? EMPTY_FORM);
   const [editorTab, setEditorTab] = useState<EditorTab>('edit');
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminStatusFilter>('all');
-  const [notice, setNotice] = useState('');
-  const [formError, setFormError] = useState('');
+  const [notification, setNotification] = useState<AppNotification | null>(null);
+  const [autosaveNote, setAutosaveNote] = useState('');
   const [imageSettings, setImageSettings] = useState(() => imageSettingsRepository.load());
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [imageAlt, setImageAlt] = useState('Kitepop 图片');
@@ -182,22 +183,36 @@ function App() {
 
     if (hasDraftContent) {
       draftRepository.save(form);
-      setNotice('草稿已自动保存到本地浏览器');
+      setAutosaveNote('草稿已自动保存到本地浏览器');
     }
   }, [adminUnlocked, editingId, form]);
+
+  useEffect(() => {
+    if (!notification) return;
+
+    const timer = window.setTimeout(() => {
+      setNotification((current) => (current?.id === notification.id ? null : current));
+    }, notification.durationMs);
+
+    return () => window.clearTimeout(timer);
+  }, [notification]);
+
+  const notify = (type: NotificationType, message: string, durationMs?: number) => {
+    setNotification(createNotification(type, message, durationMs));
+  };
 
   const refresh = () => setPosts(repository.list());
 
   const updateForm = (patch: Partial<BlogPostDraft>) => {
     setForm((current) => ({ ...current, ...patch }));
-    setFormError('');
+    setNotification((current) => (current?.type === 'error' ? null : current));
   };
 
   const startCreate = () => {
     setEditingId(null);
     setForm(draftRepository.load() ?? EMPTY_FORM);
     setEditorTab('edit');
-    setNotice('已进入新建文章模式');
+    notify('info', '已进入新建文章模式');
   };
 
   const startEdit = (post: BlogPost) => {
@@ -213,24 +228,24 @@ function App() {
       coverImage: post.coverImage ?? ''
     });
     setEditorTab('edit');
-    setNotice(`正在编辑：${post.title}`);
+    notify('info', `正在编辑：${post.title}`);
   };
 
   const savePost = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!form.title.trim()) {
-      setFormError('请填写文章标题');
+      notify('error', '请填写文章标题');
       return;
     }
 
     if (!form.summary.trim()) {
-      setFormError('请填写文章摘要');
+      notify('error', '请填写文章摘要');
       return;
     }
 
     if (!form.content.trim()) {
-      setFormError('请填写文章正文');
+      notify('error', '请填写文章正文');
       return;
     }
 
@@ -238,7 +253,7 @@ function App() {
     const coverImage = coverImageInput ? normalizeImageUrl(coverImageInput) : '';
 
     if (coverImageInput && !coverImage) {
-      setFormError('请输入 HTTPS 封面图片 URL（本地调试允许 localhost HTTP）');
+      notify('error', '请输入 HTTPS 封面图片 URL（本地调试允许 localhost HTTP）');
       return;
     }
 
@@ -254,7 +269,7 @@ function App() {
     if (saved) {
       setSelectedPostId(saved.id);
       setActiveCategory(saved.category);
-      setNotice(saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
+      notify('success', saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
       draftRepository.clear();
       startEdit(saved);
     }
@@ -266,7 +281,7 @@ function App() {
 
     repository.remove(post.id);
     refresh();
-    setNotice('文章已删除');
+    notify('success', '文章已删除');
     if (selectedPostId === post.id) setSelectedPostId(null);
     if (editingId === post.id) startCreate();
   };
@@ -275,7 +290,7 @@ function App() {
     const updated = repository.update(id, { status });
     refresh();
     if (updated && editingId === id) startEdit(updated);
-    setNotice(status === 'published' ? '文章已发布' : '文章已转为草稿');
+    notify('success', status === 'published' ? '文章已发布' : '文章已转为草稿');
   };
 
   const unlockAdmin = async (event: FormEvent<HTMLFormElement>) => {
@@ -292,33 +307,33 @@ function App() {
       const result = (await response.json()) as { ok?: boolean; message?: string };
 
       if (!response.ok || !result.ok) {
-        setFormError(result.message || '后台口令不正确');
+        notify('error', result.message || '后台口令不正确');
         return;
       }
 
       setAdminUnlocked(true);
       setPassword('');
-      setNotice('已进入后台');
+      notify('success', '已进入后台');
     } catch {
-      setFormError('无法连接后台登录接口');
+      notify('error', '无法连接后台登录接口');
     }
   };
 
   const saveImageSettings = () => {
     if (!normalizeUploadUrl(imageSettings.uploadUrl)) {
-      setFormError('请输入 HTTPS 图床上传接口（本地调试允许 localhost HTTP）');
+      notify('error', '请输入 HTTPS 图床上传接口（本地调试允许 localhost HTTP）');
       return;
     }
 
     imageSettingsRepository.save(imageSettings);
-    setNotice('图床设置已保存到本地浏览器');
+    notify('success', '图床设置已保存到本地浏览器');
   };
 
   const insertImage = (image: UploadedImage, asCover = false) => {
     const imageUrl = normalizeImageUrl(image.url);
 
     if (!imageUrl) {
-      setFormError('请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
+      notify('error', '请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
       return;
     }
 
@@ -328,21 +343,21 @@ function App() {
       content: nextContent,
       coverImage: asCover ? imageUrl : form.coverImage
     });
-    setNotice(asCover ? '图片已插入正文并设为封面' : '图片已插入正文');
+    notify('success', asCover ? '图片已插入正文并设为封面' : '图片已插入正文');
   };
 
   const insertMarkdownSnippet = (before: string, after = '', placeholder = '内容') => {
     const snippet = `${before}${placeholder}${after}`;
     const nextContent = form.content.trim() ? `${form.content}\n\n${snippet}` : snippet;
     updateForm({ content: nextContent });
-    setNotice('Markdown 片段已插入正文');
+    notify('info', 'Markdown 片段已插入正文');
   };
 
   const insertManualImage = () => {
     const url = normalizeImageUrl(manualImageUrl);
 
     if (!url) {
-      setFormError('请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
+      notify('error', '请输入 HTTPS 图片 URL（本地调试允许 localhost HTTP）');
       return;
     }
 
@@ -355,15 +370,15 @@ function App() {
     if (!file) return;
 
     setUploading(true);
-    setFormError('');
+    setNotification((current) => (current?.type === 'error' ? null : current));
 
     try {
       const image = await uploadToImageHost(file, imageSettings);
       setUploadedImages((current) => [image, ...current]);
       insertImage(image);
-      setNotice('图片上传成功');
+      notify('success', '图片上传成功');
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : '图片上传失败');
+      notify('error', error instanceof Error ? error.message : '图片上传失败');
     } finally {
       setUploading(false);
       event.target.value = '';
@@ -372,7 +387,7 @@ function App() {
 
   const copyText = async (text: string) => {
     await navigator.clipboard.writeText(text);
-    setNotice('已复制到剪贴板');
+    notify('success', '已复制到剪贴板');
   };
 
   return (
@@ -399,6 +414,13 @@ function App() {
           </button>
         </nav>
       </header>
+
+      {notification ? (
+        <div className={`toast toast-${notification.type}`} role="alert">
+          <span>{notification.message}</span>
+          <button aria-label="关闭提示" onClick={() => setNotification(null)} type="button">×</button>
+        </div>
+      ) : null}
 
       {mode === 'home' ? (
         <>
@@ -540,7 +562,6 @@ function App() {
                 type="password"
                 value={password}
               />
-              {formError ? <p className="form-message error">{formError}</p> : null}
               <button type="submit">进入后台</button>
             </form>
           ) : (
@@ -583,8 +604,7 @@ function App() {
                   <h2>{editingId ? '编辑文章' : '新建文章'}</h2>
                   <button type="submit">{editingId ? '保存更新' : '保存文章'}</button>
                 </div>
-                {notice ? <p className="form-message">{notice}</p> : null}
-                {formError ? <p className="form-message error">{formError}</p> : null}
+                {autosaveNote ? <p className="autosave-note">{autosaveNote}</p> : null}
 
                 <section className="tool-panel">
                   <div className="panel-heading">
