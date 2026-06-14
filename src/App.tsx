@@ -4,14 +4,28 @@ import {
   BlogCategoryId,
   BlogPost,
   BlogPostDraft,
+  BlogUser,
   PostComment,
   PostStatus,
+  UserSession,
   calculateReadingMinutes,
   filterPosts,
   getCategory,
   getCategoryIcon
 } from './lib/blog';
-import { createPost, createPostComment, deletePost, listPostComments, listPosts, updatePost } from './lib/blogApi';
+import {
+  createPost,
+  createPostComment,
+  deletePost,
+  getCurrentUser,
+  listPostComments,
+  listPosts,
+  listUsers,
+  loginUser,
+  registerUser,
+  updatePost,
+  updateUser
+} from './lib/blogApi';
 import {
   ACCOUNTING_CATEGORIES,
   ACCOUNTING_ENTRY_COLLAPSE_LIMIT,
@@ -77,6 +91,7 @@ const safeImageAttributes = {
 
 const draftRepository = createDraftAutosaveRepository();
 const ADMIN_SESSION_KEY = 'kitepop-admin-session';
+const USER_SESSION_KEY = 'kitepop-user-session';
 const ACCOUNTING_SESSION_KEY = 'kitepop-accounting-session';
 const EMPTY_FILE_FOLDER_VIEW: FileFolderView = {
   folder: null,
@@ -97,9 +112,14 @@ const EMPTY_FORM: BlogPostDraft = {
 };
 
 const EMPTY_COMMENT_FORM = {
-  nickname: '',
-  role: '',
   content: ''
+};
+
+const EMPTY_USER_FORM = {
+  username: '',
+  password: '',
+  nickname: '',
+  role: ''
 };
 
 const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
@@ -153,12 +173,36 @@ function loadAdminSession(): { token: string; expiresAt?: string } | null {
   }
 }
 
+function loadUserSession(): UserSession | null {
+  try {
+    const raw = window.localStorage.getItem(USER_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as UserSession;
+    if (!parsed.token || !parsed.expiresAt || Date.parse(parsed.expiresAt) <= Date.now()) {
+      window.localStorage.removeItem(USER_SESSION_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    window.localStorage.removeItem(USER_SESSION_KEY);
+    return null;
+  }
+}
+
 function saveAdminSession(session: { token: string; expiresAt?: string }) {
   window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
 }
 
 function clearAdminSession() {
   window.localStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
+function saveUserSession(session: UserSession) {
+  window.localStorage.setItem(USER_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearUserSession() {
+  window.localStorage.removeItem(USER_SESSION_KEY);
 }
 
 function formatBytes(bytes = 0): string {
@@ -287,6 +331,11 @@ function App() {
   const [comments, setComments] = useState<PostComment[]>([]);
   const [commentForm, setCommentForm] = useState(EMPTY_COMMENT_FORM);
   const [commentLoading, setCommentLoading] = useState(false);
+  const [userSession, setUserSession] = useState<UserSession | null>(() => loadUserSession());
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
+  const [adminUsers, setAdminUsers] = useState<BlogUser[]>([]);
+  const [adminPanelOpen, setAdminPanelOpen] = useState({ content: true, users: false });
   const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(loadAdminSession()));
   const [adminToken, setAdminToken] = useState(() => loadAdminSession()?.token ?? '');
   const [password, setPassword] = useState('');
@@ -340,6 +389,7 @@ function App() {
   const draftCount = posts.filter((post) => post.status === 'draft').length;
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const formCoverImage = getSafeImageUrl(form.coverImage);
+  const userToken = userSession?.token ?? '';
   const accountingToken = accountingSession?.token ?? '';
   const accountingCategories = ACCOUNTING_CATEGORIES.filter(
     (category) => category.type === 'both' || category.type === accountingForm.type
@@ -391,6 +441,15 @@ function App() {
       setPosts(nextPosts);
     } catch {
       notify('error', '文章加载失败，请稍后重试');
+    }
+  };
+
+  const loadAdminUsers = async (token = adminToken) => {
+    if (!token) return;
+    try {
+      setAdminUsers(await listUsers(token));
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '用户列表加载失败');
     }
   };
 
@@ -480,11 +539,27 @@ function App() {
         setAdminUnlocked(true);
         setAdminToken(saved.token);
         await loadPosts(true, saved.token);
+        await loadAdminUsers(saved.token);
       })
       .catch(() => {
         clearAdminSession();
         setAdminUnlocked(false);
         setAdminToken('');
+      });
+  }, []);
+
+  useEffect(() => {
+    const saved = loadUserSession();
+    if (!saved?.token) return;
+    void getCurrentUser(saved.token)
+      .then((user) => {
+        const session = { ...saved, user };
+        saveUserSession(session);
+        setUserSession(session);
+      })
+      .catch(() => {
+        clearUserSession();
+        setUserSession(null);
       });
   }, []);
 
@@ -598,13 +673,17 @@ function App() {
   const submitComment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!detailPost || commentLoading) return;
+    if (!userToken) {
+      notify('error', '请先登录后再评论');
+      return;
+    }
     if (!commentForm.content.trim()) {
       notify('error', '请填写评论内容');
       return;
     }
     setCommentLoading(true);
     try {
-      const comment = await createPostComment(detailPost.slug, commentForm);
+      const comment = await createPostComment(detailPost.slug, commentForm, userToken);
       setComments((current) => [comment, ...current]);
       setCommentForm(EMPTY_COMMENT_FORM);
       notify('success', '评论已发布');
@@ -612,6 +691,38 @@ function App() {
       notify('error', error instanceof Error ? error.message : '评论发布失败');
     } finally {
       setCommentLoading(false);
+    }
+  };
+
+  const submitUserAuth = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const session =
+        authMode === 'register'
+          ? await registerUser(userForm)
+          : await loginUser(userForm.username, userForm.password);
+      saveUserSession(session);
+      setUserSession(session);
+      setUserForm(EMPTY_USER_FORM);
+      notify('success', authMode === 'register' ? '注册成功，已登录' : '登录成功');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '用户操作失败');
+    }
+  };
+
+  const logoutUser = () => {
+    clearUserSession();
+    setUserSession(null);
+    notify('info', '已退出当前用户');
+  };
+
+  const saveAdminUser = async (user: BlogUser) => {
+    try {
+      const updated = await updateUser(user.id, user, adminToken);
+      setAdminUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      notify('success', '用户资料已更新');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '用户更新失败');
     }
   };
 
@@ -736,6 +847,7 @@ function App() {
       saveAdminSession({ token: result.token, expiresAt: result.expiresAt });
       setPassword('');
       await loadPosts(true, result.token);
+      await loadAdminUsers(result.token);
       notify('success', '已进入后台');
     } catch {
       notify('error', '无法连接后台登录接口');
@@ -1159,6 +1271,55 @@ function App() {
             <span><Icon name="grid" /><strong>{BLOG_CATEGORIES.length}</strong> 内容模块</span>
           </section>
 
+          <section className="user-auth-card">
+            {userSession ? (
+              <>
+                <div>
+                  <strong>{userSession.user.nickname}</strong>
+                  <span>{userSession.user.role} · {userSession.user.permission === 'reader' ? '阅读用户' : '管理员'}</span>
+                </div>
+                <button className="ghost" onClick={logoutUser} type="button">退出登录</button>
+              </>
+            ) : (
+              <form onSubmit={submitUserAuth}>
+                <div className="segmented-control compact-tabs">
+                  <button className={authMode === 'login' ? 'active' : ''} onClick={() => setAuthMode('login')} type="button">登录</button>
+                  <button className={authMode === 'register' ? 'active' : ''} onClick={() => setAuthMode('register')} type="button">注册</button>
+                </div>
+                <input
+                  aria-label="用户名"
+                  onChange={(event) => setUserForm((current) => ({ ...current, username: event.target.value }))}
+                  placeholder="用户名"
+                  value={userForm.username}
+                />
+                <input
+                  aria-label="密码"
+                  onChange={(event) => setUserForm((current) => ({ ...current, password: event.target.value }))}
+                  placeholder="密码"
+                  type="password"
+                  value={userForm.password}
+                />
+                {authMode === 'register' ? (
+                  <>
+                    <input
+                      aria-label="昵称"
+                      onChange={(event) => setUserForm((current) => ({ ...current, nickname: event.target.value }))}
+                      placeholder="昵称"
+                      value={userForm.nickname}
+                    />
+                    <input
+                      aria-label="身份"
+                      onChange={(event) => setUserForm((current) => ({ ...current, role: event.target.value }))}
+                      placeholder="身份，例如：读者 / 朋友 / 安全研究员"
+                      value={userForm.role}
+                    />
+                  </>
+                ) : null}
+                <button type="submit">{authMode === 'register' ? '创建账号' : '登录评论'}</button>
+              </form>
+            )}
+          </section>
+
           <section className="category-grid" aria-label="内容分类">
             <button
               className={activeCategory === 'all' ? 'category active' : 'category'}
@@ -1190,7 +1351,7 @@ function App() {
             ))}
           </section>
 
-          <section className="content-layout">
+          <section className={detailPost ? 'content-layout detail-mode' : 'content-layout'}>
             <aside className="post-panel">
               <div className="panel-heading">
                 <h2>文章列表</h2>
@@ -1321,30 +1482,29 @@ function App() {
                     <section className="comment-panel">
                       <div className="panel-heading">
                         <h3>评论 · {comments.length}</h3>
+                        {userSession ? (
+                          <div className="comment-user-chip">
+                            <strong>{userSession.user.nickname}</strong>
+                            <span>{userSession.user.role}</span>
+                          </div>
+                        ) : null}
                       </div>
-                      <form className="comment-form" onSubmit={submitComment}>
-                        <div className="form-grid">
-                          <input
-                            aria-label="评论昵称"
-                            onChange={(event) => setCommentForm((current) => ({ ...current, nickname: event.target.value }))}
-                            placeholder="昵称"
-                            value={commentForm.nickname}
+                      {userSession ? (
+                        <form className="comment-form" onSubmit={submitComment}>
+                          <textarea
+                            aria-label="评论内容"
+                            onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
+                            placeholder="写点想法..."
+                            value={commentForm.content}
                           />
-                          <input
-                            aria-label="评论身份"
-                            onChange={(event) => setCommentForm((current) => ({ ...current, role: event.target.value }))}
-                            placeholder="身份，例如：读者 / 朋友 / 安全研究员"
-                            value={commentForm.role}
-                          />
+                          <button disabled={commentLoading} type="submit">{commentLoading ? '发布中...' : '发布评论'}</button>
+                        </form>
+                      ) : (
+                        <div className="comment-empty-card">
+                          <strong>登录后可评论</strong>
+                          <p>注册后默认只有阅读权限，评论会自动显示你的昵称和身份。</p>
                         </div>
-                        <textarea
-                          aria-label="评论内容"
-                          onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
-                          placeholder="写点想法..."
-                          value={commentForm.content}
-                        />
-                        <button disabled={commentLoading} type="submit">{commentLoading ? '发布中...' : '发布评论'}</button>
-                      </form>
+                      )}
                       <div className="comment-list">
                         {comments.map((comment) => (
                           <article className="comment-item" key={comment.id}>
@@ -1937,36 +2097,84 @@ function App() {
           ) : (
             <>
               <aside className="admin-list">
-                <div className="panel-heading">
-                  <h2>内容管理</h2>
-                  <button onClick={startCreate} type="button">新建</button>
-                </div>
-                <div className="segmented-control">
-                  {(['all', 'published', 'draft'] as AdminStatusFilter[]).map((status) => (
-                    <button
-                      className={adminStatusFilter === status ? 'active' : ''}
-                      key={status}
-                      onClick={() => setAdminStatusFilter(status)}
-                      type="button"
-                    >
-                      {status === 'all' ? '全部' : status === 'published' ? '已发布' : '草稿'}
+                <section className={adminPanelOpen.content ? 'admin-group open' : 'admin-group'}>
+                  <div className="panel-heading">
+                    <h2>内容管理</h2>
+                    <button onClick={() => setAdminPanelOpen((current) => ({ ...current, content: !current.content }))} type="button">
+                      {adminPanelOpen.content ? '收起' : '展开'}
                     </button>
-                  ))}
-                </div>
-                {adminPosts.map((post) => (
-                  <div className="admin-post" key={post.id}>
-                    <button onClick={() => startEdit(post)} type="button">
-                      <strong>{post.title}</strong>
-                      <small>{getCategory(post.category).name} · {post.status === 'published' ? '已发布' : '草稿'}</small>
-                    </button>
-                    <div>
-                      <button onClick={() => updateStatus(post.id, post.status === 'published' ? 'draft' : 'published')} type="button">
-                        {post.status === 'published' ? '设草稿' : '发布'}
-                      </button>
-                      <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
-                    </div>
                   </div>
-                ))}
+                  {adminPanelOpen.content ? (
+                    <>
+                      <button className="ghost admin-create" onClick={startCreate} type="button">新建</button>
+                      <div className="segmented-control">
+                        {(['all', 'published', 'draft'] as AdminStatusFilter[]).map((status) => (
+                          <button
+                            className={adminStatusFilter === status ? 'active' : ''}
+                            key={status}
+                            onClick={() => setAdminStatusFilter(status)}
+                            type="button"
+                          >
+                            {status === 'all' ? '全部' : status === 'published' ? '已发布' : '草稿'}
+                          </button>
+                        ))}
+                      </div>
+                      {adminPosts.map((post) => (
+                        <div className="admin-post" key={post.id}>
+                          <button onClick={() => startEdit(post)} type="button">
+                            <strong>{post.title}</strong>
+                            <small>{getCategory(post.category).name} · {post.status === 'published' ? '已发布' : '草稿'}</small>
+                          </button>
+                          <div>
+                            <button onClick={() => updateStatus(post.id, post.status === 'published' ? 'draft' : 'published')} type="button">
+                              {post.status === 'published' ? '设草稿' : '发布'}
+                            </button>
+                            <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : null}
+                </section>
+
+                <section className={adminPanelOpen.users ? 'admin-group open' : 'admin-group'}>
+                  <div className="panel-heading">
+                    <h2>用户管理</h2>
+                    <button onClick={() => setAdminPanelOpen((current) => ({ ...current, users: !current.users }))} type="button">
+                      {adminPanelOpen.users ? '收起' : '展开'}
+                    </button>
+                  </div>
+                  {adminPanelOpen.users ? (
+                    <div className="admin-user-list">
+                      {adminUsers.map((user) => (
+                        <div className="admin-user" key={user.id}>
+                          <input
+                            onChange={(event) => setAdminUsers((current) => current.map((item) => (
+                              item.id === user.id ? { ...item, nickname: event.target.value } : item
+                            )))}
+                            value={user.nickname}
+                          />
+                          <input
+                            onChange={(event) => setAdminUsers((current) => current.map((item) => (
+                              item.id === user.id ? { ...item, role: event.target.value } : item
+                            )))}
+                            value={user.role}
+                          />
+                          <select
+                            onChange={(event) => setAdminUsers((current) => current.map((item) => (
+                              item.id === user.id ? { ...item, permission: event.target.value as BlogUser['permission'] } : item
+                            )))}
+                            value={user.permission}
+                          >
+                            <option value="reader">reader</option>
+                            <option value="admin">admin</option>
+                          </select>
+                          <button onClick={() => void saveAdminUser(user)} type="button">保存</button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
               </aside>
 
               <form className="editor-panel" onSubmit={savePost}>

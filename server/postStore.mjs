@@ -187,7 +187,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       return selectComments(db, post.id);
     },
 
-    createComment(idOrSlug, draft) {
+    createComment(idOrSlug, draft, user) {
       const post = this.get(idOrSlug);
       if (!post) return undefined;
       const content = String(draft.content || '').trim();
@@ -195,8 +195,8 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       const comment = {
         id: createId(),
         postId: post.id,
-        nickname: String(draft.nickname || '匿名访客').trim() || '匿名访客',
-        role: String(draft.role || '读者').trim() || '读者',
+        nickname: String(user?.nickname || draft.nickname || '匿名访客').trim() || '匿名访客',
+        role: String(user?.role || draft.role || '读者').trim() || '读者',
         content,
         createdAt: today()
       };

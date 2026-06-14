@@ -56,11 +56,11 @@ describe('post store', () => {
       nickname: 'Kite',
       role: '站长',
       content: '这篇文章有用。'
-    });
+    }, { nickname: '登录昵称', role: '安全研究员' });
 
     expect(comment.postId).toBe(post.id);
-    expect(comment.nickname).toBe('Kite');
-    expect(comment.role).toBe('站长');
+    expect(comment.nickname).toBe('登录昵称');
+    expect(comment.role).toBe('安全研究员');
     expect(store.listComments(post.slug).map((item) => item.content)).toEqual(['这篇文章有用。']);
     expect(() => store.createComment(post.id, { nickname: '', role: '', content: '' })).toThrow('Comment content is required');
   });

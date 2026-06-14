@@ -501,6 +501,40 @@ p {
   padding: 16px;
 }
 
+.user-auth-card {
+  background: #fffaf3;
+  border: 1px solid #e0d6c5;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  max-width: 1180px;
+  margin: 12px auto 0;
+  padding: 12px;
+}
+
+.user-auth-card form {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto repeat(4, minmax(120px, 1fr)) auto;
+  width: 100%;
+}
+
+.user-auth-card > div {
+  display: grid;
+  gap: 2px;
+}
+
+.user-auth-card span {
+  color: #68706a;
+  font-weight: 800;
+}
+
+.compact-tabs {
+  min-width: 150px;
+}
+
 .metrics-strip span {
   align-items: center;
   display: inline-flex;
@@ -656,6 +690,14 @@ p {
   display: grid;
   gap: 18px;
   grid-template-columns: 380px minmax(0, 1fr);
+}
+
+.content-layout.detail-mode {
+  grid-template-columns: 1fr;
+}
+
+.content-layout.detail-mode .post-panel {
+  display: none;
 }
 
 .post-panel,
@@ -1056,16 +1098,54 @@ textarea {
 }
 
 .comment-form {
+  background: linear-gradient(135deg, #fffaf3, #f3eadb);
+  border: 1px solid #e0d6c5;
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(24, 33, 31, 0.08);
   display: grid;
-  gap: 10px;
+  gap: 12px;
+  padding: 14px;
 }
 
 .comment-form textarea {
-  min-height: 110px;
+  background: #fff;
+  border-color: #d4c6b4;
+  min-height: 126px;
 }
 
 .comment-form button {
   justify-self: start;
+}
+
+.comment-user-chip {
+  align-items: center;
+  background: #17201d;
+  border-radius: 999px;
+  color: #fffaf3;
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.comment-user-chip span {
+  background: rgba(255, 250, 243, 0.12);
+  border-radius: 999px;
+  color: #d7b879;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 2px 8px;
+}
+
+.comment-empty-card {
+  background: #f8f3ea;
+  border: 1px dashed #d5c7b6;
+  border-radius: 8px;
+  color: #38423d;
+  padding: 14px;
+}
+
+.comment-empty-card p {
+  margin: 5px 0 0;
 }
 
 .comment-list {
@@ -1145,6 +1225,41 @@ textarea {
 .post-panel {
   position: sticky;
   top: 16px;
+}
+
+.admin-group {
+  border: 1px solid #e0d6c5;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.admin-group + .admin-group {
+  margin-top: 12px;
+}
+
+.admin-create {
+  justify-self: start;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-user {
+  background: #f8f3ea;
+  border: 1px solid #e4d8c7;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr 120px auto;
+  padding: 10px;
+}
+
+.admin-user button {
+  min-height: 40px;
 }
 
 .admin-post {
@@ -2002,6 +2117,16 @@ textarea {
   .post-panel,
   .admin-list {
     position: static;
+  }
+
+  .user-auth-card,
+  .user-auth-card form {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user {
+    grid-template-columns: 1fr;
   }
 }
 

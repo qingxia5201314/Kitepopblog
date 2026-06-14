@@ -1,4 +1,4 @@
-import { BlogPost, BlogPostDraft, PostComment, PostCommentDraft, PostStatus } from './blog';
+import { BlogPost, BlogPostDraft, BlogUser, PostComment, PostCommentDraft, PostStatus, UserSession } from './blog';
 
 interface ListPostOptions {
   includeDrafts?: boolean;
@@ -79,16 +79,78 @@ export async function listPostComments(postIdOrSlug: string): Promise<PostCommen
   return payload.comments;
 }
 
-export async function createPostComment(postIdOrSlug: string, draft: PostCommentDraft): Promise<PostComment> {
+export async function createPostComment(postIdOrSlug: string, draft: PostCommentDraft, token: string): Promise<PostComment> {
   const payload = await parseResponse<{ comment: PostComment }>(
     await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`, {
       method: 'POST',
       headers: {
-        'content-type': 'application/json'
+        'content-type': 'application/json',
+        ...authHeaders(token)
       },
       body: JSON.stringify(draft)
     })
   );
 
   return payload.comment;
+}
+
+export async function registerUser(draft: {
+  username: string;
+  password: string;
+  nickname: string;
+  role: string;
+}): Promise<UserSession> {
+  return parseResponse<UserSession>(
+    await fetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(draft)
+    })
+  );
+}
+
+export async function loginUser(username: string, password: string): Promise<UserSession> {
+  return parseResponse<UserSession>(
+    await fetch('/api/users/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    })
+  );
+}
+
+export async function getCurrentUser(token: string): Promise<BlogUser> {
+  const payload = await parseResponse<{ user: BlogUser }>(
+    await fetch('/api/users/me', {
+      headers: authHeaders(token)
+    })
+  );
+  return payload.user;
+}
+
+export async function listUsers(token: string): Promise<BlogUser[]> {
+  const payload = await parseResponse<{ users: BlogUser[] }>(
+    await fetch('/api/admin/users', {
+      headers: authHeaders(token)
+    })
+  );
+  return payload.users;
+}
+
+export async function updateUser(
+  id: string,
+  patch: Partial<Pick<BlogUser, 'nickname' | 'role' | 'permission'>>,
+  token: string
+): Promise<BlogUser> {
+  const payload = await parseResponse<{ user: BlogUser }>(
+    await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        ...authHeaders(token)
+      },
+      body: JSON.stringify(patch)
+    })
+  );
+  return payload.user;
 }

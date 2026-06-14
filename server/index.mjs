@@ -11,6 +11,7 @@ import { createFileStore } from './fileStore.mjs';
 import { createImageStore } from './imageStore.mjs';
 import { createPostStore } from './postStore.mjs';
 import { createSqliteDatabase } from './sqliteDatabase.mjs';
+import { createUserStore } from './userStore.mjs';
 
 const root = resolve('dist');
 const port = Number(process.env.PORT || 3000);
@@ -243,7 +244,7 @@ function publicFolderView(view) {
   };
 }
 
-async function handlePosts(request, response, store, sessions) {
+async function handlePosts(request, response, store, sessions, userStore) {
   const url = new URL(request.url || '/', 'http://localhost');
   const admin = isAdmin(request, sessions);
 
@@ -276,9 +277,14 @@ async function handlePosts(request, response, store, sessions) {
     }
 
     if (request.method === 'POST') {
+      const user = userStore.verify(request.headers.authorization || '');
+      if (!user) {
+        sendJson(response, 401, { ok: false, message: '请先登录后再评论' });
+        return;
+      }
       try {
         const body = await readJsonBody(request);
-        const comment = store.createComment(commentsPostId, body);
+        const comment = store.createComment(commentsPostId, body, user);
         sendJson(response, comment ? 201 : 404, comment ? { comment } : { ok: false, message: 'Post not found' });
       } catch (error) {
         sendJson(response, 400, { ok: false, message: error?.message || 'Invalid request body' });
@@ -315,6 +321,66 @@ async function handlePosts(request, response, store, sessions) {
   if (request.method === 'DELETE') {
     const removed = store.remove(postId);
     sendJson(response, removed ? 200 : 404, removed ? { ok: true } : { ok: false, message: 'Post not found' });
+    return;
+  }
+
+  sendJson(response, 405, { ok: false, message: 'Method not allowed' });
+}
+
+async function handleUsers(request, response, userStore) {
+  const url = new URL(request.url || '/', 'http://localhost');
+
+  if (url.pathname === '/api/users/register' && request.method === 'POST') {
+    try {
+      const body = await readJsonBody(request);
+      sendJson(response, 201, { ok: true, ...userStore.register(body) });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error?.message || '注册失败' });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/users/login' && request.method === 'POST') {
+    try {
+      const body = await readJsonBody(request);
+      sendJson(response, 200, { ok: true, ...userStore.login(body) });
+    } catch (error) {
+      sendJson(response, 401, { ok: false, message: error?.message || '登录失败' });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/users/me' && request.method === 'GET') {
+    const user = userStore.verify(request.headers.authorization || '');
+    sendJson(response, user ? 200 : 401, user ? { ok: true, user } : { ok: false, message: 'Unauthorized' });
+    return;
+  }
+
+  sendJson(response, 404, { ok: false, message: 'Not found' });
+}
+
+async function handleAdminUsers(request, response, sessions, userStore) {
+  const admin = isAdmin(request, sessions);
+  if (!admin) {
+    sendJson(response, 401, { ok: false, message: 'Unauthorized' });
+    return;
+  }
+
+  const url = new URL(request.url || '/', 'http://localhost');
+  if (url.pathname === '/api/admin/users' && request.method === 'GET') {
+    sendJson(response, 200, { users: userStore.listUsers() });
+    return;
+  }
+
+  const match = url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
+  if (match && request.method === 'PUT') {
+    try {
+      const body = await readJsonBody(request);
+      const user = userStore.updateUser(decodeURIComponent(match[1]), body);
+      sendJson(response, user ? 200 : 404, user ? { user } : { ok: false, message: 'User not found' });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error?.message || 'User update failed' });
+    }
     return;
   }
 
@@ -593,6 +659,7 @@ const database = await createSqliteDatabase({ dbPath: postDbPath });
 const adminSessionStore = createAdminSessionStore({ database });
 const sessions = createAdminSessions({ store: adminSessionStore });
 const store = await createPostStore({ database });
+const userStore = createUserStore({ database });
 const accountingStore = createAccountingStore({ database });
 const accountingSessions = createAccountingSessions({ store: accountingStore });
 const fileStore = createFileStore({ database, uploadDir });
@@ -609,8 +676,18 @@ createServer(async (request, response) => {
     return;
   }
 
+  if (request.url?.startsWith('/api/admin/users')) {
+    await handleAdminUsers(request, response, sessions, userStore);
+    return;
+  }
+
+  if (request.url?.startsWith('/api/users')) {
+    await handleUsers(request, response, userStore);
+    return;
+  }
+
   if (request.url?.startsWith('/api/posts')) {
-    await handlePosts(request, response, store, sessions);
+    await handlePosts(request, response, store, sessions, userStore);
     return;
   }
 

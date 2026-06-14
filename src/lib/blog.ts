@@ -47,9 +47,23 @@ export interface PostComment {
 }
 
 export interface PostCommentDraft {
+  content: string;
+}
+
+export interface BlogUser {
+  id: string;
+  username: string;
   nickname: string;
   role: string;
-  content: string;
+  permission: 'reader' | 'admin';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UserSession {
+  token: string;
+  expiresAt: string;
+  user: BlogUser;
 }
 
 export interface PostFilter {
