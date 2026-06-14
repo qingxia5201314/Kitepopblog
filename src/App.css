@@ -221,15 +221,70 @@ button:active,
 .panel-heading button,
 .unlock-panel button,
 .editor-panel button,
+.user-auth-card button,
+.comment-form button,
+.back-link,
 .accounting-card button,
 .accounting-actions button,
-.admin-post div button {
+.admin-group button,
+.admin-post div button,
+.file-toolbar button,
+.folder-item button,
+.file-dropzone button,
+.file-item button,
+.image-dropzone button,
+.image-item button {
   background: #17201d;
   border: 1px solid #17201d;
   border-radius: 7px;
   color: #fffaf3;
+  font-weight: 850;
   min-height: 38px;
   padding: 8px 14px;
+}
+
+button.ghost,
+.hero-actions .ghost,
+.accounting-actions .ghost,
+.user-auth-card .ghost,
+.admin-create,
+.back-link {
+  background: #fffaf3;
+  border-color: #d9cfbd;
+  color: #17201d;
+}
+
+button.ghost:hover,
+.hero-actions .ghost:hover,
+.accounting-actions .ghost:hover,
+.user-auth-card .ghost:hover,
+.admin-create:hover,
+.back-link:hover {
+  background: #f0e6d8;
+  border-color: #17201d;
+}
+
+button.danger,
+.admin-post .danger,
+.accounting-card .danger,
+.entry-item .danger,
+.folder-item .danger,
+.file-item .danger,
+.image-item .danger {
+  background: #fff5f2;
+  border-color: #c4564f;
+  color: #9e2f28;
+}
+
+button.danger:hover,
+.admin-post .danger:hover,
+.accounting-card .danger:hover,
+.entry-item .danger:hover,
+.folder-item .danger:hover,
+.file-item .danger:hover,
+.image-item .danger:hover {
+  background: #ffe6e0;
+  border-color: #9e2f28;
 }
 
 .topbar nav button {
@@ -414,11 +469,6 @@ p {
   margin-top: 26px;
 }
 
-.hero-actions .ghost {
-  background: transparent;
-  color: #17201d;
-}
-
 .hero-visual {
   align-content: center;
   display: grid;
@@ -587,8 +637,13 @@ p {
 }
 
 .user-auth-card > div {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.52);
+  border: 1px solid #e2d5c4;
+  border-radius: 8px;
   display: grid;
   gap: 2px;
+  padding: 8px 11px;
 }
 
 .user-auth-card span {
