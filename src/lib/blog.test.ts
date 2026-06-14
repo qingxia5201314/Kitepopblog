@@ -55,6 +55,103 @@ describe('blog helpers', () => {
     expect(filterPosts(posts, { query: '越权' })).toHaveLength(0);
   });
 
+  it('filters published posts by tag', () => {
+    const posts: BlogPost[] = [
+      {
+        id: '1',
+        slug: 'src-one',
+        title: 'SRC case one',
+        summary: 'published case',
+        category: 'src' as const,
+        tags: ['SRC', '越权'],
+        content: 'published src case',
+        status: 'published' as const,
+        createdAt: '2026-06-01',
+        updatedAt: '2026-06-01',
+        cover: 'src'
+      },
+      {
+        id: '2',
+        slug: 'src-two',
+        title: 'SRC case two',
+        summary: 'draft case',
+        category: 'src' as const,
+        tags: ['src'],
+        content: 'draft src case',
+        status: 'draft' as const,
+        createdAt: '2026-06-02',
+        updatedAt: '2026-06-02',
+        cover: 'src'
+      },
+      {
+        id: '3',
+        slug: 'life',
+        title: 'Life note',
+        summary: 'other tag',
+        category: 'life' as const,
+        tags: ['生活'],
+        content: 'life note',
+        status: 'published' as const,
+        createdAt: '2026-06-03',
+        updatedAt: '2026-06-03',
+        cover: 'life'
+      }
+    ];
+
+    expect(filterPosts(posts, { tag: 'src' }).map((post) => post.id)).toEqual(['1']);
+    expect(filterPosts(posts, { tag: 'src', includeDrafts: true }).map((post) => post.id)).toEqual(['2', '1']);
+  });
+
+  it('filters published posts by multiple selected tags', () => {
+    const posts: BlogPost[] = [
+      {
+        id: '1',
+        slug: 'src-auth',
+        title: 'SRC auth case',
+        summary: 'published case',
+        category: 'src' as const,
+        tags: ['SRC', 'Auth Bypass', '越权'],
+        content: 'published src case',
+        status: 'published' as const,
+        createdAt: '2026-06-01',
+        updatedAt: '2026-06-01',
+        cover: 'src'
+      },
+      {
+        id: '2',
+        slug: 'src-only',
+        title: 'SRC only case',
+        summary: 'published case',
+        category: 'src' as const,
+        tags: ['SRC'],
+        content: 'published src case',
+        status: 'published' as const,
+        createdAt: '2026-06-02',
+        updatedAt: '2026-06-02',
+        cover: 'src'
+      },
+      {
+        id: '3',
+        slug: 'draft-auth',
+        title: 'Draft auth case',
+        summary: 'draft case',
+        category: 'src' as const,
+        tags: ['SRC', 'Auth Bypass'],
+        content: 'draft src case',
+        status: 'draft' as const,
+        createdAt: '2026-06-03',
+        updatedAt: '2026-06-03',
+        cover: 'src'
+      }
+    ];
+
+    expect(filterPosts(posts, { tags: ['src', 'auth bypass'] }).map((post) => post.id)).toEqual(['1']);
+    expect(filterPosts(posts, { tags: ['src', 'auth bypass'], includeDrafts: true }).map((post) => post.id)).toEqual([
+      '3',
+      '1'
+    ]);
+  });
+
   it('sorts posts newest first and exposes four blog categories', () => {
     const posts = [
       { id: 'old', updatedAt: '2026-01-01' },

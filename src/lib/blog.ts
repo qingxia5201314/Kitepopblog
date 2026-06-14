@@ -40,6 +40,8 @@ export type BlogPostDraft = Omit<BlogPost, 'id' | 'slug' | 'createdAt' | 'update
 export interface PostFilter {
   category?: BlogCategoryId | 'all';
   query?: string;
+  tag?: string;
+  tags?: string[];
   includeDrafts?: boolean;
 }
 
@@ -253,6 +255,12 @@ export function sortPostsByDate<T extends { updatedAt: string }>(posts: T[]): T[
 
 export function filterPosts(posts: BlogPost[], filter: PostFilter = {}): BlogPost[] {
   const query = filter.query?.trim().toLowerCase() ?? '';
+  const selectedTags = [
+    ...(filter.tag ? [filter.tag] : []),
+    ...(filter.tags ?? [])
+  ]
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean);
 
   return sortPostsByDate(
     posts.filter((post) => {
@@ -260,8 +268,10 @@ export function filterPosts(posts: BlogPost[], filter: PostFilter = {}): BlogPos
       const categoryMatches = !filter.category || filter.category === 'all' || post.category === filter.category;
       const queryTarget = `${post.title} ${post.summary} ${post.tags.join(' ')} ${post.content}`.toLowerCase();
       const queryMatches = !query || queryTarget.includes(query);
+      const postTags = post.tags.map((postTag) => postTag.toLowerCase());
+      const tagMatches = selectedTags.every((tag) => postTags.includes(tag));
 
-      return statusMatches && categoryMatches && queryMatches;
+      return statusMatches && categoryMatches && queryMatches && tagMatches;
     })
   );
 }

@@ -80,10 +80,39 @@ function normalizeEntryDraft(draft) {
 
 function normalizeSavingGoal(goal) {
   if (!goal) return null;
+  const hasTargetSaving = String(goal.targetSavingYuan ?? goal.targetSavingCents ?? '').trim();
+  const hasAvailableBudget = String(goal.availableBudgetYuan ?? goal.availableBudgetCents ?? '').trim();
+  if (hasTargetSaving || hasAvailableBudget) {
+    return {
+      name: String(goal.name || '本月存钱计划').trim(),
+      targetSavingCents: goal.targetSavingCents ?? parseMoneyToCents(goal.targetSavingYuan ?? '0', { emptyAsZero: true }),
+      availableBudgetCents: hasAvailableBudget
+        ? goal.availableBudgetCents ?? parseMoneyToCents(goal.availableBudgetYuan, { emptyAsZero: true })
+        : undefined,
+      startDate: goal.startDate,
+      endDate: goal.endDate
+    };
+  }
+
+  const hasCurrentBalance = String(goal.currentBalanceYuan ?? goal.currentBalanceCents ?? '').trim();
+  const hasTargetBalance = String(goal.targetBalanceYuan ?? goal.targetBalanceCents ?? '').trim();
+  if (hasCurrentBalance || hasTargetBalance) {
+    return {
+      name: String(goal.name || '月底余额目标').trim(),
+      currentBalanceCents: goal.currentBalanceCents ?? parseMoneyToCents(goal.currentBalanceYuan),
+      targetBalanceCents: goal.targetBalanceCents ?? parseMoneyToCents(goal.targetBalanceYuan),
+      startDate: goal.startDate,
+      endDate: goal.endDate
+    };
+  }
+
+  const hasTarget = String(goal.targetYuan ?? goal.targetCents ?? '').trim();
+  const hasSaved = String(goal.savedYuan ?? goal.savedCents ?? '').trim();
+  if (!hasTarget && !hasSaved) return null;
   return {
     name: String(goal.name || '存钱目标').trim(),
     targetCents: goal.targetCents ?? parseMoneyToCents(goal.targetYuan),
-    savedCents: goal.savedCents ?? parseMoneyToCents(goal.savedYuan ?? '0'),
+    savedCents: goal.savedCents ?? parseMoneyToCents(goal.savedYuan ?? '0', { emptyAsZero: true }),
     startDate: goal.startDate,
     endDate: goal.endDate
   };
@@ -214,7 +243,8 @@ export function createAccountingStore({ database }) {
       const current = getSettings();
       const next = {
         monthlyBudgetCents:
-          settings.monthlyBudgetCents ?? parseMoneyToCents(settings.monthlyBudgetYuan ?? String(current.monthlyBudgetCents / 100)),
+          settings.monthlyBudgetCents ??
+          parseMoneyToCents(settings.monthlyBudgetYuan ?? String(current.monthlyBudgetCents / 100), { emptyAsZero: true }),
         savingGoal: settings.savingGoal === undefined ? current.savingGoal : normalizeSavingGoal(settings.savingGoal)
       };
       db.run(
@@ -233,11 +263,16 @@ export function createAccountingStore({ database }) {
     getMonthData(options = {}) {
       const settings = getSettings();
       const entries = this.listEntries(options);
+      const summary = summarizeEntries(entries, settings);
       return {
         entries,
         settings,
-        summary: summarizeEntries(entries, settings),
-        savingGoal: calculateSavingGoal(settings.savingGoal, { today: options.today })
+        summary,
+        savingGoal: calculateSavingGoal(settings.savingGoal, {
+          today: options.today,
+          monthlyBudgetCents: settings.monthlyBudgetCents,
+          expenseCents: summary.expenseCents
+        })
       };
     }
   };

@@ -18,6 +18,10 @@ export interface AccountingCategory {
   accent: string;
 }
 
+export const ACCOUNTING_PAYMENT_METHODS = ['支付宝', '微信', '银行卡', '现金', '花呗', '其他'] as const;
+export const ACCOUNTING_ENTRY_COLLAPSE_LIMIT = 5;
+export type BudgetHealth = 'good' | 'warn' | 'danger' | 'neutral';
+
 export interface AccountingEntry {
   id: string;
   type: AccountingEntryType;
@@ -41,8 +45,12 @@ export interface AccountingEntryDraft {
 
 export interface SavingGoalDraft {
   name: string;
-  targetYuan: string;
-  savedYuan: string;
+  targetYuan?: string;
+  savedYuan?: string;
+  currentBalanceYuan?: string;
+  targetBalanceYuan?: string;
+  targetSavingYuan?: string;
+  availableBudgetYuan?: string;
   startDate: string;
   endDate: string;
 }
@@ -51,12 +59,27 @@ export interface SavingGoal {
   name: string;
   targetCents: number;
   savedCents: number;
+  currentBalanceCents?: number;
+  targetBalanceCents?: number;
+  targetSavingCents?: number;
+  plannedAvailableCents?: number;
+  availableBudgetCents?: number;
+  budgetLimitCents?: number;
+  spentCents?: number;
+  remainingAvailableCents?: number;
+  overBudgetCents?: number;
+  savingGapCents?: number;
+  savingSurplusCents?: number;
   startDate: string;
   endDate: string;
   progressPercent: number;
   remainingCents: number;
+  balanceDeltaCents?: number;
+  safeToSpendCents?: number;
   daysLeft: number;
+  dailyAvailableCents?: number;
   dailyRequiredCents: number;
+  projectedSavingCents?: number;
 }
 
 export interface AccountingSettings {
@@ -74,6 +97,9 @@ export interface AccountingSummary {
   expenseCents: number;
   balanceCents: number;
   dailyExpenseCents: number;
+  budgetLimitCents: number;
+  plannedAvailableCents: number;
+  targetSavingCents: number;
   budgetUsedPercent: number;
   budgetRemainingCents: number;
   topExpenseCategory: { category: AccountingCategoryId; amountCents: number } | null;
@@ -117,4 +143,33 @@ export function formatMoney(cents = 0): string {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
+}
+
+export function sanitizeMoneyInput(value: string): string {
+  let next = value.replace(/[^\d.]/g, '');
+  const firstDot = next.indexOf('.');
+  if (firstDot !== -1) {
+    next = `${next.slice(0, firstDot + 1)}${next.slice(firstDot + 1).replace(/\./g, '')}`;
+  }
+
+  const [yuan, cents] = next.split('.');
+  if (cents !== undefined) return `${yuan}.${cents.slice(0, 2)}`;
+  return yuan;
+}
+
+export function getVisibleAccountingEntries<T>(entries: T[], expanded: boolean): T[] {
+  return expanded ? entries : entries.slice(0, ACCOUNTING_ENTRY_COLLAPSE_LIMIT);
+}
+
+export function getBudgetHealth({
+  remainingCents,
+  limitCents
+}: {
+  remainingCents: number;
+  limitCents: number;
+}): BudgetHealth {
+  if (limitCents <= 0) return 'neutral';
+  if (remainingCents < 0) return 'danger';
+  if (remainingCents / limitCents <= 0.2) return 'warn';
+  return 'good';
 }

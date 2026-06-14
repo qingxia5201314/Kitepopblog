@@ -28,4 +28,10 @@ describe('markdown parser', () => {
       { type: 'image', alt: '封面', url: 'https://img.example.com/a.png' }
     ]);
   });
+
+  it('parses hosted image markdown paths', () => {
+    expect(parseMarkdown('![pasted](/api/images/raw/img-1)')).toEqual([
+      { type: 'image', alt: 'pasted', url: '/api/images/raw/img-1' }
+    ]);
+  });
 });

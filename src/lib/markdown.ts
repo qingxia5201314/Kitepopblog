@@ -54,7 +54,7 @@ export function parseMarkdown(markdown: string): MarkdownBlock[] {
       continue;
     }
 
-    const imageMatch = line.match(/^!\[(.*)]\((https?:\/\/.+)\)$/);
+    const imageMatch = line.match(/^!\[(.*)]\((https?:\/\/.+|\/api\/images\/raw\/[^)\s]+)\)$/);
     if (imageMatch) {
       flushParagraph(blocks, paragraph);
       currentList = flushList(blocks, currentList);

@@ -77,6 +77,77 @@ describe('accounting store', () => {
     expect(monthData.savingGoal.dailyRequiredCents).toBe(20834);
   });
 
+  it('allows monthly budget without a saving goal', () => {
+    store.updateSettings({
+      monthlyBudgetYuan: '3000',
+      savingGoal: {
+        name: '本月存钱目标',
+        targetYuan: '',
+        savedYuan: '',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30'
+      }
+    });
+
+    const monthData = store.getMonthData({ month: '2026-06' });
+
+    expect(monthData.settings.monthlyBudgetCents).toBe(300000);
+    expect(monthData.savingGoal).toBeNull();
+  });
+
+  it('stores a dynamic month-end balance target', () => {
+    store.updateSettings({
+      monthlyBudgetYuan: '2000',
+      savingGoal: {
+        name: '月底余额目标',
+        currentBalanceYuan: '14406',
+        targetBalanceYuan: '14000',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30'
+      }
+    });
+
+    const monthData = store.getMonthData({ month: '2026-06', today: '2026-06-13' });
+
+    expect(monthData.settings.monthlyBudgetCents).toBe(200000);
+    expect(monthData.settings.savingGoal.currentBalanceCents).toBe(1440600);
+    expect(monthData.settings.savingGoal.targetBalanceCents).toBe(1400000);
+    expect(monthData.savingGoal.safeToSpendCents).toBe(40600);
+    expect(monthData.savingGoal.projectedSavingCents).toBe(159400);
+  });
+
+  it('stores planned saving and manual usable budget settings', () => {
+    store.createEntry({
+      type: 'expense',
+      amountYuan: '300',
+      category: 'food',
+      account: '支付宝',
+      spentAt: '2026-06-13',
+      note: '月中支出'
+    });
+    store.updateSettings({
+      monthlyBudgetYuan: '2000',
+      savingGoal: {
+        name: '本月存钱计划',
+        targetSavingYuan: '1000',
+        availableBudgetYuan: '600',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30'
+      }
+    });
+
+    const monthData = store.getMonthData({ month: '2026-06', today: '2026-06-13' });
+
+    expect(monthData.settings.monthlyBudgetCents).toBe(200000);
+    expect(monthData.settings.savingGoal.targetSavingCents).toBe(100000);
+    expect(monthData.settings.savingGoal.availableBudgetCents).toBe(60000);
+    expect(monthData.summary.budgetLimitCents).toBe(60000);
+    expect(monthData.summary.budgetUsedPercent).toBe(50);
+    expect(monthData.summary.budgetRemainingCents).toBe(30000);
+    expect(monthData.savingGoal.remainingAvailableCents).toBe(30000);
+    expect(monthData.savingGoal.projectedSavingCents).toBe(140000);
+  });
+
   it('removes entries by id', () => {
     const entry = store.createEntry({
       type: 'expense',

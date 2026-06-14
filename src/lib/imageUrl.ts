@@ -1,6 +1,7 @@
 export function normalizeImageUrl(value: string): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
+  if (trimmed.startsWith('/api/images/raw/')) return trimmed;
 
   try {
     const url = new URL(trimmed);

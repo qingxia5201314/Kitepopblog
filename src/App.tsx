@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BLOG_CATEGORIES,
   BlogCategoryId,
@@ -13,6 +13,8 @@ import {
 import { createPost, deletePost, listPosts, updatePost } from './lib/blogApi';
 import {
   ACCOUNTING_CATEGORIES,
+  ACCOUNTING_ENTRY_COLLAPSE_LIMIT,
+  ACCOUNTING_PAYMENT_METHODS,
   AccountingCategoryId,
   AccountingEntry,
   AccountingEntryDraft,
@@ -22,6 +24,9 @@ import {
   currentMonthInput,
   formatMoney,
   getAccountingCategory,
+  getBudgetHealth,
+  getVisibleAccountingEntries,
+  sanitizeMoneyInput,
   todayDateInput
 } from './lib/accounting';
 import {
@@ -32,12 +37,29 @@ import {
   updateAccountingEntry,
   updateAccountingSettings
 } from './lib/accountingApi';
+import {
+  FileFolder,
+  FileFolderView,
+  UploadedFile,
+  createFileFolder,
+  createFileLink,
+  deleteFileFolder,
+  deleteUploadedFile,
+  getFileFolderView,
+  renameFileFolder,
+  uploadFile
+} from './lib/fileApi';
 import { createDraftAutosaveRepository } from './lib/draftAutosave';
 import { normalizeImageUrl } from './lib/imageUrl';
+import { uploadHostedImage } from './lib/imageApi';
 import { MarkdownBlock, parseMarkdown } from './lib/markdown';
+import { createMarkdownImageBlock, getFirstClipboardImage, insertAtSelection } from './lib/markdownInsert';
 import { AppNotification, NotificationType, createNotification } from './lib/notification';
+import { formatTagInput, parseTagInput } from './lib/tags';
+import accountingHeroImage from './assets/accounting-hero.webp';
+import { copyTextToClipboard } from './lib/clipboard';
 
-type ViewMode = 'home' | 'accounting' | 'admin';
+type ViewMode = 'home' | 'accounting' | 'files' | 'admin';
 type EditorTab = 'edit' | 'preview';
 type AdminStatusFilter = 'all' | PostStatus;
 type AccountingTypeFilter = 'all' | AccountingEntryType;
@@ -51,7 +73,14 @@ const safeImageAttributes = {
 } as const;
 
 const draftRepository = createDraftAutosaveRepository();
+const ADMIN_SESSION_KEY = 'kitepop-admin-session';
 const ACCOUNTING_SESSION_KEY = 'kitepop-accounting-session';
+const EMPTY_FILE_FOLDER_VIEW: FileFolderView = {
+  folder: null,
+  breadcrumbs: [],
+  folders: [],
+  files: []
+};
 
 const EMPTY_FORM: BlogPostDraft = {
   title: '',
@@ -76,9 +105,9 @@ const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
 const EMPTY_ACCOUNTING_SETTINGS: AccountingSettingsDraft = {
   monthlyBudgetYuan: '',
   savingGoal: {
-    name: '本月存钱目标',
-    targetYuan: '',
-    savedYuan: '',
+    name: '本月存钱计划',
+    targetSavingYuan: '',
+    availableBudgetYuan: '',
     startDate: `${currentMonthInput()}-01`,
     endDate: `${currentMonthInput()}-30`
   }
@@ -99,6 +128,35 @@ function loadAccountingSession(): { token: string; expiresAt: string } | null {
   }
 }
 
+function loadAdminSession(): { token: string; expiresAt?: string } | null {
+  try {
+    const raw = window.localStorage.getItem(ADMIN_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { token?: string; expiresAt?: string };
+    if (!parsed.token || (parsed.expiresAt && Date.parse(parsed.expiresAt) <= Date.now())) {
+      window.localStorage.removeItem(ADMIN_SESSION_KEY);
+      return null;
+    }
+    return { token: parsed.token, expiresAt: parsed.expiresAt };
+  } catch {
+    return null;
+  }
+}
+
+function saveAdminSession(session: { token: string; expiresAt?: string }) {
+  window.localStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearAdminSession() {
+  window.localStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
+function formatBytes(bytes = 0): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
 function saveAccountingSession(session: { token: string; expiresAt: string }) {
   window.localStorage.setItem(ACCOUNTING_SESSION_KEY, JSON.stringify(session));
 }
@@ -109,17 +167,6 @@ function clearAccountingSession() {
 
 function centsToInput(cents = 0): string {
   return cents > 0 ? String(cents / 100) : '';
-}
-
-function splitTags(value: string): string[] {
-  return value
-    .split(/[,，\s]+/)
-    .map((tag) => tag.trim())
-    .filter(Boolean);
-}
-
-function formatTags(tags: string[]): string {
-  return tags.join('，');
 }
 
 function renderInlineMarkdown(text: string) {
@@ -210,14 +257,29 @@ function App() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [mode, setMode] = useState<ViewMode>('home');
   const [activeCategory, setActiveCategory] = useState<BlogCategoryId | 'all'>('all');
+  const [activeTags, setActiveTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [adminUnlocked, setAdminUnlocked] = useState(false);
-  const [adminToken, setAdminToken] = useState('');
+  const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(loadAdminSession()));
+  const [adminToken, setAdminToken] = useState(() => loadAdminSession()?.token ?? '');
   const [password, setPassword] = useState('');
+  const [filePassword, setFilePassword] = useState('');
+  const [activeFileFolderId, setActiveFileFolderId] = useState('');
+  const [fileFolderView, setFileFolderView] = useState<FileFolderView>(EMPTY_FILE_FOLDER_VIEW);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const [generatedFileLink, setGeneratedFileLink] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BlogPostDraft>(() => draftRepository.load() ?? EMPTY_FORM);
+  const [tagInput, setTagInput] = useState(() => {
+    const draft = draftRepository.load() ?? EMPTY_FORM;
+    return formatTagInput(draft.tags);
+  });
   const [editorTab, setEditorTab] = useState<EditorTab>('edit');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminStatusFilter>('all');
   const [notification, setNotification] = useState<AppNotification | null>(null);
   const [autosaveNote, setAutosaveNote] = useState('');
@@ -227,16 +289,17 @@ function App() {
   const [accountingTypeFilter, setAccountingTypeFilter] = useState<AccountingTypeFilter>('all');
   const [accountingCategoryFilter, setAccountingCategoryFilter] = useState<AccountingCategoryFilter>('all');
   const [accountingData, setAccountingData] = useState<AccountingMonthData | null>(null);
+  const [accountingEntriesExpanded, setAccountingEntriesExpanded] = useState(false);
   const [accountingForm, setAccountingForm] = useState<AccountingEntryDraft>(EMPTY_ACCOUNTING_ENTRY);
   const [editingAccountingId, setEditingAccountingId] = useState<string | null>(null);
   const [accountingSettingsForm, setAccountingSettingsForm] =
     useState<AccountingSettingsDraft>(EMPTY_ACCOUNTING_SETTINGS);
 
   const visiblePosts = useMemo(
-    () => filterPosts(posts, { category: activeCategory, query }),
-    [activeCategory, posts, query]
+    () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
+    [activeCategory, activeTags, posts, query]
   );
-  const selectedPost = posts.find((post) => post.id === selectedPostId) ?? visiblePosts[0];
+  const selectedPost = visiblePosts.find((post) => post.id === selectedPostId) ?? visiblePosts[0];
   const selectedCoverImage = getSafeImageUrl(selectedPost?.coverImage);
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
@@ -246,6 +309,20 @@ function App() {
   const accountingCategories = ACCOUNTING_CATEGORIES.filter(
     (category) => category.type === 'both' || category.type === accountingForm.type
   );
+  const accountingPaymentMethods = useMemo(() => {
+    const methods = [...ACCOUNTING_PAYMENT_METHODS];
+    if (accountingForm.account && !methods.includes(accountingForm.account as (typeof ACCOUNTING_PAYMENT_METHODS)[number])) {
+      return [...methods, accountingForm.account];
+    }
+    return methods;
+  }, [accountingForm.account]);
+  const accountingEntries = accountingData?.entries ?? [];
+  const visibleAccountingEntries = getVisibleAccountingEntries(accountingEntries, accountingEntriesExpanded);
+  const hasCollapsedAccountingEntries = accountingEntries.length > ACCOUNTING_ENTRY_COLLAPSE_LIMIT;
+  const budgetHealth = getBudgetHealth({
+    remainingCents: accountingData?.summary.budgetRemainingCents ?? 0,
+    limitCents: accountingData?.summary.budgetLimitCents ?? 0
+  });
 
   useEffect(() => {
     if (!adminUnlocked || editingId) return;
@@ -282,14 +359,33 @@ function App() {
     }
   };
 
+  const loadFiles = async (token = adminToken, folderId = activeFileFolderId) => {
+    if (!token) return;
+    try {
+      setFileFolderView(await getFileFolderView(token, folderId));
+      setActiveFileFolderId(folderId);
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文件列表加载失败');
+    }
+  };
+
   const syncAccountingSettingsForm = (data: AccountingMonthData) => {
     setAccountingSettingsForm({
       monthlyBudgetYuan: centsToInput(data.settings.monthlyBudgetCents),
       savingGoal: data.savingGoal
         ? {
             name: data.savingGoal.name,
-            targetYuan: centsToInput(data.savingGoal.targetCents),
-            savedYuan: centsToInput(data.savingGoal.savedCents),
+            targetSavingYuan: centsToInput(
+              data.savingGoal.targetSavingCents ??
+                data.savingGoal.projectedSavingCents ??
+                data.savingGoal.targetCents
+            ),
+            availableBudgetYuan: centsToInput(
+              data.savingGoal.availableBudgetCents ??
+                data.savingGoal.budgetLimitCents ??
+                data.savingGoal.safeToSpendCents ??
+                data.summary.budgetLimitCents
+            ),
             startDate: data.savingGoal.startDate,
             endDate: data.savingGoal.endDate
           }
@@ -329,19 +425,65 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const saved = loadAdminSession();
+    if (!saved?.token) return;
+
+    fetch('/api/admin/session', {
+      headers: { Authorization: `Bearer ${saved.token}` }
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('expired');
+        setAdminUnlocked(true);
+        setAdminToken(saved.token);
+        await loadPosts(true, saved.token);
+      })
+      .catch(() => {
+        clearAdminSession();
+        setAdminUnlocked(false);
+        setAdminToken('');
+      });
+  }, []);
+
+  useEffect(() => {
     if (accountingToken) {
       void loadAccountingData(accountingToken, accountingMonth, accountingTypeFilter, accountingCategoryFilter);
     }
   }, [accountingToken, accountingMonth, accountingTypeFilter, accountingCategoryFilter]);
+
+  useEffect(() => {
+    if (mode === 'files' && adminToken) {
+      void loadFiles(adminToken, activeFileFolderId);
+    }
+  }, [mode, adminToken, activeFileFolderId]);
+
+  useEffect(() => {
+    setAccountingEntriesExpanded(false);
+  }, [accountingMonth, accountingTypeFilter, accountingCategoryFilter]);
 
   const updateForm = (patch: Partial<BlogPostDraft>) => {
     setForm((current) => ({ ...current, ...patch }));
     setNotification((current) => (current?.type === 'error' ? null : current));
   };
 
+  const updateTagInput = (value: string) => {
+    setTagInput(value);
+    updateForm({ tags: parseTagInput(value) });
+  };
+
+  const toggleActiveTag = (tag: string) => {
+    setActiveTags((current) =>
+      current.some((selectedTag) => selectedTag.toLowerCase() === tag.toLowerCase())
+        ? current.filter((selectedTag) => selectedTag.toLowerCase() !== tag.toLowerCase())
+        : [...current, tag]
+    );
+    setSelectedPostId(null);
+  };
+
   const startCreate = () => {
+    const draft = draftRepository.load() ?? EMPTY_FORM;
     setEditingId(null);
-    setForm(draftRepository.load() ?? EMPTY_FORM);
+    setForm(draft);
+    setTagInput(formatTagInput(draft.tags));
     setEditorTab('edit');
     notify('info', '已进入新建文章模式');
   };
@@ -358,6 +500,7 @@ function App() {
       cover: post.cover,
       coverImage: post.coverImage ?? ''
     });
+    setTagInput(formatTagInput(post.tags));
     setEditorTab('edit');
     if (showNotice) notify('info', `正在编辑：${post.title}`);
   };
@@ -390,6 +533,7 @@ function App() {
 
     const payload = {
       ...form,
+      tags: parseTagInput(tagInput),
       cover: form.category,
       coverImage
     };
@@ -444,7 +588,7 @@ function App() {
         },
         body: JSON.stringify({ password })
       });
-      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string };
+      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string; expiresAt?: string };
 
       if (!response.ok || !result.ok || !result.token) {
         notify('error', result.message || '后台口令不正确');
@@ -453,6 +597,7 @@ function App() {
 
       setAdminUnlocked(true);
       setAdminToken(result.token);
+      saveAdminSession({ token: result.token, expiresAt: result.expiresAt });
       setPassword('');
       await loadPosts(true, result.token);
       notify('success', '已进入后台');
@@ -461,11 +606,176 @@ function App() {
     }
   };
 
+  const unlockFiles = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ password: filePassword })
+      });
+      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string; expiresAt?: string };
+
+      if (!response.ok || !result.ok || !result.token) {
+        notify('error', result.message || '后台口令不正确');
+        return;
+      }
+
+      setAdminUnlocked(true);
+      setAdminToken(result.token);
+      saveAdminSession({ token: result.token, expiresAt: result.expiresAt });
+      setFilePassword('');
+      await loadFiles(result.token, activeFileFolderId);
+      notify('success', '已进入文件仓库');
+    } catch {
+      notify('error', '无法连接文件登录接口');
+    }
+  };
+
+  const handleFileUpload = async (file?: File) => {
+    if (!file || !adminToken) return;
+    setUploadingFile(true);
+    setGeneratedFileLink('');
+
+    try {
+      await uploadFile(file, adminToken, activeFileFolderId);
+      await loadFiles(adminToken, activeFileFolderId);
+      notify('success', '文件已上传');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文件上传失败');
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const copyFileLink = async (file: UploadedFile) => {
+    if (!adminToken) return;
+    try {
+      const link = await createFileLink(file.id, adminToken);
+      const absoluteLink = new URL(link.path, window.location.origin).toString();
+      setGeneratedFileLink(absoluteLink);
+      const copied = await copyTextToClipboard(absoluteLink);
+      notify('success', copied ? '签名链接已复制' : '签名链接已生成，请手动复制');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '生成链接失败');
+    }
+  };
+
+  const removeUploadedFile = async (file: UploadedFile) => {
+    if (!adminToken) return;
+    const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立即失效。`);
+    if (!confirmed) return;
+
+    try {
+      await deleteUploadedFile(file.id, adminToken);
+      await loadFiles(adminToken, activeFileFolderId);
+      setGeneratedFileLink('');
+      notify('success', '文件已删除');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文件删除失败');
+    }
+  };
+
+  const openFileFolder = (folderId = '') => {
+    setGeneratedFileLink('');
+    setActiveFileFolderId(folderId);
+  };
+
+  const createFolderInCurrentFolder = async () => {
+    if (!adminToken) return;
+    const name = window.prompt('文件夹名称');
+    if (!name?.trim()) return;
+
+    try {
+      await createFileFolder({ name: name.trim(), parentId: activeFileFolderId }, adminToken);
+      await loadFiles(adminToken, activeFileFolderId);
+      notify('success', '文件夹已创建');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文件夹创建失败');
+    }
+  };
+
+  const renameFolderItem = async (folder: FileFolder) => {
+    if (!adminToken) return;
+    const name = window.prompt('新的文件夹名称', folder.name);
+    if (!name?.trim() || name.trim() === folder.name) return;
+
+    try {
+      await renameFileFolder(folder.id, name.trim(), adminToken);
+      await loadFiles(adminToken, activeFileFolderId);
+      notify('success', '文件夹已重命名');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文件夹重命名失败');
+    }
+  };
+
+  const removeFolderItem = async (folder: FileFolder) => {
+    if (!adminToken) return;
+    const confirmed = window.confirm(`确认删除空文件夹 ${folder.name} 吗？非空文件夹不会被删除。`);
+    if (!confirmed) return;
+
+    try {
+      await deleteFileFolder(folder.id, adminToken);
+      await loadFiles(adminToken, activeFileFolderId);
+      notify('success', '文件夹已删除');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '文件夹删除失败');
+    }
+  };
+
+  const insertMarkdownAtEditor = (snippet: string, selectionStart?: number, selectionEnd?: number) => {
+    const editor = contentEditorRef.current;
+    const source = editor?.value ?? form.content;
+    const start = selectionStart ?? editor?.selectionStart ?? source.length;
+    const end = selectionEnd ?? editor?.selectionEnd ?? start;
+    const next = insertAtSelection(source, snippet, start, end);
+    updateForm({ content: next.value });
+    window.setTimeout(() => {
+      contentEditorRef.current?.focus();
+      contentEditorRef.current?.setSelectionRange(next.cursor, next.cursor);
+    }, 0);
+  };
+
   const insertMarkdownSnippet = (before: string, after = '', placeholder = '内容') => {
-    const snippet = `${before}${placeholder}${after}`;
-    const nextContent = form.content.trim() ? `${form.content}\n\n${snippet}` : snippet;
-    updateForm({ content: nextContent });
+    insertMarkdownAtEditor(`${before}${placeholder}${after}`);
     notify('info', 'Markdown 片段已插入正文');
+  };
+
+  const insertImageFile = async (file?: File, selectionStart?: number, selectionEnd?: number) => {
+    if (!file) return;
+    if (!adminToken) {
+      notify('error', '请先进入后台再上传图片');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      notify('error', '只能上传图片文件');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const image = await uploadHostedImage(file, adminToken);
+      insertMarkdownAtEditor(createMarkdownImageBlock(image.originalName, image.path), selectionStart, selectionEnd);
+      notify('success', '图片已上传并插入正文');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '图片上传失败');
+    } finally {
+      setUploadingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  };
+
+  const pasteImageIntoEditor = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const image = getFirstClipboardImage(event.clipboardData.items);
+    if (!image) return;
+    const start = event.currentTarget.selectionStart;
+    const end = event.currentTarget.selectionEnd;
+    event.preventDefault();
+    void insertImageFile(image, start, end);
   };
 
   const unlockAccounting = async (event: FormEvent<HTMLFormElement>) => {
@@ -560,7 +870,7 @@ function App() {
     try {
       await updateAccountingSettings(accountingSettingsForm, accountingToken);
       await loadAccountingData();
-      notify('success', '预算和存钱目标已保存');
+      notify('success', '预算和存钱计划已保存');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '设置保存失败');
     }
@@ -587,6 +897,9 @@ function App() {
           </button>
           <button className={mode === 'accounting' ? 'active' : ''} onClick={() => setMode('accounting')} type="button">
             记账
+          </button>
+          <button className={mode === 'files' ? 'active' : ''} onClick={() => setMode('files')} type="button">
+            文件
           </button>
           <button className={mode === 'admin' ? 'active' : ''} onClick={() => setMode('admin')} type="button">
             后台
@@ -635,7 +948,14 @@ function App() {
           </section>
 
           <section className="category-grid" aria-label="内容分类">
-            <button className={activeCategory === 'all' ? 'category active' : 'category'} onClick={() => setActiveCategory('all')} type="button">
+            <button
+              className={activeCategory === 'all' ? 'category active' : 'category'}
+              onClick={() => {
+                setActiveCategory('all');
+                setActiveTags([]);
+              }}
+              type="button"
+            >
               <Icon name="grid" className="category-icon" />
               <strong>全部内容</strong>
               <span>查看所有已发布文章</span>
@@ -644,7 +964,10 @@ function App() {
               <button
                 className={activeCategory === category.id ? 'category active' : 'category'}
                 key={category.id}
-                onClick={() => setActiveCategory(category.id)}
+                onClick={() => {
+                  setActiveCategory(category.id);
+                  setActiveTags([]);
+                }}
                 style={{ '--accent': category.accent } as React.CSSProperties}
                 type="button"
               >
@@ -665,6 +988,20 @@ function App() {
                   placeholder="搜索标题、标签、正文"
                   value={query}
                 />
+                {activeTags.length ? (
+                  <div className="tag-filter-group" aria-label="已选标签">
+                    {activeTags.map((tag) => (
+                      <button className="tag-filter-chip" key={tag} onClick={() => toggleActiveTag(tag)} type="button">
+                        <Icon name="tag" />
+                        {tag}
+                        <span>移除</span>
+                      </button>
+                    ))}
+                    <button className="tag-filter-clear" onClick={() => setActiveTags([])} type="button">
+                      清空
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div className="post-list">
                 {visiblePosts.map((post) => {
@@ -722,7 +1059,17 @@ function App() {
                   <h2>{selectedPost.title}</h2>
                   <p className="summary">{selectedPost.summary}</p>
                   <div className="tag-row">
-                    {selectedPost.tags.map((tag) => <span key={tag}><Icon name="tag" />{tag}</span>)}
+                    {selectedPost.tags.map((tag) => (
+                      <button
+                        className={activeTags.some((selectedTag) => selectedTag.toLowerCase() === tag.toLowerCase()) ? 'active' : ''}
+                        key={tag}
+                        onClick={() => toggleActiveTag(tag)}
+                        type="button"
+                      >
+                        <Icon name="tag" />
+                        {tag}
+                      </button>
+                    ))}
                   </div>
                   <div className="article-body">{renderMarkdown(selectedPost.content)}</div>
                 </>
@@ -756,6 +1103,7 @@ function App() {
                   <h1>本月收支和存钱目标</h1>
                   <p>会话已保持到 {new Date(accountingSession.expiresAt).toLocaleDateString('zh-CN')}，数据只从服务端读取。</p>
                 </div>
+                <img alt="" className="accounting-hero-art" src={accountingHeroImage} />
                 <div className="accounting-actions">
                   <input
                     aria-label="选择月份"
@@ -768,21 +1116,35 @@ function App() {
               </section>
 
               <section className="accounting-metrics">
-                <div>
-                  <span>本月收入</span>
+                <div className="metric-card">
+                  <i className="metric-icon metric-income" aria-hidden="true" />
+                  <span className="metric-label">本月收入</span>
                   <strong>{formatMoney(accountingData?.summary.incomeCents ?? 0)}</strong>
                 </div>
-                <div>
-                  <span>本月支出</span>
+                <div className="metric-card">
+                  <i className="metric-icon metric-expense" aria-hidden="true" />
+                  <span className="metric-label">本月支出</span>
                   <strong>{formatMoney(accountingData?.summary.expenseCents ?? 0)}</strong>
                 </div>
-                <div>
-                  <span>结余</span>
-                  <strong>{formatMoney(accountingData?.summary.balanceCents ?? 0)}</strong>
+                <div className="metric-card">
+                  <i className="metric-icon metric-balance" aria-hidden="true" />
+                  <span className="metric-label">本月可用</span>
+                  <strong>{formatMoney(accountingData?.summary.budgetLimitCents ?? 0)}</strong>
                 </div>
-                <div>
-                  <span>预算剩余</span>
+                <div className={`metric-card metric-focus metric-${budgetHealth}`}>
+                  <i className="metric-icon metric-budget" aria-hidden="true" />
+                  <span className="metric-label">剩余可用</span>
                   <strong>{formatMoney(accountingData?.summary.budgetRemainingCents ?? 0)}</strong>
+                  <div className="metric-progress" aria-label={`可用额度已用 ${accountingData?.summary.budgetUsedPercent ?? 0}%`}>
+                    <span style={{ width: `${Math.min(accountingData?.summary.budgetUsedPercent ?? 0, 100)}%` }} />
+                  </div>
+                  <small>已用 {accountingData?.summary.budgetUsedPercent ?? 0}%</small>
+                </div>
+                <div className="metric-card">
+                  <i className="metric-icon metric-saving" aria-hidden="true" />
+                  <span className="metric-label">计划存钱</span>
+                  <strong>{formatMoney(accountingData?.summary.targetSavingCents ?? 0)}</strong>
+                  <small>预计 {formatMoney(accountingData?.savingGoal?.projectedSavingCents ?? 0)}</small>
                 </div>
               </section>
 
@@ -814,7 +1176,7 @@ function App() {
                       金额
                       <input
                         inputMode="decimal"
-                        onChange={(event) => updateAccountingForm({ amountYuan: event.target.value })}
+                        onChange={(event) => updateAccountingForm({ amountYuan: sanitizeMoneyInput(event.target.value) })}
                         placeholder="0.00"
                         value={accountingForm.amountYuan}
                       />
@@ -841,12 +1203,15 @@ function App() {
                       />
                     </label>
                     <label>
-                      账户
-                      <input
+                      支付方式
+                      <select
                         onChange={(event) => updateAccountingForm({ account: event.target.value })}
-                        placeholder="支付宝 / 微信 / 银行卡"
                         value={accountingForm.account}
-                      />
+                      >
+                        {accountingPaymentMethods.map((method) => (
+                          <option key={method} value={method}>{method}</option>
+                        ))}
+                      </select>
                     </label>
                   </div>
                   <label>
@@ -862,7 +1227,12 @@ function App() {
 
                 <section className="accounting-card">
                   <div className="panel-heading">
-                    <h2>流水筛选</h2>
+                    <h2>流水筛选 · {accountingEntries.length} 条</h2>
+                    {hasCollapsedAccountingEntries ? (
+                      <button onClick={() => setAccountingEntriesExpanded((expanded) => !expanded)} type="button">
+                        {accountingEntriesExpanded ? '收起' : `展开全部`}
+                      </button>
+                    ) : null}
                   </div>
                   <div className="form-grid">
                     <label>
@@ -890,7 +1260,7 @@ function App() {
                     </label>
                   </div>
                   <div className="entry-list">
-                    {(accountingData?.entries ?? []).map((entry) => {
+                    {visibleAccountingEntries.map((entry) => {
                       const category = getAccountingCategory(entry.category);
                       return (
                         <div className="entry-item" key={entry.id}>
@@ -910,74 +1280,78 @@ function App() {
                     {accountingData && accountingData.entries.length === 0 ? (
                       <div className="empty-state">这个筛选条件下还没有流水。</div>
                     ) : null}
+                    {hasCollapsedAccountingEntries ? (
+                      <button className="entry-toggle" onClick={() => setAccountingEntriesExpanded((expanded) => !expanded)} type="button">
+                        {accountingEntriesExpanded
+                          ? '收起流水'
+                          : `还有 ${accountingEntries.length - ACCOUNTING_ENTRY_COLLAPSE_LIMIT} 条，展开查看`}
+                      </button>
+                    ) : null}
                   </div>
                 </section>
 
                 <form className="accounting-card saving-panel" onSubmit={saveAccountingSettings}>
                   <div className="panel-heading">
-                    <h2>预算和存钱目标</h2>
+                    <h2>预算和存钱计划</h2>
                     <button type="submit">保存设置</button>
                   </div>
                   <label>
-                    月预算
+                    每月生活费
                     <input
                       inputMode="decimal"
                       onChange={(event) =>
-                        setAccountingSettingsForm((current) => ({ ...current, monthlyBudgetYuan: event.target.value }))
+                        setAccountingSettingsForm((current) => ({
+                          ...current,
+                          monthlyBudgetYuan: sanitizeMoneyInput(event.target.value)
+                        }))
                       }
-                      placeholder="例如：3000"
+                      placeholder="例如：2000"
                       value={accountingSettingsForm.monthlyBudgetYuan}
                     />
                   </label>
                   <div className="progress-track">
                     <span style={{ width: `${Math.min(accountingData?.summary.budgetUsedPercent ?? 0, 100)}%` }} />
                   </div>
-                  <p>预算已用 {accountingData?.summary.budgetUsedPercent ?? 0}%</p>
+                  <p>可用额度已用 {accountingData?.summary.budgetUsedPercent ?? 0}%</p>
                   {accountingSettingsForm.savingGoal ? (
                     <>
                       <div className="form-grid">
                         <label>
-                          目标名称
-                          <input
-                            onChange={(event) =>
-                              setAccountingSettingsForm((current) => ({
-                                ...current,
-                                savingGoal: { ...current.savingGoal!, name: event.target.value }
-                              }))
-                            }
-                            value={accountingSettingsForm.savingGoal.name}
-                          />
-                        </label>
-                        <label>
-                          目标金额
+                          本月计划存钱
                           <input
                             inputMode="decimal"
                             onChange={(event) =>
                               setAccountingSettingsForm((current) => ({
                                 ...current,
-                                savingGoal: { ...current.savingGoal!, targetYuan: event.target.value }
+                                savingGoal: {
+                                  ...current.savingGoal!,
+                                  targetSavingYuan: sanitizeMoneyInput(event.target.value)
+                                }
                               }))
                             }
-                            placeholder="5000"
-                            value={accountingSettingsForm.savingGoal.targetYuan}
+                            placeholder="例如：1000"
+                            value={accountingSettingsForm.savingGoal.targetSavingYuan ?? ''}
+                          />
+                        </label>
+                        <label>
+                          本月可用额度
+                          <input
+                            inputMode="decimal"
+                            onChange={(event) =>
+                              setAccountingSettingsForm((current) => ({
+                                ...current,
+                                savingGoal: {
+                                  ...current.savingGoal!,
+                                  availableBudgetYuan: sanitizeMoneyInput(event.target.value)
+                                }
+                              }))
+                            }
+                            placeholder="例如：1000"
+                            value={accountingSettingsForm.savingGoal.availableBudgetYuan ?? ''}
                           />
                         </label>
                       </div>
                       <div className="form-grid">
-                        <label>
-                          已存金额
-                          <input
-                            inputMode="decimal"
-                            onChange={(event) =>
-                              setAccountingSettingsForm((current) => ({
-                                ...current,
-                                savingGoal: { ...current.savingGoal!, savedYuan: event.target.value }
-                              }))
-                            }
-                            placeholder="1200"
-                            value={accountingSettingsForm.savingGoal.savedYuan}
-                          />
-                        </label>
                         <label>
                           结束日期
                           <input
@@ -995,13 +1369,164 @@ function App() {
                     </>
                   ) : null}
                   <div className="saving-summary">
-                    <strong>{accountingData?.savingGoal?.progressPercent ?? 0}%</strong>
-                    <span>还需 {formatMoney(accountingData?.savingGoal?.remainingCents ?? 0)}</span>
-                    <span>建议每天存 {formatMoney(accountingData?.savingGoal?.dailyRequiredCents ?? 0)}</span>
+                    <span>
+                      <small>存钱进度</small>
+                      <strong>{accountingData?.savingGoal?.progressPercent ?? 0}%</strong>
+                    </span>
+                    <span>
+                      <small>剩余可用</small>
+                      <strong>
+                        {(accountingData?.savingGoal?.remainingAvailableCents ?? 0) >= 0
+                          ? formatMoney(accountingData?.savingGoal?.remainingAvailableCents ?? 0)
+                          : `超支 ${formatMoney(accountingData?.savingGoal?.overBudgetCents ?? 0)}`}
+                      </strong>
+                    </span>
+                    <span>
+                      <small>每日建议</small>
+                      <strong>
+                        {(accountingData?.savingGoal?.remainingAvailableCents ?? 0) >= 0
+                          ? `最多 ${formatMoney(accountingData?.savingGoal?.dailyAvailableCents ?? 0)}`
+                          : `补足 ${formatMoney(accountingData?.savingGoal?.dailyRequiredCents ?? 0)}`}
+                      </strong>
+                    </span>
+                    <span>
+                      <small>预计可存</small>
+                      <strong>
+                        {formatMoney(accountingData?.savingGoal?.projectedSavingCents ?? 0)}
+                        {(accountingData?.savingGoal?.savingGapCents ?? 0) > 0
+                          ? ` · 差 ${formatMoney(accountingData?.savingGoal?.savingGapCents ?? 0)}`
+                          : ''}
+                        {(accountingData?.savingGoal?.savingSurplusCents ?? 0) > 0
+                          ? ` · 多 ${formatMoney(accountingData?.savingGoal?.savingSurplusCents ?? 0)}`
+                          : ''}
+                      </strong>
+                    </span>
                   </div>
                 </form>
               </section>
             </>
+          )}
+        </section>
+      ) : mode === 'files' ? (
+        <section className="files-page">
+          {!adminToken ? (
+            <form className="unlock-panel" onSubmit={unlockFiles}>
+              <p className="eyebrow">Private Files</p>
+              <h1>文件仓库</h1>
+              <p>输入后台口令后上传文件、生成签名访问链接。文件不限类型，但上传、管理和链接生成都需要后台鉴权。</p>
+              <input
+                aria-label="文件仓库口令"
+                onChange={(event) => setFilePassword(event.target.value)}
+                placeholder="输入后台口令"
+                type="password"
+                value={filePassword}
+              />
+              <button type="submit">进入文件仓库</button>
+            </form>
+          ) : (
+            <section className="files-layout">
+              <div className="file-hero accounting-card">
+                <div>
+                  <p className="eyebrow">Signed Storage</p>
+                  <h1>文件仓库</h1>
+                  <p>上传后的文件默认不可公开访问，只有生成签名链接后才可被外部读取。删除文件会让旧链接立即失效。</p>
+                </div>
+                <button onClick={() => void loadFiles(adminToken, activeFileFolderId)} type="button">刷新列表</button>
+              </div>
+
+              <section className="file-toolbar accounting-card">
+                <div className="file-breadcrumbs" aria-label="文件夹路径">
+                  <button className={!activeFileFolderId ? 'active' : ''} onClick={() => openFileFolder('')} type="button">
+                    根目录
+                  </button>
+                  {fileFolderView.breadcrumbs.map((folder) => (
+                    <button
+                      className={folder.id === activeFileFolderId ? 'active' : ''}
+                      key={folder.id}
+                      onClick={() => openFileFolder(folder.id)}
+                      type="button"
+                    >
+                      {folder.name}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => void createFolderInCurrentFolder()} type="button">新建文件夹</button>
+              </section>
+
+              {fileFolderView.folders.length ? (
+                <section className="folder-grid" aria-label="文件夹">
+                  {fileFolderView.folders.map((folder) => (
+                    <div className="folder-item" key={folder.id}>
+                      <button className="folder-open" onClick={() => openFileFolder(folder.id)} type="button">
+                        <span className="folder-icon">DIR</span>
+                        <span>
+                          <strong>{folder.name}</strong>
+                          <small>{new Date(folder.updatedAt).toLocaleString('zh-CN')}</small>
+                        </span>
+                      </button>
+                      <div>
+                        <button onClick={() => void renameFolderItem(folder)} type="button">重命名</button>
+                        <button className="danger" onClick={() => void removeFolderItem(folder)} type="button">删除</button>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              ) : null}
+
+              <section
+                className={fileDragActive ? 'file-dropzone active' : 'file-dropzone'}
+                onDragLeave={() => setFileDragActive(false)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setFileDragActive(true);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setFileDragActive(false);
+                  void handleFileUpload(event.dataTransfer.files[0]);
+                }}
+              >
+                <input
+                  onChange={(event) => void handleFileUpload(event.target.files?.[0])}
+                  ref={fileInputRef}
+                  type="file"
+                />
+                <strong>拖拽文件到这里，或选择上传</strong>
+                <span>不限文件类型，单文件大小受服务端 FILE_UPLOAD_LIMIT 控制。</span>
+                <button disabled={uploadingFile} onClick={() => fileInputRef.current?.click()} type="button">
+                  {uploadingFile ? '上传中...' : '选择文件'}
+                </button>
+              </section>
+
+              {generatedFileLink ? (
+                <div className="file-link-box">
+                  <span>最近生成的签名链接</span>
+                  <code>{generatedFileLink}</code>
+                </div>
+              ) : null}
+
+              <section className="accounting-card file-list-panel">
+                <div className="panel-heading">
+                  <h2>当前目录文件 · {fileFolderView.files.length} 个</h2>
+                </div>
+                <div className="file-list">
+                  {fileFolderView.files.map((file) => (
+                    <div className="file-item" key={file.id}>
+                      <span className="file-badge">FILE</span>
+                      <span>
+                        <strong>{file.originalName}</strong>
+                        <small>{formatBytes(file.sizeBytes)} · {file.contentType} · {new Date(file.uploadedAt).toLocaleString('zh-CN')}</small>
+                      </span>
+                      <button onClick={() => void copyFileLink(file)} type="button">复制链接</button>
+                      <button className="danger" onClick={() => void removeUploadedFile(file)} type="button">删除</button>
+                    </div>
+                  ))}
+                  {fileFolderView.files.length === 0 ? (
+                    <div className="empty-state">这个目录还没有文件。</div>
+                  ) : null}
+                </div>
+              </section>
+            </section>
           )}
         </section>
       ) : (
@@ -1113,9 +1638,9 @@ function App() {
                 <label>
                   标签
                   <input
-                    onChange={(event) => updateForm({ tags: splitTags(event.target.value) })}
-                    placeholder="用逗号或空格分隔"
-                    value={formatTags(form.tags)}
+                    onChange={(event) => updateTagInput(event.target.value)}
+                    placeholder="用逗号分隔标签"
+                    value={tagInput}
                   />
                 </label>
                 <div className="segmented-control editor-tabs">
@@ -1129,6 +1654,13 @@ function App() {
                 {editorTab === 'edit' ? (
                   <section className="markdown-editor">
                     <div className="markdown-toolbar" aria-label="Markdown 工具栏">
+                      <input
+                        accept="image/png,image/jpeg,image/gif,image/webp"
+                        className="hidden-input"
+                        onChange={(event) => void insertImageFile(event.target.files?.[0])}
+                        ref={imageInputRef}
+                        type="file"
+                      />
                       <button aria-label="一级标题" onClick={() => insertMarkdownSnippet('# ')} title="一级标题" type="button">H1</button>
                       <button aria-label="二级标题" onClick={() => insertMarkdownSnippet('## ')} title="二级标题" type="button">H2</button>
                       <button aria-label="粗体" onClick={() => insertMarkdownSnippet('**', '**')} title="粗体" type="button">B</button>
@@ -1137,13 +1669,18 @@ function App() {
                       <button aria-label="列表" onClick={() => insertMarkdownSnippet('- ')} title="列表" type="button">•</button>
                       <button aria-label="链接" onClick={() => insertMarkdownSnippet('[', '](https://example.com)', '链接文字')} title="链接" type="button">↗</button>
                       <button aria-label="代码块" onClick={() => insertMarkdownSnippet('```bash\n', '\n```', 'npm run build')} title="代码块" type="button">▣</button>
+                      <button aria-label="上传图片" disabled={uploadingImage} onClick={() => imageInputRef.current?.click()} title="上传图片" type="button">
+                        {uploadingImage ? '...' : 'IMG'}
+                      </button>
                     </div>
                     <label>
                       正文
                       <textarea
                         className="content-editor"
                         onChange={(event) => updateForm({ content: event.target.value })}
+                        onPaste={pasteImageIntoEditor}
                         placeholder="支持 Markdown：标题、粗体、行内代码、链接、引用、列表、代码块、图片。"
+                        ref={contentEditorRef}
                         rows={16}
                         value={form.content}
                       />
