@@ -99,7 +99,8 @@ const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
   category: 'food',
   account: '微信',
   spentAt: todayDateInput(),
-  note: ''
+  note: '',
+  includeInSaving: true
 };
 
 const EMPTY_ACCOUNTING_SETTINGS: AccountingSettingsDraft = {
@@ -910,7 +911,8 @@ function App() {
       category: entry.category,
       account: entry.account,
       spentAt: entry.spentAt,
-      note: entry.note
+      note: entry.note,
+      includeInSaving: entry.includeInSaving
     });
   };
 
@@ -1317,6 +1319,17 @@ function App() {
                       value={accountingForm.note}
                     />
                   </label>
+                  <label className="toggle-row">
+                    <input
+                      checked={accountingForm.includeInSaving}
+                      onChange={(event) => updateAccountingForm({ includeInSaving: event.target.checked })}
+                      type="checkbox"
+                    />
+                    <span>
+                      <strong>计入存钱项目</strong>
+                      <small>勾选后参与剩余可用计算；收入不会进入本月收入。</small>
+                    </span>
+                  </label>
                   <button type="submit">{editingAccountingId ? '保存更新' : '保存流水'}</button>
                 </form>
 
@@ -1362,7 +1375,12 @@ function App() {
                           <span className={`entry-type entry-${entry.type}`}>{entry.type === 'expense' ? '支' : '收'}</span>
                           <span>
                             <strong>{category.name} · {entry.account}</strong>
-                            <small>{entry.spentAt}{entry.note ? ` · ${entry.note}` : ''}</small>
+                            <small>
+                              {entry.spentAt}{entry.note ? ` · ${entry.note}` : ''}
+                              <em className={`entry-saving-badge ${entry.includeInSaving ? 'active' : ''}`}>
+                                {entry.includeInSaving ? '存钱项目' : '普通流水'}
+                              </em>
+                            </small>
                           </span>
                           <strong className={entry.type === 'expense' ? 'money-expense' : 'money-income'}>
                             {entry.type === 'expense' ? '-' : '+'}{formatMoney(entry.amountCents)}

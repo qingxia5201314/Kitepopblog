@@ -50,6 +50,11 @@ function initSchema(db) {
       saving_goal_json TEXT NOT NULL DEFAULT ''
     );
   `);
+  try {
+    db.run('ALTER TABLE accounting_entries ADD COLUMN include_in_saving INTEGER NOT NULL DEFAULT 1');
+  } catch (error) {
+    if (!String(error?.message || error).toLowerCase().includes('duplicate column')) throw error;
+  }
 }
 
 function rowToEntry(row) {
@@ -61,6 +66,7 @@ function rowToEntry(row) {
     account: row.account,
     spentAt: row.spent_at,
     note: row.note || '',
+    includeInSaving: row.include_in_saving !== 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -74,7 +80,8 @@ function normalizeEntryDraft(draft) {
     category: draft.category,
     account: String(draft.account || '').trim(),
     spentAt: draft.spentAt,
-    note: String(draft.note || '').trim()
+    note: String(draft.note || '').trim(),
+    includeInSaving: draft.includeInSaving !== false
   };
 }
 
@@ -173,8 +180,8 @@ export function createAccountingStore({ database }) {
       };
       db.run(
         `INSERT INTO accounting_entries (
-          id, type, amount_cents, category, account, spent_at, note, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          id, type, amount_cents, category, account, spent_at, note, include_in_saving, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           entry.id,
           entry.type,
@@ -183,6 +190,7 @@ export function createAccountingStore({ database }) {
           entry.account,
           entry.spentAt,
           entry.note,
+          entry.includeInSaving ? 1 : 0,
           entry.createdAt,
           entry.updatedAt
         ]
@@ -200,13 +208,14 @@ export function createAccountingStore({ database }) {
         category: patch.category ?? current.category,
         account: patch.account ?? current.account,
         spentAt: patch.spentAt ?? current.spentAt,
-        note: patch.note ?? current.note
+        note: patch.note ?? current.note,
+        includeInSaving: patch.includeInSaving ?? current.includeInSaving
       });
       const updated = { ...current, ...normalized, updatedAt: today() };
 
       db.run(
         `UPDATE accounting_entries SET
-          type = ?, amount_cents = ?, category = ?, account = ?, spent_at = ?, note = ?, updated_at = ?
+          type = ?, amount_cents = ?, category = ?, account = ?, spent_at = ?, note = ?, include_in_saving = ?, updated_at = ?
         WHERE id = ?`,
         [
           updated.type,
@@ -215,6 +224,7 @@ export function createAccountingStore({ database }) {
           updated.account,
           updated.spentAt,
           updated.note,
+          updated.includeInSaving ? 1 : 0,
           updated.updatedAt,
           id
         ]
@@ -271,7 +281,7 @@ export function createAccountingStore({ database }) {
         savingGoal: calculateSavingGoal(settings.savingGoal, {
           today: options.today,
           monthlyBudgetCents: settings.monthlyBudgetCents,
-          expenseCents: summary.expenseCents
+          expenseCents: summary.savingNetExpenseCents
         })
       };
     }

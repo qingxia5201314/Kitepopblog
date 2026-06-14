@@ -30,6 +30,7 @@ export interface AccountingEntry {
   account: string;
   spentAt: string;
   note: string;
+  includeInSaving: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +42,7 @@ export interface AccountingEntryDraft {
   account: string;
   spentAt: string;
   note: string;
+  includeInSaving: boolean;
 }
 
 export interface SavingGoalDraft {
@@ -95,6 +97,9 @@ export interface AccountingSettingsDraft {
 export interface AccountingSummary {
   incomeCents: number;
   expenseCents: number;
+  savingIncomeCents: number;
+  savingExpenseCents: number;
+  savingNetExpenseCents: number;
   balanceCents: number;
   dailyExpenseCents: number;
   budgetLimitCents: number;

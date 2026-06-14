@@ -38,7 +38,8 @@ describe('accounting api client', () => {
         category: 'food',
         account: '支付宝',
         spentAt: '2026-06-13',
-        note: '午饭'
+        note: '午饭',
+        includeInSaving: true
       },
       'accounting-token'
     );

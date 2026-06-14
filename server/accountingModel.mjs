@@ -87,11 +87,18 @@ export function deriveBudgetPlan({ monthlyBudgetCents = 0, savingGoal = null } =
 
 export function summarizeEntries(entries, { monthlyBudgetCents = 0, savingGoal = null } = {}) {
   const incomeCents = entries
-    .filter((entry) => entry.type === 'income')
+    .filter((entry) => entry.type === 'income' && entry.includeInSaving === false)
     .reduce((total, entry) => total + entry.amountCents, 0);
   const expenseCents = entries
     .filter((entry) => entry.type === 'expense')
     .reduce((total, entry) => total + entry.amountCents, 0);
+  const savingIncomeCents = entries
+    .filter((entry) => entry.type === 'income' && entry.includeInSaving !== false)
+    .reduce((total, entry) => total + entry.amountCents, 0);
+  const savingExpenseCents = entries
+    .filter((entry) => entry.type === 'expense' && entry.includeInSaving !== false)
+    .reduce((total, entry) => total + entry.amountCents, 0);
+  const savingNetExpenseCents = Math.max(savingExpenseCents - savingIncomeCents, 0);
   const expenseByCategory = entries
     .filter((entry) => entry.type === 'expense')
     .reduce((groups, entry) => {
@@ -104,14 +111,17 @@ export function summarizeEntries(entries, { monthlyBudgetCents = 0, savingGoal =
   return {
     incomeCents,
     expenseCents,
+    savingIncomeCents,
+    savingExpenseCents,
+    savingNetExpenseCents,
     balanceCents: incomeCents - expenseCents,
     dailyExpenseCents: Math.round(expenseCents / Math.max(new Date().getDate(), 1)),
     budgetLimitCents: budgetPlan.budgetLimitCents,
     plannedAvailableCents: budgetPlan.plannedAvailableCents,
     targetSavingCents: budgetPlan.targetSavingCents,
     budgetUsedPercent:
-      budgetPlan.budgetLimitCents > 0 ? Math.min(999, Math.round((expenseCents / budgetPlan.budgetLimitCents) * 100)) : 0,
-    budgetRemainingCents: budgetPlan.budgetLimitCents > 0 ? budgetPlan.budgetLimitCents - expenseCents : 0,
+      budgetPlan.budgetLimitCents > 0 ? Math.min(999, Math.round((savingNetExpenseCents / budgetPlan.budgetLimitCents) * 100)) : 0,
+    budgetRemainingCents: budgetPlan.budgetLimitCents > 0 ? budgetPlan.budgetLimitCents - savingNetExpenseCents : 0,
     topExpenseCategory: topExpense ? { category: topExpense[0], amountCents: topExpense[1] } : null
   };
 }

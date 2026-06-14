@@ -35,7 +35,8 @@ describe('accounting store', () => {
       category: 'salary',
       account: '银行卡',
       spentAt: '2026-06-01',
-      note: '工资'
+      note: '工资',
+      includeInSaving: false
     });
     store.createEntry({
       type: 'expense',
@@ -55,6 +56,38 @@ describe('accounting store', () => {
     expect(summary.summary.expenseCents).toBe(3500);
     expect(summary.summary.balanceCents).toBe(676500);
     expect(summary.summary.topExpenseCategory).toEqual({ category: 'food', amountCents: 3500 });
+  });
+
+  it('defaults entries into the saving project and persists opt-outs', () => {
+    const defaultEntry = store.createEntry({
+      type: 'expense',
+      amountYuan: '100',
+      category: 'food',
+      account: 'cash',
+      spentAt: '2026-06-13',
+      note: ''
+    });
+    const excludedIncome = store.createEntry({
+      type: 'income',
+      amountYuan: '5000',
+      category: 'salary',
+      account: 'bank',
+      spentAt: '2026-06-13',
+      note: '',
+      includeInSaving: false
+    });
+    const updated = store.updateEntry(defaultEntry.id, { includeInSaving: false });
+    const monthData = store.getMonthData({ month: '2026-06' });
+
+    expect(defaultEntry.includeInSaving).toBe(true);
+    expect(excludedIncome.includeInSaving).toBe(false);
+    expect(updated.includeInSaving).toBe(false);
+    expect(monthData.entries.map((entry) => [entry.id, entry.includeInSaving])).toEqual([
+      [defaultEntry.id, false],
+      [excludedIncome.id, false]
+    ]);
+    expect(monthData.summary.incomeCents).toBe(500000);
+    expect(monthData.summary.budgetRemainingCents).toBe(0);
   });
 
   it('stores budget and one-month saving goal settings', () => {

@@ -20,6 +20,25 @@ describe('accounting saving goal model', () => {
     expect(status.savingGapCents).toBe(0);
   });
 
+  it('separates saving-project bills from public income and usable budget math', () => {
+    const entries = [
+      { type: 'expense', amountCents: 30000, category: 'food', includeInSaving: true },
+      { type: 'income', amountCents: 10000, category: 'salary', includeInSaving: true },
+      { type: 'income', amountCents: 500000, category: 'salary', includeInSaving: false },
+      { type: 'expense', amountCents: 20000, category: 'shopping', includeInSaving: false }
+    ];
+    const goal = { targetSavingCents: 100000, availableBudgetCents: 100000, endDate: '2026-06-30' };
+    const summary = summarizeEntries(entries, { monthlyBudgetCents: 200000, savingGoal: goal });
+
+    expect(summary.incomeCents).toBe(500000);
+    expect(summary.expenseCents).toBe(50000);
+    expect(summary.savingIncomeCents).toBe(10000);
+    expect(summary.savingExpenseCents).toBe(30000);
+    expect(summary.savingNetExpenseCents).toBe(20000);
+    expect(summary.budgetRemainingCents).toBe(80000);
+    expect(summary.budgetUsedPercent).toBe(20);
+  });
+
   it('lets a mid-month manual usable budget drive the budget percentage', () => {
     const entries = [{ type: 'expense', amountCents: 30000, category: 'food' }];
     const goal = { targetSavingCents: 100000, availableBudgetCents: 60000, endDate: '2026-06-30' };
