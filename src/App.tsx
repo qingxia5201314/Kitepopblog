@@ -924,9 +924,9 @@ function App() {
           <section className="hero-band">
             <div className="hero-copy">
               <p className="eyebrow">Kitepop Blog</p>
-              <h1>记录生活，也记录每一次专业成长。</h1>
+              <h1>让世界变得有趣！</h1>
               <p>
-                这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。后台支持 Markdown、封面图和图文发布。
+                这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。
               </p>
               <div className="hero-actions">
                 <button onClick={() => setMode('admin')} type="button">发布文章</button>
