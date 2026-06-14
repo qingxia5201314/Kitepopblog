@@ -23,20 +23,18 @@ describe('user store', () => {
     const session = store.register({
       username: 'kite_user',
       password: 'secret123',
-      nickname: 'Kite',
-      role: '安全研究员'
+      nickname: 'Kite'
     });
 
     expect(session.user.permission).toBe('reader');
     expect(session.user.nickname).toBe('Kite');
-    expect(store.verify(`Bearer ${session.token}`)?.role).toBe('安全研究员');
     expect(store.listUsers()).toHaveLength(1);
   });
 
   it('logs in and lets admins update public identity', () => {
-    const created = store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader', role: '读者' });
+    const created = store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
     const login = store.login({ username: 'reader01', password: 'secret123' });
-    const updated = store.updateUser(created.user.id, { nickname: '新昵称', role: '朋友', permission: 'reader' });
+    const updated = store.updateUser(created.user.id, { nickname: '新昵称', permission: 'reader' });
 
     expect(login.user.id).toBe(created.user.id);
     expect(updated.nickname).toBe('新昵称');

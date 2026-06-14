@@ -118,8 +118,7 @@ const EMPTY_COMMENT_FORM = {
 const EMPTY_USER_FORM = {
   username: '',
   password: '',
-  nickname: '',
-  role: ''
+  nickname: ''
 };
 
 const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
@@ -319,6 +318,40 @@ function filterPostsByDate(posts: BlogPost[], filter: PostDateFilter): BlogPost[
   return posts.filter((post) => Date.parse(post.updatedAt) >= minTime);
 }
 
+function permissionLabel(permission?: BlogUser['permission']): string {
+  return permission === 'admin' ? '管理员' : '阅读用户';
+}
+
+function FilterMenu({
+  label,
+  onSelect,
+  options
+}: {
+  label: string;
+  onSelect: (value: string) => void;
+  options: Array<[string, string]>;
+}) {
+  return (
+    <details className="filter-menu">
+      <summary>{label}</summary>
+      <div>
+        {options.map(([value, text]) => (
+          <button
+            key={value}
+            onClick={(event) => {
+              onSelect(value);
+              event.currentTarget.closest('details')?.removeAttribute('open');
+            }}
+            type="button"
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 function App() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [mode, setMode] = useState<ViewMode>('home');
@@ -326,7 +359,10 @@ function App() {
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<PostDateFilter>('all');
-  const [detailPostId, setDetailPostId] = useState<string | null>(null);
+  const [detailPostId, setDetailPostId] = useState<string | null>(() => {
+    const match = window.location.hash.match(/^#\/posts\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  });
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [comments, setComments] = useState<PostComment[]>([]);
   const [commentForm, setCommentForm] = useState(EMPTY_COMMENT_FORM);
@@ -335,7 +371,7 @@ function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [adminUsers, setAdminUsers] = useState<BlogUser[]>([]);
-  const [adminPanelOpen, setAdminPanelOpen] = useState({ content: true, users: false });
+  const [adminPanelOpen, setAdminPanelOpen] = useState({ content: false, users: false });
   const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(loadAdminSession()));
   const [adminToken, setAdminToken] = useState(() => loadAdminSession()?.token ?? '');
   const [password, setPassword] = useState('');
@@ -528,6 +564,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const syncRoute = () => {
+      const match = window.location.hash.match(/^#\/posts\/(.+)$/);
+      setDetailPostId(match ? decodeURIComponent(match[1]) : null);
+    };
+    window.addEventListener('hashchange', syncRoute);
+    syncRoute();
+    return () => window.removeEventListener('hashchange', syncRoute);
+  }, []);
+
+  useEffect(() => {
     const saved = loadAdminSession();
     if (!saved?.token) return;
 
@@ -661,13 +707,13 @@ function App() {
 
   const openPostDetail = (post: BlogPost) => {
     setSelectedPostId(post.id);
-    setDetailPostId(post.id);
-    window.history.replaceState(null, '', `#post-${post.slug}`);
+    setDetailPostId(post.slug);
+    window.location.hash = `/posts/${post.slug}`;
   };
 
   const closePostDetail = () => {
     setDetailPostId(null);
-    window.history.replaceState(null, '', '#');
+    window.location.hash = '';
   };
 
   const submitComment = async (event: FormEvent<HTMLFormElement>) => {
@@ -1243,7 +1289,74 @@ function App() {
         </div>
       ) : null}
 
-      {mode === 'home' ? (
+      {mode === 'home' && detailPost ? (
+        <section className="article-page">
+          <button className="back-link" onClick={closePostDetail} type="button">返回文章列表</button>
+          {getSafeImageUrl(detailPost.coverImage) ? (
+            <img alt={detailPost.title} className="article-cover-image" src={getSafeImageUrl(detailPost.coverImage)} {...safeImageAttributes} />
+          ) : (
+            <div className={`article-cover cover-${detailPost.cover}`}>
+              <span>
+                <Icon name={getCategoryIcon(detailPost.category)} />
+                {getCategory(detailPost.category).name}
+              </span>
+            </div>
+          )}
+          <p className="article-meta">
+            <span><Icon name="calendar" />{detailPost.updatedAt}</span>
+            <span><Icon name="clock" />{calculateReadingMinutes(detailPost.content)} 分钟阅读</span>
+            <span><Icon name={getCategoryIcon(detailPost.category)} />{getCategory(detailPost.category).name}</span>
+          </p>
+          <h1>{detailPost.title}</h1>
+          <p className="summary">{detailPost.summary}</p>
+          <div className="tag-row">
+            {detailPost.tags.map((tag) => (
+              <button key={tag} onClick={() => toggleActiveTag(tag)} type="button">
+                <Icon name="tag" />
+                {tag}
+              </button>
+            ))}
+          </div>
+          <div className="article-body">{renderMarkdown(detailPost.content)}</div>
+          <section className="comment-panel">
+            <div className="panel-heading">
+              <h3>评论 · {comments.length}</h3>
+              {userSession ? (
+                <div className="comment-user-chip">
+                  <strong>{userSession.user.nickname}</strong>
+                  <span>{permissionLabel(userSession.user.permission)}</span>
+                </div>
+              ) : null}
+            </div>
+            {userSession ? (
+              <form className="comment-form" onSubmit={submitComment}>
+                <textarea
+                  aria-label="评论内容"
+                  onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
+                  placeholder="写点想法..."
+                  value={commentForm.content}
+                />
+                <button disabled={commentLoading} type="submit">{commentLoading ? '发布中...' : '发布评论'}</button>
+              </form>
+            ) : (
+              <div className="comment-empty-card">
+                <strong>登录后可评论</strong>
+                <p>注册后默认只有阅读权限，评论会自动显示你的昵称和权限身份。</p>
+              </div>
+            )}
+            <div className="comment-list">
+              {comments.map((comment) => (
+                <article className="comment-item" key={comment.id}>
+                  <strong>{comment.nickname}<span>{comment.role}</span></strong>
+                  <p>{comment.content}</p>
+                  <small>{comment.createdAt}</small>
+                </article>
+              ))}
+              {comments.length === 0 ? <div className="empty-state">还没有评论。</div> : null}
+            </div>
+          </section>
+        </section>
+      ) : mode === 'home' ? (
         <>
           <section className="hero-band">
             <div className="hero-copy">
@@ -1276,7 +1389,7 @@ function App() {
               <>
                 <div>
                   <strong>{userSession.user.nickname}</strong>
-                  <span>{userSession.user.role} · {userSession.user.permission === 'reader' ? '阅读用户' : '管理员'}</span>
+                  <span>{permissionLabel(userSession.user.permission)}</span>
                 </div>
                 <button className="ghost" onClick={logoutUser} type="button">退出登录</button>
               </>
@@ -1300,59 +1413,20 @@ function App() {
                   value={userForm.password}
                 />
                 {authMode === 'register' ? (
-                  <>
-                    <input
-                      aria-label="昵称"
-                      onChange={(event) => setUserForm((current) => ({ ...current, nickname: event.target.value }))}
-                      placeholder="昵称"
-                      value={userForm.nickname}
-                    />
-                    <input
-                      aria-label="身份"
-                      onChange={(event) => setUserForm((current) => ({ ...current, role: event.target.value }))}
-                      placeholder="身份，例如：读者 / 朋友 / 安全研究员"
-                      value={userForm.role}
-                    />
-                  </>
+                  <input
+                    aria-label="昵称"
+                    onChange={(event) => setUserForm((current) => ({ ...current, nickname: event.target.value }))}
+                    placeholder="昵称"
+                    value={userForm.nickname}
+                  />
                 ) : null}
                 <button type="submit">{authMode === 'register' ? '创建账号' : '登录评论'}</button>
               </form>
             )}
           </section>
 
-          <section className="category-grid" aria-label="内容分类">
-            <button
-              className={activeCategory === 'all' ? 'category active' : 'category'}
-              onClick={() => {
-                setActiveCategory('all');
-                setActiveTags([]);
-              }}
-              type="button"
-            >
-              <Icon name="grid" className="category-icon" />
-              <strong>全部内容</strong>
-              <span>查看所有已发布文章</span>
-            </button>
-            {BLOG_CATEGORIES.map((category) => (
-              <button
-                className={activeCategory === category.id ? 'category active' : 'category'}
-                key={category.id}
-                onClick={() => {
-                  setActiveCategory(category.id);
-                  setActiveTags([]);
-                }}
-                style={{ '--accent': category.accent } as React.CSSProperties}
-                type="button"
-              >
-                <Icon name={getCategoryIcon(category.id)} className="category-icon" />
-                <strong>{category.name}</strong>
-                <span>{category.description}</span>
-              </button>
-            ))}
-          </section>
-
-          <section className={detailPost ? 'content-layout detail-mode' : 'content-layout'}>
-            <aside className="post-panel">
+          <section className="home-post-section">
+            <aside className="post-panel home-post-panel">
               <div className="panel-heading">
                 <h2>文章列表</h2>
                 <input
@@ -1362,29 +1436,27 @@ function App() {
                   value={query}
                 />
                 <div className="index-filters" aria-label="文章索引筛选">
-                  <select
-                    aria-label="按时间筛选"
-                    onChange={(event) => setDateFilter(event.target.value as PostDateFilter)}
-                    value={dateFilter}
-                  >
-                    <option value="all">全部时间</option>
-                    <option value="7d">最近 7 天</option>
-                    <option value="30d">最近 30 天</option>
-                    <option value="year">今年</option>
-                  </select>
-                  <select
-                    aria-label="按分类筛选"
-                    onChange={(event) => {
-                      setActiveCategory(event.target.value as BlogCategoryId | 'all');
+                  <FilterMenu
+                    label={dateFilter === 'all' ? '全部时间' : dateFilter === '7d' ? '最近 7 天' : dateFilter === '30d' ? '最近 30 天' : '今年'}
+                    options={[
+                      ['all', '全部时间'],
+                      ['7d', '最近 7 天'],
+                      ['30d', '最近 30 天'],
+                      ['year', '今年']
+                    ]}
+                    onSelect={(value) => setDateFilter(value as PostDateFilter)}
+                  />
+                  <FilterMenu
+                    label={activeCategory === 'all' ? '全部分类' : getCategory(activeCategory).name}
+                    options={[
+                      ['all', '全部分类'],
+                      ...BLOG_CATEGORIES.map((category) => [category.id, category.name] as [string, string])
+                    ]}
+                    onSelect={(value) => {
+                      setActiveCategory(value as BlogCategoryId | 'all');
                       setSelectedPostId(null);
                     }}
-                    value={activeCategory}
-                  >
-                    <option value="all">全部分类</option>
-                    {BLOG_CATEGORIES.map((category) => (
-                      <option key={category.id} value={category.id}>{category.name}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
                 {activeTags.length ? (
                   <div className="tag-filter-group" aria-label="已选标签">
@@ -1407,7 +1479,7 @@ function App() {
                   const coverImage = getSafeImageUrl(post.coverImage);
                   return (
                     <button
-                      className={selectedPost?.id === post.id ? 'post-item active' : 'post-item'}
+                      className="post-item"
                       key={post.id}
                       onClick={() => openPostDetail(post)}
                       type="button"
@@ -1435,93 +1507,6 @@ function App() {
                 })}
               </div>
             </aside>
-
-            <article className={detailPost ? 'article-view article-detail' : 'article-view'}>
-              {(detailPost ?? selectedPost) ? (
-                <>
-                  {detailPost ? (
-                    <button className="back-link" onClick={closePostDetail} type="button">返回文章列表</button>
-                  ) : null}
-                  {getSafeImageUrl((detailPost ?? selectedPost)?.coverImage) ? (
-                    <img
-                      alt={(detailPost ?? selectedPost)?.title}
-                      className="article-cover-image"
-                      src={getSafeImageUrl((detailPost ?? selectedPost)?.coverImage)}
-                      {...safeImageAttributes}
-                    />
-                  ) : (
-                    <div className={`article-cover cover-${(detailPost ?? selectedPost)?.cover}`}>
-                      <span>
-                        <Icon name={getCategoryIcon((detailPost ?? selectedPost)!.category)} />
-                        {getCategory((detailPost ?? selectedPost)!.category).name}
-                      </span>
-                    </div>
-                  )}
-                  <p className="article-meta">
-                    <span><Icon name="calendar" />{(detailPost ?? selectedPost)!.updatedAt}</span>
-                    <span><Icon name="clock" />{calculateReadingMinutes((detailPost ?? selectedPost)!.content)} 分钟阅读</span>
-                    <span><Icon name={getCategoryIcon((detailPost ?? selectedPost)!.category)} />{getCategory((detailPost ?? selectedPost)!.category).name}</span>
-                  </p>
-                  <h2>{(detailPost ?? selectedPost)!.title}</h2>
-                  <p className="summary">{(detailPost ?? selectedPost)!.summary}</p>
-                  <div className="tag-row">
-                    {(detailPost ?? selectedPost)!.tags.map((tag) => (
-                      <button
-                        className={activeTags.some((selectedTag) => selectedTag.toLowerCase() === tag.toLowerCase()) ? 'active' : ''}
-                        key={tag}
-                        onClick={() => toggleActiveTag(tag)}
-                        type="button"
-                      >
-                        <Icon name="tag" />
-                        {tag}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="article-body">{renderMarkdown((detailPost ?? selectedPost)!.content)}</div>
-                  {detailPost ? (
-                    <section className="comment-panel">
-                      <div className="panel-heading">
-                        <h3>评论 · {comments.length}</h3>
-                        {userSession ? (
-                          <div className="comment-user-chip">
-                            <strong>{userSession.user.nickname}</strong>
-                            <span>{userSession.user.role}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                      {userSession ? (
-                        <form className="comment-form" onSubmit={submitComment}>
-                          <textarea
-                            aria-label="评论内容"
-                            onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
-                            placeholder="写点想法..."
-                            value={commentForm.content}
-                          />
-                          <button disabled={commentLoading} type="submit">{commentLoading ? '发布中...' : '发布评论'}</button>
-                        </form>
-                      ) : (
-                        <div className="comment-empty-card">
-                          <strong>登录后可评论</strong>
-                          <p>注册后默认只有阅读权限，评论会自动显示你的昵称和身份。</p>
-                        </div>
-                      )}
-                      <div className="comment-list">
-                        {comments.map((comment) => (
-                          <article className="comment-item" key={comment.id}>
-                            <strong>{comment.nickname}<span>{comment.role}</span></strong>
-                            <p>{comment.content}</p>
-                            <small>{comment.createdAt}</small>
-                          </article>
-                        ))}
-                        {comments.length === 0 ? <div className="empty-state">还没有评论。</div> : null}
-                      </div>
-                    </section>
-                  ) : null}
-                </>
-              ) : (
-                <div className="empty-state">还没有匹配的文章。</div>
-              )}
-            </article>
           </section>
         </>
       ) : mode === 'accounting' ? (
@@ -2152,13 +2137,8 @@ function App() {
                             onChange={(event) => setAdminUsers((current) => current.map((item) => (
                               item.id === user.id ? { ...item, nickname: event.target.value } : item
                             )))}
+                            placeholder="昵称"
                             value={user.nickname}
-                          />
-                          <input
-                            onChange={(event) => setAdminUsers((current) => current.map((item) => (
-                              item.id === user.id ? { ...item, role: event.target.value } : item
-                            )))}
-                            value={user.role}
                           />
                           <select
                             onChange={(event) => setAdminUsers((current) => current.map((item) => (
@@ -2166,8 +2146,8 @@ function App() {
                             )))}
                             value={user.permission}
                           >
-                            <option value="reader">reader</option>
-                            <option value="admin">admin</option>
+                            <option value="reader">阅读用户</option>
+                            <option value="admin">管理员</option>
                           </select>
                           <button onClick={() => void saveAdminUser(user)} type="button">保存</button>
                         </div>

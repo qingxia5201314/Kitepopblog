@@ -45,13 +45,13 @@ describe('blog api client', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    await registerUser({ username: 'kite', password: 'secret123', nickname: 'Kite', role: '读者' });
+    await registerUser({ username: 'kite', password: 'secret123', nickname: 'Kite' });
     await loginUser('kite', 'secret123');
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/users/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'kite', password: 'secret123', nickname: 'Kite', role: '读者' })
+      body: JSON.stringify({ username: 'kite', password: 'secret123', nickname: 'Kite' })
     });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/users/login', {
       method: 'POST',

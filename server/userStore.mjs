@@ -25,7 +25,6 @@ function rowToUser(row) {
     id: row.id,
     username: row.username,
     nickname: row.nickname,
-    role: row.role,
     permission: row.permission,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -94,7 +93,7 @@ export function createUserStore({ database, now = () => new Date() }) {
       return rows(db, 'SELECT * FROM users ORDER BY created_at DESC').map(rowToUser);
     },
 
-    register({ username, password, nickname, role }) {
+    register({ username, password, nickname }) {
       const cleanUsername = String(username || '').trim();
       const cleanPassword = String(password || '');
       if (!/^[A-Za-z0-9_]{3,24}$/.test(cleanUsername)) throw new Error('用户名需为 3-24 位字母、数字或下划线');
@@ -105,7 +104,6 @@ export function createUserStore({ database, now = () => new Date() }) {
         id: `user-${randomBytes(12).toString('hex')}`,
         username: cleanUsername,
         nickname: String(nickname || cleanUsername).trim() || cleanUsername,
-        role: String(role || '读者').trim() || '读者',
         permission: 'reader',
         createdAt: time,
         updatedAt: time
@@ -113,7 +111,7 @@ export function createUserStore({ database, now = () => new Date() }) {
       db.run(
         `INSERT INTO users (id, username, password_hash, nickname, role, permission, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [user.id, user.username, hashPassword(cleanPassword), user.nickname, user.role, user.permission, user.createdAt, user.updatedAt]
+        [user.id, user.username, hashPassword(cleanPassword), user.nickname, user.permission, user.permission, user.createdAt, user.updatedAt]
       );
       database.persist();
       return issueSession(user);
@@ -140,13 +138,12 @@ export function createUserStore({ database, now = () => new Date() }) {
       const updated = {
         ...current,
         nickname: String(patch.nickname ?? current.nickname).trim() || current.nickname,
-        role: String(patch.role ?? current.role).trim() || current.role,
         permission: ['reader', 'admin'].includes(patch.permission) ? patch.permission : current.permission,
         updatedAt: now().toISOString()
       };
       db.run('UPDATE users SET nickname = ?, role = ?, permission = ?, updated_at = ? WHERE id = ?', [
         updated.nickname,
-        updated.role,
+        updated.permission,
         updated.permission,
         updated.updatedAt,
         id

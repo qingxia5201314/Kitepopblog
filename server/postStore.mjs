@@ -196,7 +196,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         id: createId(),
         postId: post.id,
         nickname: String(user?.nickname || draft.nickname || '匿名访客').trim() || '匿名访客',
-        role: String(user?.role || draft.role || '读者').trim() || '读者',
+        role: user?.permission === 'admin' ? '管理员' : '阅读用户',
         content,
         createdAt: today()
       };

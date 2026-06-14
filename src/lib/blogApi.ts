@@ -98,7 +98,6 @@ export async function registerUser(draft: {
   username: string;
   password: string;
   nickname: string;
-  role: string;
 }): Promise<UserSession> {
   return parseResponse<UserSession>(
     await fetch('/api/users/register', {
@@ -139,7 +138,7 @@ export async function listUsers(token: string): Promise<BlogUser[]> {
 
 export async function updateUser(
   id: string,
-  patch: Partial<Pick<BlogUser, 'nickname' | 'role' | 'permission'>>,
+  patch: Partial<Pick<BlogUser, 'nickname' | 'permission'>>,
   token: string
 ): Promise<BlogUser> {
   const payload = await parseResponse<{ user: BlogUser }>(

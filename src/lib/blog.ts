@@ -54,7 +54,6 @@ export interface BlogUser {
   id: string;
   username: string;
   nickname: string;
-  role: string;
   permission: 'reader' | 'admin';
   createdAt: string;
   updatedAt: string;
