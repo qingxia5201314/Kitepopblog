@@ -547,7 +547,7 @@ function App() {
     const coverImage = coverImageInput ? normalizeImageUrl(coverImageInput) : '';
 
     if (coverImageInput && !coverImage) {
-      notify('error', '请输入 HTTPS 封面图片 URL（本地调试允许 localhost HTTP）');
+      notify('error', '请输入 HTTPS 图片 URL，或使用本站图床图片链接');
       return;
     }
 
@@ -1814,7 +1814,7 @@ function App() {
                   封面图 URL
                   <input
                     onChange={(event) => updateForm({ coverImage: event.target.value })}
-                    placeholder="请输入 HTTPS 图片 URL"
+                    placeholder="请输入 HTTPS 图片 URL，或粘贴本站图床链接"
                     value={form.coverImage ?? ''}
                   />
                 </label>
