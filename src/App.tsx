@@ -97,7 +97,7 @@ const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
   type: 'expense',
   amountYuan: '',
   category: 'food',
-  account: '支付宝',
+  account: '微信',
   spentAt: todayDateInput(),
   note: ''
 };
