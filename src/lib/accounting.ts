@@ -18,7 +18,7 @@ export interface AccountingCategory {
   accent: string;
 }
 
-export const ACCOUNTING_PAYMENT_METHODS = ['支付宝', '微信', '银行卡', '现金', '花呗', '其他'] as const;
+export const ACCOUNTING_PAYMENT_METHODS = ['微信', '支付宝', '银行卡', '现金', '花呗', '其他'] as const;
 export const ACCOUNTING_ENTRY_COLLAPSE_LIMIT = 5;
 export type BudgetHealth = 'good' | 'warn' | 'danger' | 'neutral';
 
