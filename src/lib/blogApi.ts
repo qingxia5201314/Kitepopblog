@@ -1,4 +1,4 @@
-import { BlogPost, BlogPostDraft, PostStatus } from './blog';
+import { BlogPost, BlogPostDraft, PostComment, PostCommentDraft, PostStatus } from './blog';
 
 interface ListPostOptions {
   includeDrafts?: boolean;
@@ -69,4 +69,26 @@ export async function deletePost(id: string, token: string): Promise<void> {
       headers: authHeaders(token)
     })
   );
+}
+
+export async function listPostComments(postIdOrSlug: string): Promise<PostComment[]> {
+  const payload = await parseResponse<{ comments: PostComment[] }>(
+    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`)
+  );
+
+  return payload.comments;
+}
+
+export async function createPostComment(postIdOrSlug: string, draft: PostCommentDraft): Promise<PostComment> {
+  const payload = await parseResponse<{ comment: PostComment }>(
+    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(draft)
+    })
+  );
+
+  return payload.comment;
 }

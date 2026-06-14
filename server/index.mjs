@@ -162,6 +162,11 @@ function getPostId(pathname) {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+function getPostCommentsId(pathname) {
+  const match = pathname.match(/^\/api\/posts\/([^/]+)\/comments$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 function getAccountingEntryId(pathname) {
   const match = pathname.match(/^\/api\/accounting\/entries\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : '';
@@ -260,6 +265,28 @@ async function handlePosts(request, response, store, sessions) {
     } catch {
       sendJson(response, 400, { ok: false, message: 'Invalid request body' });
     }
+    return;
+  }
+
+  const commentsPostId = getPostCommentsId(url.pathname);
+  if (commentsPostId) {
+    if (request.method === 'GET') {
+      sendJson(response, 200, { comments: store.listComments(commentsPostId) });
+      return;
+    }
+
+    if (request.method === 'POST') {
+      try {
+        const body = await readJsonBody(request);
+        const comment = store.createComment(commentsPostId, body);
+        sendJson(response, comment ? 201 : 404, comment ? { comment } : { ok: false, message: 'Post not found' });
+      } catch (error) {
+        sendJson(response, 400, { ok: false, message: error?.message || 'Invalid request body' });
+      }
+      return;
+    }
+
+    sendJson(response, 405, { ok: false, message: 'Method not allowed' });
     return;
   }
 

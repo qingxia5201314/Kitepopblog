@@ -19,6 +19,17 @@ function rowToPost(row) {
   };
 }
 
+function rowToComment(row) {
+  return {
+    id: row.id,
+    postId: row.post_id,
+    nickname: row.nickname,
+    role: row.role || '',
+    content: row.content,
+    createdAt: row.created_at
+  };
+}
+
 function postToParams(post) {
   return [
     post.id,
@@ -63,7 +74,23 @@ function initSchema(db) {
       cover TEXT NOT NULL,
       cover_image TEXT NOT NULL DEFAULT ''
     );
+
+    CREATE TABLE IF NOT EXISTS post_comments (
+      id TEXT PRIMARY KEY,
+      post_id TEXT NOT NULL,
+      nickname TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
+}
+
+function selectComments(db, postId) {
+  const rows = db.exec('SELECT * FROM post_comments WHERE post_id = ? ORDER BY created_at DESC', [postId]);
+  if (rows.length === 0) return [];
+  const { columns, values } = rows[0];
+  return values.map((value) => rowToComment(Object.fromEntries(columns.map((column, index) => [column, value[index]]))));
 }
 
 function insertPost(db, post) {
@@ -152,6 +179,34 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       db.run('DELETE FROM posts WHERE id = ?', [id]);
       sqlite.persist();
       return true;
+    },
+
+    listComments(idOrSlug) {
+      const post = this.get(idOrSlug);
+      if (!post) return [];
+      return selectComments(db, post.id);
+    },
+
+    createComment(idOrSlug, draft) {
+      const post = this.get(idOrSlug);
+      if (!post) return undefined;
+      const content = String(draft.content || '').trim();
+      if (!content) throw new Error('Comment content is required');
+      const comment = {
+        id: createId(),
+        postId: post.id,
+        nickname: String(draft.nickname || '匿名访客').trim() || '匿名访客',
+        role: String(draft.role || '读者').trim() || '读者',
+        content,
+        createdAt: today()
+      };
+      db.run(
+        `INSERT INTO post_comments (id, post_id, nickname, role, content, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [comment.id, comment.postId, comment.nickname, comment.role, comment.content, comment.createdAt]
+      );
+      sqlite.persist();
+      return comment;
     }
   };
 }

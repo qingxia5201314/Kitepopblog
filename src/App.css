@@ -29,6 +29,58 @@ button {
   cursor: pointer;
 }
 
+button,
+.post-item,
+.category,
+.visual-card,
+.metric-card,
+.article-view,
+.accounting-card,
+.file-item,
+.image-item,
+.admin-post {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+button:hover,
+.post-item:hover,
+.category:hover,
+.visual-card:hover,
+.metric-card:hover,
+.accounting-card:hover,
+.file-item:hover,
+.image-item:hover,
+.admin-post:hover {
+  transform: translateY(-3px);
+}
+
+button:active,
+.post-item:active,
+.category:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.pointer-particle {
+  animation: particle-fade 520ms ease-out forwards;
+  background: #2f7d67;
+  border-radius: 999px;
+  height: 6px;
+  left: 0;
+  pointer-events: none;
+  position: fixed;
+  top: 0;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  z-index: 9999;
+}
+
+.pointer-particle.burst {
+  animation-duration: 780ms;
+  background: #d7a93c;
+  height: 8px;
+  width: 8px;
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 20px;
@@ -83,7 +135,7 @@ button {
 }
 
 .brand-status {
-  display: grid;
+  display: none;
   gap: 3px;
   margin-left: 2px;
 }
@@ -296,6 +348,18 @@ button {
   }
 }
 
+@keyframes particle-fade {
+  from {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx, 0px)), calc(-50% + var(--dy, -24px))) scale(0.2);
+  }
+}
+
 .hero-band {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
@@ -361,6 +425,13 @@ p {
   gap: 12px;
   grid-template-columns: 1fr 1fr;
   min-height: 320px;
+}
+
+.index-filters {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
 }
 
 .visual-card {
@@ -939,7 +1010,7 @@ textarea {
   border-radius: 8px;
   display: block;
   max-height: 560px;
-  object-fit: cover;
+  object-fit: contain;
   width: 100%;
 }
 
@@ -955,6 +1026,82 @@ textarea {
   border-left: 3px solid #8a5a19;
   border-radius: 6px;
   padding: 8px 10px;
+}
+
+.back-link {
+  background: #f4efe5;
+  border: 1px solid #dfd2bf;
+  border-radius: 999px;
+  color: #38423d;
+  font-weight: 800;
+  margin-bottom: 14px;
+  min-height: 34px;
+  padding: 7px 12px;
+}
+
+.article-detail {
+  max-width: 880px;
+}
+
+.comment-panel {
+  border-top: 1px solid #e0d6c5;
+  display: grid;
+  gap: 14px;
+  margin-top: 34px;
+  padding-top: 20px;
+}
+
+.comment-panel h3 {
+  margin: 0;
+}
+
+.comment-form {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-form textarea {
+  min-height: 110px;
+}
+
+.comment-form button {
+  justify-self: start;
+}
+
+.comment-list {
+  display: grid;
+  gap: 10px;
+}
+
+.comment-item {
+  background: #f8f3ea;
+  border: 1px solid #e2d6c4;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.comment-item strong {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.comment-item strong span {
+  background: #e8ddca;
+  border-radius: 999px;
+  color: #6b5a43;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+}
+
+.comment-item p {
+  color: #38423d;
+  line-height: 1.7;
+  margin: 8px 0;
+}
+
+.comment-item small {
+  color: #68706a;
 }
 
 .code-rule {
@@ -1884,14 +2031,59 @@ textarea {
   }
 
   .hero-band {
-    padding: 24px;
+    gap: 16px;
+    min-height: auto;
+    padding: 18px;
   }
 
-  .hero-visual,
-  .category-grid,
   .form-grid,
   .accounting-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .hero-copy h1 {
+    font-size: 2.2rem;
+  }
+
+  .hero-copy p {
+    font-size: 0.95rem;
+    line-height: 1.65;
+  }
+
+  .hero-visual {
+    display: flex;
+    gap: 8px;
+    min-height: 0;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .visual-card {
+    flex: 0 0 118px;
+    font-size: 1rem;
+    min-height: 72px;
+    padding: 12px;
+  }
+
+  .visual-card .ui-icon {
+    height: 26px;
+    right: 9px;
+    top: 9px;
+    width: 26px;
+  }
+
+  .category-grid {
+    gap: 8px;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .category {
+    min-height: 88px;
+    padding: 12px;
+  }
+
+  .category span {
+    display: none;
   }
 
   .visual-src,
@@ -1900,7 +2092,29 @@ textarea {
   }
 
   .metrics-strip {
-    align-items: flex-start;
-    flex-direction: column;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding: 10px;
+  }
+
+  .metrics-strip span {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .post-panel,
+  .article-view {
+    padding: 14px;
+  }
+
+  .article-cover-image,
+  .article-cover {
+    aspect-ratio: 16 / 10;
+    height: auto;
+  }
+
+  .index-filters {
+    grid-template-columns: 1fr;
   }
 }

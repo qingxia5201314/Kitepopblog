@@ -37,6 +37,21 @@ export interface BlogPost {
 
 export type BlogPostDraft = Omit<BlogPost, 'id' | 'slug' | 'createdAt' | 'updatedAt'>;
 
+export interface PostComment {
+  id: string;
+  postId: string;
+  nickname: string;
+  role: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface PostCommentDraft {
+  nickname: string;
+  role: string;
+  content: string;
+}
+
 export interface PostFilter {
   category?: BlogCategoryId | 'all';
   query?: string;

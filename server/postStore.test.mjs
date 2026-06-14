@@ -47,4 +47,21 @@ describe('post store', () => {
     expect(store.remove(created.id)).toBe(true);
     expect(store.get(created.id)).toBeUndefined();
   });
+
+  it('stores public comments for each post', async () => {
+    const store = await createPostStore({ dbPath: join(tempDir, 'blog.sqlite') });
+    const post = store.list({ includeDrafts: false })[0];
+
+    const comment = store.createComment(post.id, {
+      nickname: 'Kite',
+      role: '站长',
+      content: '这篇文章有用。'
+    });
+
+    expect(comment.postId).toBe(post.id);
+    expect(comment.nickname).toBe('Kite');
+    expect(comment.role).toBe('站长');
+    expect(store.listComments(post.slug).map((item) => item.content)).toEqual(['这篇文章有用。']);
+    expect(() => store.createComment(post.id, { nickname: '', role: '', content: '' })).toThrow('Comment content is required');
+  });
 });

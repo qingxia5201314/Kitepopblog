@@ -4,13 +4,14 @@ import {
   BlogCategoryId,
   BlogPost,
   BlogPostDraft,
+  PostComment,
   PostStatus,
   calculateReadingMinutes,
   filterPosts,
   getCategory,
   getCategoryIcon
 } from './lib/blog';
-import { createPost, deletePost, listPosts, updatePost } from './lib/blogApi';
+import { createPost, createPostComment, deletePost, listPostComments, listPosts, updatePost } from './lib/blogApi';
 import {
   ACCOUNTING_CATEGORIES,
   ACCOUNTING_ENTRY_COLLAPSE_LIMIT,
@@ -57,6 +58,7 @@ import { createMarkdownImageBlock, getFirstClipboardImage, insertAtSelection } f
 import { AppNotification, NotificationType, createNotification } from './lib/notification';
 import { formatTagInput, parseTagInput } from './lib/tags';
 import accountingHeroImage from './assets/accounting-hero.webp';
+import faviconImage from './assets/favicon-source.jpg';
 import { copyTextToClipboard } from './lib/clipboard';
 
 type ViewMode = 'home' | 'accounting' | 'files' | 'images' | 'admin';
@@ -64,6 +66,7 @@ type EditorTab = 'edit' | 'preview';
 type AdminStatusFilter = 'all' | PostStatus;
 type AccountingTypeFilter = 'all' | AccountingEntryType;
 type AccountingCategoryFilter = 'all' | AccountingCategoryId;
+type PostDateFilter = 'all' | '7d' | '30d' | 'year';
 type UiIcon = ReturnType<typeof getCategoryIcon> | 'calendar' | 'clock' | 'tag' | 'spark' | 'grid' | 'draft' | 'edit';
 
 const safeImageAttributes = {
@@ -91,6 +94,12 @@ const EMPTY_FORM: BlogPostDraft = {
   status: 'draft',
   cover: 'life',
   coverImage: ''
+};
+
+const EMPTY_COMMENT_FORM = {
+  nickname: '',
+  role: '',
+  content: ''
 };
 
 const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
@@ -254,13 +263,30 @@ function Icon({ className = '', name }: { className?: string; name: UiIcon }) {
   return <span aria-hidden="true" className={`ui-icon icon-${name} ${className}`} />;
 }
 
+function filterPostsByDate(posts: BlogPost[], filter: PostDateFilter): BlogPost[] {
+  if (filter === 'all') return posts;
+  const now = Date.now();
+  const ranges: Record<Exclude<PostDateFilter, 'all'>, number> = {
+    '7d': 7,
+    '30d': 30,
+    year: 365
+  };
+  const minTime = now - ranges[filter] * 86400000;
+  return posts.filter((post) => Date.parse(post.updatedAt) >= minTime);
+}
+
 function App() {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [mode, setMode] = useState<ViewMode>('home');
   const [activeCategory, setActiveCategory] = useState<BlogCategoryId | 'all'>('all');
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<PostDateFilter>('all');
+  const [detailPostId, setDetailPostId] = useState<string | null>(null);
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [comments, setComments] = useState<PostComment[]>([]);
+  const [commentForm, setCommentForm] = useState(EMPTY_COMMENT_FORM);
+  const [commentLoading, setCommentLoading] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(loadAdminSession()));
   const [adminToken, setAdminToken] = useState(() => loadAdminSession()?.token ?? '');
   const [password, setPassword] = useState('');
@@ -278,6 +304,7 @@ function App() {
   const imageHostInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const trailRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<BlogPostDraft>(() => draftRepository.load() ?? EMPTY_FORM);
   const [tagInput, setTagInput] = useState(() => {
@@ -305,7 +332,9 @@ function App() {
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
     [activeCategory, activeTags, posts, query]
   );
-  const selectedPost = visiblePosts.find((post) => post.id === selectedPostId) ?? visiblePosts[0];
+  const indexedPosts = useMemo(() => filterPostsByDate(visiblePosts, dateFilter), [dateFilter, visiblePosts]);
+  const selectedPost = indexedPosts.find((post) => post.id === selectedPostId) ?? indexedPosts[0];
+  const detailPost = posts.find((post) => post.id === detailPostId || post.slug === detailPostId) ?? null;
   const selectedCoverImage = getSafeImageUrl(selectedPost?.coverImage);
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
@@ -466,6 +495,34 @@ function App() {
   }, [accountingToken, accountingMonth, accountingTypeFilter, accountingCategoryFilter]);
 
   useEffect(() => {
+    const head = document.head;
+    let link = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      head.appendChild(link);
+    }
+    link.type = 'image/jpeg';
+    link.href = faviconImage;
+    return () => {};
+  }, []);
+
+  useEffect(() => {
+    if (!detailPost) {
+      setComments([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const nextComments = await listPostComments(detailPost.slug);
+        setComments(nextComments);
+      } catch {
+        setComments([]);
+      }
+    })();
+  }, [detailPost]);
+
+  useEffect(() => {
     if (mode === 'files' && adminToken) {
       void loadFiles(adminToken, activeFileFolderId);
     }
@@ -486,6 +543,32 @@ function App() {
     setNotification((current) => (current?.type === 'error' ? null : current));
   };
 
+  const spawnParticle = (x: number, y: number, burst = false) => {
+    const count = burst ? 10 : 1;
+    for (let index = 0; index < count; index += 1) {
+      const particle = document.createElement('span');
+      particle.className = burst ? 'pointer-particle burst' : 'pointer-particle';
+      particle.style.left = `${x}px`;
+      particle.style.top = `${y}px`;
+      particle.style.setProperty('--dx', `${(Math.random() - 0.5) * (burst ? 90 : 26)}px`);
+      particle.style.setProperty('--dy', `${(Math.random() - 0.7) * (burst ? 90 : 30)}px`);
+      document.body.appendChild(particle);
+      window.setTimeout(() => particle.remove(), burst ? 780 : 520);
+    }
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    const now = performance.now();
+    if (now - trailRef.current < 45) return;
+    trailRef.current = now;
+    spawnParticle(event.clientX, event.clientY);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLElement>) => {
+    spawnParticle(event.clientX, event.clientY, true);
+  };
+
   const updateTagInput = (value: string) => {
     setTagInput(value);
     updateForm({ tags: parseTagInput(value) });
@@ -498,6 +581,38 @@ function App() {
         : [...current, tag]
     );
     setSelectedPostId(null);
+    setDetailPostId(null);
+  };
+
+  const openPostDetail = (post: BlogPost) => {
+    setSelectedPostId(post.id);
+    setDetailPostId(post.id);
+    window.history.replaceState(null, '', `#post-${post.slug}`);
+  };
+
+  const closePostDetail = () => {
+    setDetailPostId(null);
+    window.history.replaceState(null, '', '#');
+  };
+
+  const submitComment = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!detailPost || commentLoading) return;
+    if (!commentForm.content.trim()) {
+      notify('error', '请填写评论内容');
+      return;
+    }
+    setCommentLoading(true);
+    try {
+      const comment = await createPostComment(detailPost.slug, commentForm);
+      setComments((current) => [comment, ...current]);
+      setCommentForm(EMPTY_COMMENT_FORM);
+      notify('success', '评论已发布');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '评论发布失败');
+    } finally {
+      setCommentLoading(false);
+    }
   };
 
   const startCreate = () => {
@@ -971,7 +1086,7 @@ function App() {
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}>
       <header className="topbar">
         <button className="brand-button" onClick={() => setMode('home')} type="button">
           <span className="brand-mark">K</span>
@@ -1085,6 +1200,31 @@ function App() {
                   placeholder="搜索标题、标签、正文"
                   value={query}
                 />
+                <div className="index-filters" aria-label="文章索引筛选">
+                  <select
+                    aria-label="按时间筛选"
+                    onChange={(event) => setDateFilter(event.target.value as PostDateFilter)}
+                    value={dateFilter}
+                  >
+                    <option value="all">全部时间</option>
+                    <option value="7d">最近 7 天</option>
+                    <option value="30d">最近 30 天</option>
+                    <option value="year">今年</option>
+                  </select>
+                  <select
+                    aria-label="按分类筛选"
+                    onChange={(event) => {
+                      setActiveCategory(event.target.value as BlogCategoryId | 'all');
+                      setSelectedPostId(null);
+                    }}
+                    value={activeCategory}
+                  >
+                    <option value="all">全部分类</option>
+                    {BLOG_CATEGORIES.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                </div>
                 {activeTags.length ? (
                   <div className="tag-filter-group" aria-label="已选标签">
                     {activeTags.map((tag) => (
@@ -1101,14 +1241,14 @@ function App() {
                 ) : null}
               </div>
               <div className="post-list">
-                {visiblePosts.map((post) => {
+                {indexedPosts.map((post) => {
                   const category = getCategory(post.category);
                   const coverImage = getSafeImageUrl(post.coverImage);
                   return (
                     <button
                       className={selectedPost?.id === post.id ? 'post-item active' : 'post-item'}
                       key={post.id}
-                      onClick={() => setSelectedPostId(post.id)}
+                      onClick={() => openPostDetail(post)}
                       type="button"
                     >
                       {coverImage ? (
@@ -1135,28 +1275,36 @@ function App() {
               </div>
             </aside>
 
-            <article className="article-view">
-              {selectedPost ? (
+            <article className={detailPost ? 'article-view article-detail' : 'article-view'}>
+              {(detailPost ?? selectedPost) ? (
                 <>
-                  {selectedCoverImage ? (
-                    <img alt={selectedPost.title} className="article-cover-image" src={selectedCoverImage} {...safeImageAttributes} />
+                  {detailPost ? (
+                    <button className="back-link" onClick={closePostDetail} type="button">返回文章列表</button>
+                  ) : null}
+                  {getSafeImageUrl((detailPost ?? selectedPost)?.coverImage) ? (
+                    <img
+                      alt={(detailPost ?? selectedPost)?.title}
+                      className="article-cover-image"
+                      src={getSafeImageUrl((detailPost ?? selectedPost)?.coverImage)}
+                      {...safeImageAttributes}
+                    />
                   ) : (
-                    <div className={`article-cover cover-${selectedPost.cover}`}>
+                    <div className={`article-cover cover-${(detailPost ?? selectedPost)?.cover}`}>
                       <span>
-                        <Icon name={getCategoryIcon(selectedPost.category)} />
-                        {getCategory(selectedPost.category).name}
+                        <Icon name={getCategoryIcon((detailPost ?? selectedPost)!.category)} />
+                        {getCategory((detailPost ?? selectedPost)!.category).name}
                       </span>
                     </div>
                   )}
                   <p className="article-meta">
-                    <span><Icon name="calendar" />{selectedPost.updatedAt}</span>
-                    <span><Icon name="clock" />{calculateReadingMinutes(selectedPost.content)} 分钟阅读</span>
-                    <span><Icon name={getCategoryIcon(selectedPost.category)} />{getCategory(selectedPost.category).name}</span>
+                    <span><Icon name="calendar" />{(detailPost ?? selectedPost)!.updatedAt}</span>
+                    <span><Icon name="clock" />{calculateReadingMinutes((detailPost ?? selectedPost)!.content)} 分钟阅读</span>
+                    <span><Icon name={getCategoryIcon((detailPost ?? selectedPost)!.category)} />{getCategory((detailPost ?? selectedPost)!.category).name}</span>
                   </p>
-                  <h2>{selectedPost.title}</h2>
-                  <p className="summary">{selectedPost.summary}</p>
+                  <h2>{(detailPost ?? selectedPost)!.title}</h2>
+                  <p className="summary">{(detailPost ?? selectedPost)!.summary}</p>
                   <div className="tag-row">
-                    {selectedPost.tags.map((tag) => (
+                    {(detailPost ?? selectedPost)!.tags.map((tag) => (
                       <button
                         className={activeTags.some((selectedTag) => selectedTag.toLowerCase() === tag.toLowerCase()) ? 'active' : ''}
                         key={tag}
@@ -1168,7 +1316,47 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="article-body">{renderMarkdown(selectedPost.content)}</div>
+                  <div className="article-body">{renderMarkdown((detailPost ?? selectedPost)!.content)}</div>
+                  {detailPost ? (
+                    <section className="comment-panel">
+                      <div className="panel-heading">
+                        <h3>评论 · {comments.length}</h3>
+                      </div>
+                      <form className="comment-form" onSubmit={submitComment}>
+                        <div className="form-grid">
+                          <input
+                            aria-label="评论昵称"
+                            onChange={(event) => setCommentForm((current) => ({ ...current, nickname: event.target.value }))}
+                            placeholder="昵称"
+                            value={commentForm.nickname}
+                          />
+                          <input
+                            aria-label="评论身份"
+                            onChange={(event) => setCommentForm((current) => ({ ...current, role: event.target.value }))}
+                            placeholder="身份，例如：读者 / 朋友 / 安全研究员"
+                            value={commentForm.role}
+                          />
+                        </div>
+                        <textarea
+                          aria-label="评论内容"
+                          onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
+                          placeholder="写点想法..."
+                          value={commentForm.content}
+                        />
+                        <button disabled={commentLoading} type="submit">{commentLoading ? '发布中...' : '发布评论'}</button>
+                      </form>
+                      <div className="comment-list">
+                        {comments.map((comment) => (
+                          <article className="comment-item" key={comment.id}>
+                            <strong>{comment.nickname}<span>{comment.role}</span></strong>
+                            <p>{comment.content}</p>
+                            <small>{comment.createdAt}</small>
+                          </article>
+                        ))}
+                        {comments.length === 0 ? <div className="empty-state">还没有评论。</div> : null}
+                      </div>
+                    </section>
+                  ) : null}
                 </>
               ) : (
                 <div className="empty-state">还没有匹配的文章。</div>
