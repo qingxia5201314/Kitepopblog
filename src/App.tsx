@@ -51,7 +51,7 @@ import {
 } from './lib/fileApi';
 import { createDraftAutosaveRepository } from './lib/draftAutosave';
 import { normalizeImageUrl } from './lib/imageUrl';
-import { uploadHostedImage } from './lib/imageApi';
+import { HostedImage, deleteHostedImage, listHostedImages, uploadHostedImage } from './lib/imageApi';
 import { MarkdownBlock, parseMarkdown } from './lib/markdown';
 import { createMarkdownImageBlock, getFirstClipboardImage, insertAtSelection } from './lib/markdownInsert';
 import { AppNotification, NotificationType, createNotification } from './lib/notification';
@@ -59,7 +59,7 @@ import { formatTagInput, parseTagInput } from './lib/tags';
 import accountingHeroImage from './assets/accounting-hero.webp';
 import { copyTextToClipboard } from './lib/clipboard';
 
-type ViewMode = 'home' | 'accounting' | 'files' | 'admin';
+type ViewMode = 'home' | 'accounting' | 'files' | 'images' | 'admin';
 type EditorTab = 'edit' | 'preview';
 type AdminStatusFilter = 'all' | PostStatus;
 type AccountingTypeFilter = 'all' | AccountingEntryType;
@@ -269,7 +269,12 @@ function App() {
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileDragActive, setFileDragActive] = useState(false);
   const [generatedFileLink, setGeneratedFileLink] = useState('');
+  const [imagePassword, setImagePassword] = useState('');
+  const [hostedImages, setHostedImages] = useState<HostedImage[]>([]);
+  const [imageDragActive, setImageDragActive] = useState(false);
+  const [copiedImageLink, setCopiedImageLink] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageHostInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -369,6 +374,15 @@ function App() {
     }
   };
 
+  const loadHostedImages = async (token = adminToken) => {
+    if (!token) return;
+    try {
+      setHostedImages(await listHostedImages(token));
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '图床列表加载失败');
+    }
+  };
+
   const syncAccountingSettingsForm = (data: AccountingMonthData) => {
     setAccountingSettingsForm({
       monthlyBudgetYuan: centsToInput(data.settings.monthlyBudgetCents),
@@ -455,6 +469,12 @@ function App() {
       void loadFiles(adminToken, activeFileFolderId);
     }
   }, [mode, adminToken, activeFileFolderId]);
+
+  useEffect(() => {
+    if (mode === 'images' && adminToken) {
+      void loadHostedImages(adminToken);
+    }
+  }, [mode, adminToken]);
 
   useEffect(() => {
     setAccountingEntriesExpanded(false);
@@ -632,6 +652,78 @@ function App() {
       notify('success', '已进入文件仓库');
     } catch {
       notify('error', '无法连接文件登录接口');
+    }
+  };
+
+  const unlockImages = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    try {
+      const response = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({ password: imagePassword })
+      });
+      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string; expiresAt?: string };
+
+      if (!response.ok || !result.ok || !result.token) {
+        notify('error', result.message || '后台口令不正确');
+        return;
+      }
+
+      setAdminUnlocked(true);
+      setAdminToken(result.token);
+      saveAdminSession({ token: result.token, expiresAt: result.expiresAt });
+      setImagePassword('');
+      await loadHostedImages(result.token);
+      notify('success', '已进入图床');
+    } catch {
+      notify('error', '无法连接图床登录接口');
+    }
+  };
+
+  const handleHostedImageUpload = async (file?: File) => {
+    if (!file || !adminToken) return;
+    if (!file.type.startsWith('image/')) {
+      notify('error', '图床只允许上传图片文件');
+      return;
+    }
+
+    setUploadingImage(true);
+    setCopiedImageLink('');
+    try {
+      const image = await uploadHostedImage(file, adminToken);
+      const link = new URL(image.path, window.location.origin).toString();
+      setCopiedImageLink(link);
+      await loadHostedImages(adminToken);
+      const copied = await copyTextToClipboard(link);
+      notify('success', copied ? '图片已上传，链接已复制' : '图片已上传，请手动复制链接');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '图片上传失败');
+    } finally {
+      setUploadingImage(false);
+      if (imageHostInputRef.current) imageHostInputRef.current.value = '';
+    }
+  };
+
+  const copyHostedImageLink = async (image: HostedImage) => {
+    const link = new URL(image.path, window.location.origin).toString();
+    setCopiedImageLink(link);
+    const copied = await copyTextToClipboard(link);
+    notify(copied ? 'success' : 'info', copied ? '图片链接已复制' : '请手动复制图片链接');
+  };
+
+  const removeHostedImage = async (image: HostedImage) => {
+    if (!adminToken || !window.confirm(`确认删除 ${image.originalName} 吗？`)) return;
+    try {
+      await deleteHostedImage(image.id, adminToken);
+      await loadHostedImages(adminToken);
+      if (copiedImageLink.includes(image.id)) setCopiedImageLink('');
+      notify('success', '图片已删除');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '图片删除失败');
     }
   };
 
@@ -900,6 +992,9 @@ function App() {
           </button>
           <button className={mode === 'files' ? 'active' : ''} onClick={() => setMode('files')} type="button">
             文件
+          </button>
+          <button className={mode === 'images' ? 'active' : ''} onClick={() => setMode('images')} type="button">
+            图床
           </button>
           <button className={mode === 'admin' ? 'active' : ''} onClick={() => setMode('admin')} type="button">
             后台
@@ -1523,6 +1618,94 @@ function App() {
                   ))}
                   {fileFolderView.files.length === 0 ? (
                     <div className="empty-state">这个目录还没有文件。</div>
+                  ) : null}
+                </div>
+              </section>
+            </section>
+          )}
+        </section>
+      ) : mode === 'images' ? (
+        <section className="image-host-page">
+          {!adminToken ? (
+            <form className="unlock-panel" onSubmit={unlockImages}>
+              <p className="eyebrow">Private Image Host</p>
+              <h1>图床</h1>
+              <p>输入后台口令后上传图片。这里只允许 PNG、JPG、GIF、WebP 图片，上传成功后会自动复制公开访问链接。</p>
+              <input
+                aria-label="图床口令"
+                onChange={(event) => setImagePassword(event.target.value)}
+                placeholder="输入后台口令"
+                type="password"
+                value={imagePassword}
+              />
+              <button type="submit">进入图床</button>
+            </form>
+          ) : (
+            <section className="image-host-layout">
+              <div className="file-hero accounting-card">
+                <div>
+                  <p className="eyebrow">Image Host</p>
+                  <h1>图床</h1>
+                  <p>上传成功后自动复制图片链接，可直接粘贴到 Markdown、报告或网页中使用。</p>
+                </div>
+                <button onClick={() => void loadHostedImages(adminToken)} type="button">刷新列表</button>
+              </div>
+
+              <section
+                className={imageDragActive ? 'image-dropzone active' : 'image-dropzone'}
+                onDragLeave={() => setImageDragActive(false)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setImageDragActive(true);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setImageDragActive(false);
+                  void handleHostedImageUpload(event.dataTransfer.files[0]);
+                }}
+              >
+                <input
+                  accept="image/png,image/jpeg,image/gif,image/webp"
+                  onChange={(event) => void handleHostedImageUpload(event.target.files?.[0])}
+                  ref={imageHostInputRef}
+                  type="file"
+                />
+                <strong>拖拽图片到这里，或选择上传</strong>
+                <span>仅允许 PNG、JPG、GIF、WebP，上传需要后台鉴权。</span>
+                <button disabled={uploadingImage} onClick={() => imageHostInputRef.current?.click()} type="button">
+                  {uploadingImage ? '上传中...' : '选择图片'}
+                </button>
+              </section>
+
+              {copiedImageLink ? (
+                <div className="file-link-box">
+                  <span>最近上传的图片链接</span>
+                  <code>{copiedImageLink}</code>
+                </div>
+              ) : null}
+
+              <section className="accounting-card image-list-panel">
+                <div className="panel-heading">
+                  <h2>图片列表 · {hostedImages.length} 张</h2>
+                </div>
+                <div className="image-grid">
+                  {hostedImages.map((image) => {
+                    const link = new URL(image.path, window.location.origin).toString();
+                    return (
+                      <div className="image-item" key={image.id}>
+                        <img alt={image.originalName} src={image.path} {...safeImageAttributes} />
+                        <div>
+                          <strong>{image.originalName}</strong>
+                          <small>{formatBytes(image.sizeBytes)} · {image.contentType}</small>
+                          <code>{link}</code>
+                        </div>
+                        <button onClick={() => void copyHostedImageLink(image)} type="button">复制链接</button>
+                        <button className="danger" onClick={() => void removeHostedImage(image)} type="button">删除</button>
+                      </div>
+                    );
+                  })}
+                  {hostedImages.length === 0 ? (
+                    <div className="empty-state">还没有上传图片。</div>
                   ) : null}
                 </div>
               </section>
