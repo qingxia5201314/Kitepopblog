@@ -22,7 +22,7 @@ const uploadDir = resolve(process.env.UPLOAD_DIR || './data/uploads');
 const imageDir = resolve(process.env.IMAGE_DIR || './data/images');
 const bodyLimitBytes = Number(process.env.REQUEST_BODY_LIMIT || 1024 * 1024);
 const fileUploadLimitBytes = Number(process.env.FILE_UPLOAD_LIMIT || 50 * 1024 * 1024);
-const imageUploadLimitBytes = Number(process.env.IMAGE_UPLOAD_LIMIT || 10 * 1024 * 1024);
+const imageUploadLimitBytes = Number(process.env.IMAGE_UPLOAD_LIMIT || 0);
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -66,7 +66,7 @@ async function readRequestBytes(request, limitBytes) {
 
   for await (const chunk of request) {
     size += chunk.length;
-    if (size > limitBytes) {
+    if (limitBytes > 0 && size > limitBytes) {
       throw new Error('Request body too large');
     }
     chunks.push(chunk);
