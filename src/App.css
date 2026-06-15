@@ -2182,6 +2182,18 @@ textarea {
   gap: 10px;
 }
 
+.cover-input-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.cover-input-row button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
 .markdown-toolbar {
   background: #f4efe5;
   border: 1px solid #e3d7c6;
@@ -2267,6 +2279,14 @@ textarea {
 
   .file-item button {
     grid-column: 2;
+    justify-self: start;
+  }
+
+  .cover-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cover-input-row button {
     justify-self: start;
   }
 

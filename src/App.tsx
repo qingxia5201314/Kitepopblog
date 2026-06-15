@@ -388,6 +388,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const imageHostInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const trailRef = useRef(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -1132,6 +1133,31 @@ function App() {
     } finally {
       setUploadingImage(false);
       if (imageInputRef.current) imageInputRef.current.value = '';
+    }
+  };
+
+  const uploadCoverImageFile = async (file?: File) => {
+    if (!file) return;
+    if (!adminToken) {
+      notify('error', '请先进入后台再上传封面');
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      notify('error', '只能上传图片文件');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const image = await uploadHostedImage(file, adminToken);
+      updateForm({ coverImage: image.path });
+      await loadHostedImages(adminToken);
+      notify('success', '封面图已上传并填入');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '封面图上传失败');
+    } finally {
+      setUploadingImage(false);
+      if (coverImageInputRef.current) coverImageInputRef.current.value = '';
     }
   };
 
@@ -2206,11 +2232,23 @@ function App() {
                 </div>
                 <label>
                   封面图 URL
-                  <input
-                    onChange={(event) => updateForm({ coverImage: event.target.value })}
-                    placeholder="请输入 HTTPS 图片 URL，或粘贴本站图床链接"
-                    value={form.coverImage ?? ''}
-                  />
+                  <div className="cover-input-row">
+                    <input
+                      onChange={(event) => updateForm({ coverImage: event.target.value })}
+                      placeholder="请输入 HTTPS 图片 URL，或粘贴本站图床链接"
+                      value={form.coverImage ?? ''}
+                    />
+                    <input
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      className="hidden-input"
+                      onChange={(event) => void uploadCoverImageFile(event.target.files?.[0])}
+                      ref={coverImageInputRef}
+                      type="file"
+                    />
+                    <button disabled={uploadingImage} onClick={() => coverImageInputRef.current?.click()} type="button">
+                      {uploadingImage ? '上传中' : '上传封面'}
+                    </button>
+                  </div>
                 </label>
                 <label>
                   标签
