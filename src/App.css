@@ -2428,26 +2428,26 @@ textarea {
 :root {
   color: #24130f;
   background: #fffdf9;
-  --sos-red: #e72d2f;
-  --sos-red-dark: #bd1d21;
+  --sos-red: #d84b49;
+  --sos-red-dark: #9e2f28;
   --sos-black: #2a130f;
-  --sos-yellow: #ffbd2e;
+  --sos-yellow: #d7b879;
   --sos-blue: #64a8bf;
-  --sos-paper: rgba(255, 253, 249, 0.94);
-  --sos-line: rgba(231, 45, 47, 0.34);
-  --sos-shadow: 0 18px 44px rgba(42, 19, 15, 0.12);
+  --sos-paper: rgba(255, 253, 249, 0.98);
+  --sos-line: rgba(216, 75, 73, 0.22);
+  --sos-shadow: 0 16px 34px rgba(42, 19, 15, 0.08);
 }
 
 body {
   background:
     url("./assets/haruhi-silhouette.png") right 72px top 92px / min(36vw, 390px) auto no-repeat fixed,
-    linear-gradient(112deg, transparent 0 62%, rgba(231, 45, 47, 0.1) 62% 70%, transparent 70%),
-    radial-gradient(circle at 14% 16%, rgba(255, 189, 46, 0.18), transparent 22%),
+    linear-gradient(112deg, transparent 0 62%, rgba(216, 75, 73, 0.06) 62% 70%, transparent 70%),
+    radial-gradient(circle at 14% 16%, rgba(215, 184, 121, 0.12), transparent 22%),
     #fffdf9;
 }
 
 body::before {
-  color: rgba(231, 45, 47, 0.07);
+  color: rgba(216, 75, 73, 0.045);
   content: "H";
   font-size: clamp(18rem, 42vw, 36rem);
   font-weight: 950;
@@ -2462,12 +2462,12 @@ body::before {
 
 .app-shell {
   background:
-    repeating-linear-gradient(135deg, transparent 0 18px, rgba(231, 45, 47, 0.04) 18px 20px, transparent 20px 38px);
+    repeating-linear-gradient(135deg, transparent 0 18px, rgba(216, 75, 73, 0.025) 18px 20px, transparent 20px 38px);
 }
 
 .topbar {
   background: rgba(255, 253, 249, 0.9);
-  border: 2px solid rgba(231, 45, 47, 0.18);
+  border: 1px solid rgba(216, 75, 73, 0.14);
   border-radius: 14px;
   box-shadow: var(--sos-shadow);
   padding: 10px 12px;
@@ -2481,7 +2481,7 @@ body::before {
   background: #fff;
   border: 2px solid var(--sos-red);
   border-radius: 50%;
-  box-shadow: 0 0 0 6px rgba(255, 189, 46, 0.16);
+  box-shadow: 0 0 0 6px rgba(215, 184, 121, 0.14);
   height: 54px;
   overflow: hidden;
   width: 54px;
@@ -2544,7 +2544,7 @@ body::before {
 
 .hero-band {
   background:
-    linear-gradient(110deg, rgba(255, 253, 249, 0.96) 0 56%, rgba(231, 45, 47, 0.08) 56% 100%),
+    linear-gradient(110deg, rgba(255, 253, 249, 0.98) 0 56%, rgba(216, 75, 73, 0.05) 56% 100%),
     url("./assets/haruhi-wordmark.png") left 34px top 30px / 250px auto no-repeat;
   border: 2px solid rgba(231, 45, 47, 0.2);
   border-radius: 18px;
@@ -2714,8 +2714,8 @@ button:hover,
 }
 
 .metrics-strip {
-  background: var(--sos-black);
-  border: 2px solid var(--sos-red);
+  background: rgba(42, 19, 15, 0.9);
+  border: 1px solid rgba(216, 75, 73, 0.24);
   box-shadow: var(--sos-shadow);
 }
 
@@ -2770,9 +2770,9 @@ textarea {
 .post-item:hover,
 .tag-row button:hover,
 .tag-row button.active {
-  background: #fff5f5;
+  background: #fff8f7;
   border-color: var(--sos-red);
-  box-shadow: 0 0 0 3px rgba(231, 45, 47, 0.08);
+  box-shadow: 0 0 0 3px rgba(216, 75, 73, 0.06);
 }
 
 .tag-row button,
@@ -2820,7 +2820,7 @@ textarea {
 
 .article-body blockquote,
 .article-list-line {
-  background: #fff8e8;
+  background: #fff8ef;
   border-color: var(--sos-red);
 }
 
@@ -2848,11 +2848,79 @@ textarea {
   color: var(--sos-red-dark);
 }
 
+.accounting-page {
+  color: #231511;
+  background: rgba(255, 253, 249, 0.72);
+  border-radius: 18px;
+  padding: 2px 0 18px;
+  position: relative;
+  z-index: 0;
+}
+
+.accounting-hero {
+  background: linear-gradient(135deg, rgba(255, 253, 249, 0.98), rgba(247, 239, 227, 0.98));
+  border: 1px solid rgba(216, 75, 73, 0.18);
+  box-shadow: var(--sos-shadow);
+}
+
+.accounting-hero h1,
+.accounting-hero p {
+  color: #231511;
+}
+
+.accounting-metrics {
+  gap: 12px;
+}
+
+.metric-card {
+  background: rgba(255, 253, 249, 0.98);
+  border: 1px solid rgba(216, 75, 73, 0.26);
+  color: #231511;
+}
+
+.metric-label,
+.metric-card small {
+  color: #74655f;
+}
+
+.metric-card strong {
+  color: #231511;
+}
+
+.metric-progress {
+  background: rgba(216, 75, 73, 0.1);
+}
+
+.metric-progress span {
+  background: #69b58a;
+}
+
+.metric-warn .metric-progress span {
+  background: #d7b879;
+}
+
+.metric-danger .metric-progress span {
+  background: #d86a5d;
+}
+
+.accounting-card {
+  background: rgba(255, 253, 249, 0.98);
+  border: 1px solid rgba(216, 75, 73, 0.18);
+}
+
+.saving-summary {
+  background: rgba(255, 248, 239, 0.92);
+}
+
+.saving-summary strong {
+  color: #231511;
+}
+
 @media (max-width: 900px) {
   body {
     background:
       url("./assets/haruhi-silhouette.png") right -48px top 90px / 210px auto no-repeat fixed,
-      linear-gradient(112deg, transparent 0 58%, rgba(231, 45, 47, 0.08) 58% 72%, transparent 72%),
+      linear-gradient(112deg, transparent 0 58%, rgba(216, 75, 73, 0.05) 58% 72%, transparent 72%),
       #fffdf9;
   }
 
