@@ -72,7 +72,8 @@ import { createMarkdownImageBlock, getFirstClipboardImage, insertAtSelection } f
 import { AppNotification, NotificationType, createNotification } from './lib/notification';
 import { formatTagInput, parseTagInput } from './lib/tags';
 import accountingHeroImage from './assets/accounting-hero.webp';
-import faviconImage from './assets/favicon-source.jpg';
+import faviconImage from './assets/haruhi-favicon.png';
+import haruhiAvatarImage from './assets/haruhi-avatar.png';
 import { copyTextToClipboard } from './lib/clipboard';
 
 type ViewMode = 'home' | 'accounting' | 'files' | 'images' | 'admin';
@@ -624,7 +625,7 @@ function App() {
       link.rel = 'icon';
       head.appendChild(link);
     }
-    link.type = 'image/jpeg';
+    link.type = 'image/png';
     link.href = faviconImage;
     return () => {};
   }, []);
@@ -1273,10 +1274,12 @@ function App() {
     <main className="app-shell" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}>
       <header className="topbar">
         <button className="brand-button" onClick={() => setMode('home')} type="button">
-          <span className="brand-mark">K</span>
+          <span className="brand-mark" aria-hidden="true">
+            <img alt="" src={haruhiAvatarImage} />
+          </span>
           <span>
-            <strong>Kitepop</strong>
-            <small>life / src / study / notes</small>
+            <strong>Kitepop SOS</strong>
+            <small>Haruhi style / life / src / study / notes</small>
           </span>
           <span className="brand-status" aria-hidden="true">
             <span />
@@ -1386,19 +1389,19 @@ function App() {
         <>
           <section className="hero-band">
             <div className="hero-copy">
-              <p className="eyebrow">Kitepop Blog</p>
-              <h1>让世界变得有趣！</h1>
+              <p className="eyebrow">SOS Brigade Log</p>
+              <h1>Kitepop SOS</h1>
               <p>
                 这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。
               </p>
               <div className="hero-actions">
-                <button onClick={() => setMode('admin')} type="button">发布文章</button>
+                <button onClick={() => setMode('admin')} type="button">{'SOS \u53d1\u6587'}</button>
                 <button className="ghost" onClick={() => setActiveCategory('src')} type="button">查看 SRC 复盘</button>
               </div>
             </div>
-            <div className="hero-visual" aria-label="博客内容视觉封面">
-              <div className="visual-card visual-life"><Icon name="sun" />Life</div>
-              <div className="visual-card visual-src"><Icon name="shield" />SRC</div>
+            <div className="hero-visual" aria-label="blog visual cover">
+              <div className="visual-card visual-life"><Icon name="sun" />DANCHOU</div>
+              <div className="visual-card visual-src"><Icon name="shield" />SOS SRC</div>
               <div className="visual-card visual-study"><Icon name="book" />Study</div>
               <div className="visual-card visual-notes"><Icon name="hash" />Notes</div>
             </div>
@@ -1415,7 +1418,7 @@ function App() {
               <>
                 <div>
                   <strong>{userSession.user.nickname}</strong>
-                  <span>{permissionLabel(userSession.user.permission)}</span>
+                  <span>{userSession.user.permission === 'admin' ? '\u56e2\u957f' : '\u56e2\u5458'}</span>
                 </div>
                 <button className="ghost" onClick={logoutUser} type="button">退出登录</button>
               </>
