@@ -55,6 +55,14 @@ describe('image store', () => {
       })
     ).toThrow('Only PNG, JPEG, GIF, and WebP images are allowed');
 
+    expect(() =>
+      store.validateImageUpload({
+        originalName: 'camera.jpg',
+        contentType: 'image/jpg',
+        buffer: Buffer.from('jpg-bytes')
+      })
+    ).not.toThrow();
+
     const image = await store.saveImage({
       originalName: 'photo.webp',
       contentType: 'image/webp',

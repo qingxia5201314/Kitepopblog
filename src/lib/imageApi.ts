@@ -12,11 +12,32 @@ function authHeaders(token: string): HeadersInit {
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.message || '请求失败');
+  const contentType = response.headers.get('content-type') || '';
+  const text = await response.text();
+  const trimmed = text.trim();
+  const looksJson = contentType.includes('application/json') || trimmed.startsWith('{') || trimmed.startsWith('[');
+
+  if (looksJson) {
+    try {
+      const payload = (trimmed ? JSON.parse(trimmed) : {}) as T & { message?: string };
+      if (!response.ok) {
+        throw new Error(payload.message || '请求失败');
+      }
+      return payload as T;
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(`图片上传失败：服务器返回了非 JSON 响应（HTTP ${response.status}）`);
+      }
+      throw error;
+    }
   }
-  return payload as T;
+
+  if (!response.ok) {
+    const responseKind = contentType.includes('text/html') || trimmed.startsWith('<') ? 'HTML 页面' : '非 JSON 响应';
+    throw new Error(`图片上传失败：服务器返回了 ${responseKind}（HTTP ${response.status}）`);
+  }
+
+  throw new Error('图片上传失败：服务器返回了非 JSON 响应');
 }
 
 export async function listHostedImages(token: string): Promise<HostedImage[]> {

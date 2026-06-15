@@ -4,6 +4,13 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const IMAGE_TYPES_BY_EXTENSION = new Map([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp']
+]);
 
 function rows(db, sql, params = []) {
   const statement = db.prepare(sql);
@@ -20,6 +27,16 @@ function rows(db, sql, params = []) {
 function safeOriginalName(name) {
   const cleaned = String(name || 'image').replace(/\0/g, '').replace(/\\/g, '/');
   return basename(cleaned).trim().slice(0, 180) || 'image';
+}
+
+function normalizeImageContentType(contentType, originalName) {
+  const normalized = String(contentType || '').split(';')[0].trim().toLowerCase();
+  if (normalized === 'image/jpg') return 'image/jpeg';
+  if (ALLOWED_IMAGE_TYPES.has(normalized)) return normalized;
+  if (!normalized || normalized === 'application/octet-stream') {
+    return IMAGE_TYPES_BY_EXTENSION.get(String(originalName || '').toLowerCase().match(/\.[^.]+$/)?.[0] || '') || normalized;
+  }
+  return normalized;
 }
 
 function rowToImage(row, imageDir, publicPath) {
@@ -50,14 +67,15 @@ export function createImageStore({ database, imageDir, publicPath = '/api/images
   database.persist();
 
   function validateImageUpload(upload) {
-    const contentType = String(upload.contentType || '').toLowerCase();
+    const originalName = safeOriginalName(upload.originalName);
+    const contentType = normalizeImageContentType(upload.contentType, originalName);
     if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
       throw new Error('Only PNG, JPEG, GIF, and WebP images are allowed');
     }
     const bytes = Buffer.from(upload.buffer || '');
     if (bytes.length === 0) throw new Error('Image is empty');
     return {
-      originalName: safeOriginalName(upload.originalName),
+      originalName,
       contentType,
       buffer: bytes
     };
