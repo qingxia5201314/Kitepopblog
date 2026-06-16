@@ -74,6 +74,7 @@ import { formatTagInput, parseTagInput } from './lib/tags';
 import accountingHeroImage from './assets/accounting-hero.webp';
 import faviconImage from './assets/haruhi-favicon.png';
 import haruhiAvatarImage from './assets/haruhi-avatar.png';
+import haruhiCutoutImage from './assets/haruhi-cutout.png';
 import { copyTextToClipboard } from './lib/clipboard';
 
 type ViewMode = 'home' | 'accounting' | 'files' | 'images' | 'admin';
@@ -1400,7 +1401,7 @@ function App() {
               </div>
             </div>
             <div className="hero-visual hero-art" aria-label="blog visual cover">
-              <img alt="Haruhi Suzumiya" src={haruhiAvatarImage} />
+              <img alt="Haruhi Suzumiya" src={haruhiCutoutImage} />
               <span className="hero-art-ring" aria-hidden="true" />
               <span className="hero-art-corners" aria-hidden="true" />
             </div>
