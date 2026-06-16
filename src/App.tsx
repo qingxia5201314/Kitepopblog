@@ -1399,11 +1399,10 @@ function App() {
                 <button className="ghost" onClick={() => setActiveCategory('src')} type="button">查看 SRC 复盘</button>
               </div>
             </div>
-            <div className="hero-visual" aria-label="blog visual cover">
-              <div className="visual-card visual-life"><Icon name="sun" />DANCHOU</div>
-              <div className="visual-card visual-src"><Icon name="shield" />SOS SRC</div>
-              <div className="visual-card visual-study"><Icon name="book" />Study</div>
-              <div className="visual-card visual-notes"><Icon name="hash" />Notes</div>
+            <div className="hero-visual hero-art" aria-label="blog visual cover">
+              <img alt="Haruhi Suzumiya" src={haruhiAvatarImage} />
+              <span className="hero-art-ring" aria-hidden="true" />
+              <span className="hero-art-corners" aria-hidden="true" />
             </div>
           </section>
 
