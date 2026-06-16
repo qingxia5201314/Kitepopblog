@@ -2623,18 +2623,16 @@ body::before {
 }
 
 .hero-art::before {
-  background:
-    linear-gradient(90deg, transparent 0 8%, rgba(216, 75, 73, 0.18) 8% 92%, transparent 92%),
-    linear-gradient(90deg, rgba(42, 19, 15, 0.14), rgba(216, 75, 73, 0.12));
-  border: 1px solid rgba(216, 75, 73, 0.24);
+  background: radial-gradient(ellipse at center, rgba(42, 19, 15, 0.18) 0%, rgba(216, 75, 73, 0.08) 44%, transparent 72%);
   border-radius: 999px;
-  bottom: 18px;
+  bottom: 6px;
   content: "";
-  height: 18px;
-  left: 50%;
+  filter: blur(2px);
+  height: 34px;
+  left: 57%;
   position: absolute;
-  transform: translateX(-33%);
-  width: min(62%, 360px);
+  transform: translateX(-50%);
+  width: min(48%, 300px);
   z-index: 1;
 }
 
@@ -2642,10 +2640,11 @@ body::before {
   animation: hero-float 4.8s ease-in-out infinite;
   display: block;
   filter: drop-shadow(0 18px 38px rgba(42, 19, 15, 0.12));
-  margin-right: -28px;
+  margin-bottom: 12px;
+  margin-right: -8px;
   margin-top: 0;
-  max-height: 590px;
-  max-width: min(100%, 500px);
+  max-height: 560px;
+  max-width: min(100%, 470px);
   object-fit: contain;
   object-position: right bottom;
   position: relative;
@@ -2702,15 +2701,7 @@ body::before {
 }
 
 .hero-art-corners::after {
-  background:
-    linear-gradient(var(--sos-red) 0 0) right bottom / 88px 4px no-repeat,
-    linear-gradient(var(--sos-red) 0 0) right bottom / 4px 88px no-repeat;
-  border-radius: 0 0 12px 0;
-  bottom: 56px;
-  height: 90px;
-  opacity: 0.82;
-  right: 76px;
-  width: 112px;
+  display: none;
 }
 
 .hero-actions button,
@@ -3026,7 +3017,7 @@ textarea {
   .hero-art img {
     margin-right: -12px;
     margin-top: 0;
-    max-height: 390px;
+    max-height: 370px;
   }
 
   .hero-art-ring::before {
@@ -3070,16 +3061,18 @@ textarea {
   }
 
   .hero-art img {
+    margin-bottom: 8px;
     margin-right: 0;
     margin-top: 0;
-    max-height: 330px;
-    max-width: min(100%, 310px);
+    max-height: 300px;
+    max-width: min(100%, 292px);
   }
 
   .hero-art::before {
-    bottom: 10px;
+    bottom: 4px;
+    height: 24px;
     transform: translateX(-50%);
-    width: min(72%, 250px);
+    width: min(54%, 190px);
   }
 
   .hero-art-corners::before,
@@ -3089,8 +3082,7 @@ textarea {
   }
 
   .hero-art-corners::after {
-    bottom: 34px;
-    right: 22px;
+    display: none;
   }
 }
 
