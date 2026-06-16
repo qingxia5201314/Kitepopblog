@@ -2611,10 +2611,10 @@ body::before {
 }
 
 .hero-visual {
-  align-items: center;
+  align-items: flex-end;
   display: flex;
   justify-content: center;
-  min-height: 380px;
+  min-height: 420px;
   position: relative;
 }
 
@@ -2622,13 +2622,29 @@ body::before {
   isolation: isolate;
 }
 
+.hero-art::before {
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(216, 75, 73, 0.18) 8% 92%, transparent 92%),
+    linear-gradient(90deg, rgba(42, 19, 15, 0.14), rgba(216, 75, 73, 0.12));
+  border: 1px solid rgba(216, 75, 73, 0.24);
+  border-radius: 999px;
+  bottom: 18px;
+  content: "";
+  height: 18px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-33%);
+  width: min(62%, 360px);
+  z-index: 1;
+}
+
 .hero-art img {
   animation: hero-float 4.8s ease-in-out infinite;
   display: block;
   filter: drop-shadow(0 18px 38px rgba(42, 19, 15, 0.12));
   margin-right: -28px;
-  margin-top: 18px;
-  max-height: 560px;
+  margin-top: 0;
+  max-height: 590px;
   max-width: min(100%, 500px);
   object-fit: contain;
   object-position: right bottom;
@@ -2686,13 +2702,15 @@ body::before {
 }
 
 .hero-art-corners::after {
-  border-bottom: 4px solid var(--sos-red);
-  border-right: 4px solid var(--sos-red);
+  background:
+    linear-gradient(var(--sos-red) 0 0) right bottom / 88px 4px no-repeat,
+    linear-gradient(var(--sos-red) 0 0) right bottom / 4px 88px no-repeat;
   border-radius: 0 0 12px 0;
-  bottom: 20px;
-  height: 64px;
-  right: 20px;
-  width: 64px;
+  bottom: 56px;
+  height: 90px;
+  opacity: 0.82;
+  right: 76px;
+  width: 112px;
 }
 
 .hero-actions button,
@@ -3002,13 +3020,13 @@ textarea {
   }
 
   .hero-visual {
-    min-height: 260px;
+    min-height: 300px;
   }
 
   .hero-art img {
     margin-right: -12px;
-    margin-top: 10px;
-    max-height: 360px;
+    margin-top: 0;
+    max-height: 390px;
   }
 
   .hero-art-ring::before {
@@ -3047,21 +3065,32 @@ textarea {
   }
 
   .hero-visual {
-    min-height: 220px;
+    min-height: 250px;
     order: -1;
   }
 
   .hero-art img {
     margin-right: 0;
-    margin-top: 6px;
-    max-height: 304px;
+    margin-top: 0;
+    max-height: 330px;
     max-width: min(100%, 310px);
+  }
+
+  .hero-art::before {
+    bottom: 10px;
+    transform: translateX(-50%);
+    width: min(72%, 250px);
   }
 
   .hero-art-corners::before,
   .hero-art-corners::after {
     height: 42px;
     width: 42px;
+  }
+
+  .hero-art-corners::after {
+    bottom: 34px;
+    right: 22px;
   }
 }
 
