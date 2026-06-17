@@ -12,6 +12,18 @@ export const ACCOUNTING_CATEGORIES = [
   'other'
 ];
 
+export const DEFAULT_ACCOUNTING_CATEGORIES = [
+  { id: 'food', name: '餐饮', type: 'expense', accent: '#b6423c' },
+  { id: 'transport', name: '交通', type: 'expense', accent: '#4266b2' },
+  { id: 'shopping', name: '购物', type: 'expense', accent: '#8a5a19' },
+  { id: 'study', name: '学习', type: 'expense', accent: '#2f7d67' },
+  { id: 'entertainment', name: '娱乐', type: 'expense', accent: '#7b5aa6' },
+  { id: 'rent', name: '房租', type: 'expense', accent: '#5e625f' },
+  { id: 'salary', name: '工资', type: 'income', accent: '#2f7d67' },
+  { id: 'saving', name: '存钱', type: 'both', accent: '#c08a2c' },
+  { id: 'other', name: '其他', type: 'both', accent: '#68706a' }
+];
+
 export function createAccountingId() {
   return `acc-${randomUUID()}`;
 }
@@ -45,7 +57,7 @@ export function centsToYuan(cents) {
 
 export function assertEntryDraft(draft) {
   if (!['income', 'expense'].includes(draft.type)) throw new Error('Invalid entry type');
-  if (!ACCOUNTING_CATEGORIES.includes(draft.category)) throw new Error('Invalid category');
+  if (!String(draft.category || '').trim()) throw new Error('Invalid category');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(draft.spentAt || ''))) throw new Error('Invalid date');
   if (!String(draft.account || '').trim()) throw new Error('Account is required');
 }

@@ -1,21 +1,13 @@
 export type AccountingEntryType = 'income' | 'expense';
 
-export type AccountingCategoryId =
-  | 'food'
-  | 'transport'
-  | 'shopping'
-  | 'study'
-  | 'entertainment'
-  | 'rent'
-  | 'salary'
-  | 'saving'
-  | 'other';
+export type AccountingCategoryId = string;
 
 export interface AccountingCategory {
   id: AccountingCategoryId;
   name: string;
   type: AccountingEntryType | 'both';
   accent: string;
+  custom?: boolean;
 }
 
 export const ACCOUNTING_PAYMENT_METHODS = ['微信', '支付宝', '银行卡', '现金', '花呗', '其他'] as const;
@@ -112,6 +104,7 @@ export interface AccountingSummary {
 
 export interface AccountingMonthData {
   entries: AccountingEntry[];
+  categories?: AccountingCategory[];
   settings: AccountingSettings;
   summary: AccountingSummary;
   savingGoal: SavingGoal | null;
@@ -129,8 +122,8 @@ export const ACCOUNTING_CATEGORIES: AccountingCategory[] = [
   { id: 'other', name: '其他', type: 'both', accent: '#68706a' }
 ];
 
-export function getAccountingCategory(id: AccountingCategoryId): AccountingCategory {
-  return ACCOUNTING_CATEGORIES.find((category) => category.id === id) ?? ACCOUNTING_CATEGORIES[8];
+export function getAccountingCategory(id: AccountingCategoryId, categories = ACCOUNTING_CATEGORIES): AccountingCategory {
+  return categories.find((category) => category.id === id) ?? ACCOUNTING_CATEGORIES[8];
 }
 
 export function todayDateInput(): string {

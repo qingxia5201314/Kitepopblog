@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAccountingEntry, getAccountingMonth, loginAccounting, updateAccountingSettings } from './accountingApi';
+import { createAccountingCategory, createAccountingEntry, getAccountingMonth, loginAccounting, updateAccountingSettings } from './accountingApi';
 
 describe('accounting api client', () => {
   afterEach(() => {
@@ -56,6 +56,7 @@ describe('accounting api client', () => {
       },
       'accounting-token'
     );
+    await createAccountingCategory({ name: '咖啡', type: 'expense' }, 'accounting-token');
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/accounting/month?month=2026-06', {
       headers: { Authorization: 'Bearer accounting-token' }
@@ -69,6 +70,11 @@ describe('accounting api client', () => {
       method: 'PUT',
       headers: { 'content-type': 'application/json', Authorization: 'Bearer accounting-token' },
       body: expect.any(String)
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/accounting/categories', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer accounting-token' },
+      body: JSON.stringify({ name: '咖啡', type: 'expense' })
     });
   });
 });

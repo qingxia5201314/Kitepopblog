@@ -426,6 +426,16 @@ async function handleAccounting(request, response, accountingStore, accountingSe
     return;
   }
 
+  if (url.pathname === '/api/accounting/categories' && request.method === 'POST') {
+    try {
+      const body = await readJsonBody(request);
+      sendJson(response, 201, { category: accountingStore.createCategory(body) });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Invalid request body' });
+    }
+    return;
+  }
+
   if (url.pathname === '/api/accounting/month' && request.method === 'GET') {
     sendJson(response, 200, accountingStore.getMonthData({
       month: url.searchParams.get('month') || undefined,

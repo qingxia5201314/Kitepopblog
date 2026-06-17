@@ -2,6 +2,7 @@ import {
   assertEntryDraft,
   calculateSavingGoal,
   createAccountingId,
+  DEFAULT_ACCOUNTING_CATEGORIES,
   monthOf,
   nowIso,
   parseMoneyToCents,
@@ -50,6 +51,14 @@ function initSchema(db) {
       monthly_budget_cents INTEGER NOT NULL DEFAULT 0,
       saving_goal_json TEXT NOT NULL DEFAULT ''
     );
+
+    CREATE TABLE IF NOT EXISTS accounting_categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      accent TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
   try {
     db.run('ALTER TABLE accounting_entries ADD COLUMN include_in_saving INTEGER NOT NULL DEFAULT 1');
@@ -71,6 +80,24 @@ function rowToEntry(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
+}
+
+function rowToCategory(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.type,
+    accent: row.accent,
+    custom: true
+  };
+}
+
+function normalizeCategoryDraft(draft) {
+  const name = String(draft.name || '').trim();
+  const type = String(draft.type || 'both');
+  if (!name) throw new Error('Category name is required');
+  if (!['income', 'expense', 'both'].includes(type)) throw new Error('Invalid category type');
+  return { name: name.slice(0, 18), type };
 }
 
 function normalizeEntryDraft(draft) {
@@ -145,6 +172,13 @@ export function createAccountingStore({ database }) {
     return { monthlyBudgetCents: 0, savingGoal: null };
   }
 
+  function listCategories() {
+    return [
+      ...DEFAULT_ACCOUNTING_CATEGORIES,
+      ...selectRows(db, 'SELECT * FROM accounting_categories ORDER BY created_at ASC, rowid ASC').map(rowToCategory)
+    ];
+  }
+
   return {
     createSession({ tokenHash, createdAt, expiresAt }) {
       db.run('INSERT OR REPLACE INTO accounting_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)', [
@@ -170,7 +204,31 @@ export function createAccountingStore({ database }) {
       return selectRows(db, 'SELECT token_hash AS tokenHash, created_at AS createdAt, expires_at AS expiresAt FROM accounting_sessions');
     },
 
+    listCategories,
+
+    createCategory(draft) {
+      const normalized = normalizeCategoryDraft(draft);
+      const existing = listCategories().find((category) => category.name === normalized.name && category.type === normalized.type);
+      if (existing) return existing;
+      const category = {
+        id: `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        ...normalized,
+        accent: '#d84b49',
+        custom: true
+      };
+      db.run('INSERT INTO accounting_categories (id, name, type, accent, created_at) VALUES (?, ?, ?, ?, ?)', [
+        category.id,
+        category.name,
+        category.type,
+        category.accent,
+        nowIso()
+      ]);
+      database.persist();
+      return category;
+    },
+
     createEntry(draft) {
+      if (!listCategories().some((category) => category.id === draft.category)) throw new Error('Invalid category');
       const normalized = normalizeEntryDraft(draft);
       const now = nowIso();
       const entry = {
@@ -203,7 +261,7 @@ export function createAccountingStore({ database }) {
     updateEntry(id, patch) {
       const current = selectRows(db, 'SELECT * FROM accounting_entries WHERE id = ?', [id]).map(rowToEntry)[0];
       if (!current) return undefined;
-      const normalized = normalizeEntryDraft({
+      const nextDraft = {
         type: patch.type ?? current.type,
         amountCents: patch.amountCents ?? (patch.amountYuan ? parseMoneyToCents(patch.amountYuan) : current.amountCents),
         category: patch.category ?? current.category,
@@ -211,7 +269,9 @@ export function createAccountingStore({ database }) {
         spentAt: patch.spentAt ?? current.spentAt,
         note: patch.note ?? current.note,
         includeInSaving: patch.includeInSaving ?? current.includeInSaving
-      });
+      };
+      if (!listCategories().some((category) => category.id === nextDraft.category)) throw new Error('Invalid category');
+      const normalized = normalizeEntryDraft(nextDraft);
       const updated = { ...current, ...normalized, updatedAt: nowIso() };
 
       db.run(
@@ -277,6 +337,7 @@ export function createAccountingStore({ database }) {
       const summary = summarizeEntries(entries, settings);
       return {
         entries,
+        categories: listCategories(),
         settings,
         summary,
         savingGoal: calculateSavingGoal(settings.savingGoal, {

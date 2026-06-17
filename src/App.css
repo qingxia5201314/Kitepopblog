@@ -1425,8 +1425,8 @@ textarea {
 }
 
 .admin-post {
-  background: #fff;
-  border: 1px solid #eadfce;
+  background: #fffdf9;
+  border: 1px solid rgba(42, 19, 15, 0.16);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -1477,13 +1477,15 @@ textarea {
 }
 
 .status-badge.published {
-  background: rgba(71, 163, 120, 0.12);
-  color: #2f7d67;
+  background: #e4f4ec;
+  border: 1px solid #8cc5aa;
+  color: #176047;
 }
 
 .status-badge.draft {
-  background: rgba(196, 86, 79, 0.12);
-  color: #9e2f28;
+  background: #fff0d9;
+  border: 1px solid #d7a64f;
+  color: #7b4b08;
 }
 
 .admin-post-actions {
@@ -1535,6 +1537,34 @@ textarea {
   font-weight: 850;
   gap: 8px;
   padding: 10px;
+}
+
+.custom-category-panel {
+  background: rgba(255, 244, 227, 0.72);
+  border: 1px solid rgba(216, 75, 73, 0.16);
+  border-radius: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.custom-category-panel strong {
+  color: #231511;
+}
+
+.custom-category-panel small {
+  color: #68706a;
+}
+
+.custom-category-controls {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+}
+
+.custom-category-controls input,
+.custom-category-controls select {
+  min-height: 42px;
 }
 
 .segmented-control {

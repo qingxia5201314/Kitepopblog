@@ -114,6 +114,23 @@ describe('accounting store', () => {
     expect(monthData.summary.budgetRemainingCents).toBe(0);
   });
 
+  it('stores custom categories and allows entries to use them', () => {
+    const category = store.createCategory({ name: '咖啡', type: 'expense' });
+    const entry = store.createEntry({
+      type: 'expense',
+      amountYuan: '18',
+      category: category.id,
+      account: 'wechat',
+      spentAt: '2026-06-17',
+      note: 'latte'
+    });
+    const monthData = store.getMonthData({ month: '2026-06' });
+
+    expect(category.custom).toBe(true);
+    expect(entry.category).toBe(category.id);
+    expect(monthData.categories.some((item) => item.id === category.id && item.name === '咖啡')).toBe(true);
+  });
+
   it('stores budget and one-month saving goal settings', () => {
     store.updateSettings({
       monthlyBudgetYuan: '3000',

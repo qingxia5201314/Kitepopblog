@@ -47,6 +47,7 @@ import {
 } from './lib/accounting';
 import {
   createAccountingEntry,
+  createAccountingCategory,
   deleteAccountingEntry,
   getAccountingMonth,
   loginAccounting,
@@ -430,6 +431,8 @@ function App() {
   const [editingAccountingId, setEditingAccountingId] = useState<string | null>(null);
   const [accountingSettingsForm, setAccountingSettingsForm] =
     useState<AccountingSettingsDraft>(EMPTY_ACCOUNTING_SETTINGS);
+  const [customAccountingCategoryName, setCustomAccountingCategoryName] = useState('');
+  const [customAccountingCategoryType, setCustomAccountingCategoryType] = useState<AccountingEntryType>('expense');
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -445,9 +448,10 @@ function App() {
   const formCoverImage = getSafeImageUrl(form.coverImage);
   const userToken = userSession?.token ?? '';
   const accountingToken = accountingSession?.token ?? '';
-  const accountingCategories = ACCOUNTING_CATEGORIES.filter(
-    (category) => category.type === 'both' || category.type === accountingForm.type
-  );
+  const accountingCategories = useMemo(() => {
+    const categories = accountingData?.categories?.length ? accountingData.categories : ACCOUNTING_CATEGORIES;
+    return categories.filter((category) => category.type === 'both' || category.type === accountingForm.type);
+  }, [accountingData?.categories, accountingForm.type]);
   const accountingPaymentMethods = useMemo(() => {
     const methods = [...ACCOUNTING_PAYMENT_METHODS];
     if (accountingForm.account && !methods.includes(accountingForm.account as (typeof ACCOUNTING_PAYMENT_METHODS)[number])) {
@@ -1219,6 +1223,24 @@ function App() {
     setAccountingForm({ ...EMPTY_ACCOUNTING_ENTRY, spentAt: todayDateInput() });
   };
 
+  const addCustomAccountingCategory = async () => {
+    if (!accountingToken) return;
+    const name = customAccountingCategoryName.trim();
+    if (!name) {
+      notify('error', '请先填写分类名称');
+      return;
+    }
+
+    try {
+      await createAccountingCategory({ name, type: customAccountingCategoryType }, accountingToken);
+      await loadAccountingData();
+      setCustomAccountingCategoryName('');
+      notify('success', '自定义分类已添加');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '分类创建失败');
+    }
+  };
+
   const startEditAccountingEntry = (entry: AccountingEntry) => {
     setEditingAccountingId(entry.id);
     setAccountingForm({
@@ -1667,7 +1689,7 @@ function App() {
                       </select>
                     </label>
                   </div>
-                  <div className="form-grid">
+                  <div className="ledger-filter-grid">
                     <label>
                       日期
                       <input
@@ -1687,6 +1709,27 @@ function App() {
                         ))}
                       </select>
                     </label>
+                  </div>
+                  <div className="custom-category-panel">
+                    <div>
+                      <strong>自定义分类</strong>
+                      <small>添加后会同步出现在记账分类和流水筛选里。</small>
+                    </div>
+                    <div className="custom-category-controls">
+                      <input
+                        onChange={(event) => setCustomAccountingCategoryName(event.target.value)}
+                        placeholder="例如：咖啡、服务器、订阅"
+                        value={customAccountingCategoryName}
+                      />
+                      <select
+                        onChange={(event) => setCustomAccountingCategoryType(event.target.value as AccountingEntryType)}
+                        value={customAccountingCategoryType}
+                      >
+                        <option value="expense">支出</option>
+                        <option value="income">收入</option>
+                      </select>
+                      <button onClick={() => void addCustomAccountingCategory()} type="button">添加</button>
+                    </div>
                   </div>
                   <label>
                     备注
@@ -1738,7 +1781,7 @@ function App() {
                         value={accountingCategoryFilter}
                       >
                         <option value="all">全部分类</option>
-                        {ACCOUNTING_CATEGORIES.map((category) => (
+                        {(accountingData?.categories?.length ? accountingData.categories : ACCOUNTING_CATEGORIES).map((category) => (
                           <option key={category.id} value={category.id}>{category.name}</option>
                         ))}
                       </select>
@@ -1746,7 +1789,7 @@ function App() {
                   </div>
                   <div className="entry-list">
                     {visibleAccountingEntries.map((entry) => {
-                      const category = getAccountingCategory(entry.category);
+                      const category = getAccountingCategory(entry.category, accountingData?.categories);
                       return (
                         <div className="entry-item" key={entry.id}>
                           <span className={`entry-type entry-${entry.type}`}>{entry.type === 'expense' ? '支' : '收'}</span>

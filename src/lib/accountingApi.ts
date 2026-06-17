@@ -1,4 +1,4 @@
-import { AccountingEntry, AccountingEntryDraft, AccountingMonthData, AccountingSettingsDraft } from './accounting';
+import { AccountingCategory, AccountingEntry, AccountingEntryDraft, AccountingMonthData, AccountingSettingsDraft } from './accounting';
 
 export interface AccountingLoginResult {
   token: string;
@@ -57,6 +57,20 @@ export async function createAccountingEntry(draft: AccountingEntryDraft, token: 
     })
   );
   return payload.entry;
+}
+
+export async function createAccountingCategory(
+  draft: { name: string; type: AccountingCategory['type'] },
+  token: string
+): Promise<AccountingCategory> {
+  const payload = await parseResponse<{ category: AccountingCategory }>(
+    await fetch('/api/accounting/categories', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify(draft)
+    })
+  );
+  return payload.category;
 }
 
 export async function updateAccountingEntry(
