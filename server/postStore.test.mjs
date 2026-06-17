@@ -48,6 +48,25 @@ describe('post store', () => {
     expect(store.get(created.id)).toBeUndefined();
   });
 
+  it('stores precise timestamps for posts and comments', async () => {
+    const store = await createPostStore({ dbPath: join(tempDir, 'blog.sqlite') });
+    const created = store.create({
+      title: 'timestamp post',
+      summary: 'summary',
+      category: 'notes',
+      tags: [],
+      content: 'content',
+      status: 'published',
+      cover: 'notes',
+      coverImage: ''
+    });
+    const comment = store.createComment(created.id, { content: 'hello' }, { nickname: 'Kite', permission: 'reader' });
+
+    expect(created.createdAt).toContain('T');
+    expect(created.updatedAt).toContain('T');
+    expect(comment.createdAt).toContain('T');
+  });
+
   it('stores public comments for each post', async () => {
     const store = await createPostStore({ dbPath: join(tempDir, 'blog.sqlite') });
     const post = store.list({ includeDrafts: false })[0];

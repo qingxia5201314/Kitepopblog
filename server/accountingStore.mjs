@@ -3,6 +3,7 @@ import {
   calculateSavingGoal,
   createAccountingId,
   monthOf,
+  nowIso,
   parseMoneyToCents,
   summarizeEntries,
   today
@@ -171,7 +172,7 @@ export function createAccountingStore({ database }) {
 
     createEntry(draft) {
       const normalized = normalizeEntryDraft(draft);
-      const now = today();
+      const now = nowIso();
       const entry = {
         id: createAccountingId(),
         ...normalized,
@@ -211,7 +212,7 @@ export function createAccountingStore({ database }) {
         note: patch.note ?? current.note,
         includeInSaving: patch.includeInSaving ?? current.includeInSaving
       });
-      const updated = { ...current, ...normalized, updatedAt: today() };
+      const updated = { ...current, ...normalized, updatedAt: nowIso() };
 
       db.run(
         `UPDATE accounting_entries SET
@@ -242,7 +243,7 @@ export function createAccountingStore({ database }) {
     },
 
     listEntries({ month = monthOf(today()), type = 'all', category = 'all' } = {}) {
-      return selectRows(db, 'SELECT * FROM accounting_entries WHERE substr(spent_at, 1, 7) = ? ORDER BY spent_at DESC, created_at DESC', [
+      return selectRows(db, 'SELECT * FROM accounting_entries WHERE substr(spent_at, 1, 7) = ? ORDER BY spent_at DESC, created_at DESC, rowid DESC', [
         month
       ])
         .map(rowToEntry)

@@ -166,6 +166,21 @@ export function getVisibleAccountingEntries<T>(entries: T[], expanded: boolean):
   return expanded ? entries : entries.slice(0, ACCOUNTING_ENTRY_COLLAPSE_LIMIT);
 }
 
+export function sortAccountingEntries<T extends { spentAt: string; createdAt?: string; updatedAt?: string; id?: string }>(entries: T[]): T[] {
+  return [...entries].sort((left, right) => {
+    const spentDiff = Date.parse(`${right.spentAt}T00:00:00`) - Date.parse(`${left.spentAt}T00:00:00`);
+    if (spentDiff !== 0) return spentDiff;
+
+    const rightCreated = Date.parse(right.createdAt || right.updatedAt || '');
+    const leftCreated = Date.parse(left.createdAt || left.updatedAt || '');
+    if (Number.isFinite(rightCreated) && Number.isFinite(leftCreated) && rightCreated !== leftCreated) {
+      return rightCreated - leftCreated;
+    }
+
+    return String(right.id || '').localeCompare(String(left.id || ''));
+  });
+}
+
 export function getBudgetHealth({
   remainingCents,
   limitCents

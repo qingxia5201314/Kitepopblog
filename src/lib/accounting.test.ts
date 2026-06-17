@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ACCOUNTING_ENTRY_COLLAPSE_LIMIT,
   getBudgetHealth,
+  sortAccountingEntries,
   getVisibleAccountingEntries,
   sanitizeMoneyInput
 } from './accounting';
@@ -26,6 +27,20 @@ describe('accounting helpers', () => {
       'entry-5'
     ]);
     expect(getVisibleAccountingEntries(entries, true)).toHaveLength(8);
+  });
+
+  it('sorts accounting entries by spent date and creation time newest first', () => {
+    const entries = [
+      { id: 'older-same-day', spentAt: '2026-06-17', createdAt: '2026-06-17T08:00:00.000Z' },
+      { id: 'newer-same-day', spentAt: '2026-06-17', createdAt: '2026-06-17T09:00:00.000Z' },
+      { id: 'previous-day', spentAt: '2026-06-16', createdAt: '2026-06-17T10:00:00.000Z' }
+    ];
+
+    expect(sortAccountingEntries(entries).map((entry) => entry.id)).toEqual([
+      'newer-same-day',
+      'older-same-day',
+      'previous-day'
+    ]);
   });
 
   it('classifies budget health for dashboard styling', () => {

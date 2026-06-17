@@ -42,6 +42,7 @@ import {
   getBudgetHealth,
   getVisibleAccountingEntries,
   sanitizeMoneyInput,
+  sortAccountingEntries,
   todayDateInput
 } from './lib/accounting';
 import {
@@ -304,6 +305,20 @@ function getSafeImageUrl(value?: string): string | undefined {
   return value ? normalizeImageUrl(value) : undefined;
 }
 
+function formatDateTime(value?: string): string {
+  if (!value) return '';
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 function Icon({ className = '', name }: { className?: string; name: UiIcon }) {
   return <span aria-hidden="true" className={`ui-icon icon-${name} ${className}`} />;
 }
@@ -440,7 +455,7 @@ function App() {
     }
     return methods;
   }, [accountingForm.account]);
-  const accountingEntries = accountingData?.entries ?? [];
+  const accountingEntries = useMemo(() => sortAccountingEntries(accountingData?.entries ?? []), [accountingData?.entries]);
   const visibleAccountingEntries = getVisibleAccountingEntries(accountingEntries, accountingEntriesExpanded);
   const hasCollapsedAccountingEntries = accountingEntries.length > ACCOUNTING_ENTRY_COLLAPSE_LIMIT;
   const budgetHealth = getBudgetHealth({
@@ -1333,7 +1348,7 @@ function App() {
             </div>
           )}
           <p className="article-meta">
-            <span><Icon name="calendar" />{detailPost.updatedAt}</span>
+            <span><Icon name="calendar" />{formatDateTime(detailPost.updatedAt)}</span>
             <span><Icon name="clock" />{calculateReadingMinutes(detailPost.content)} 分钟阅读</span>
             <span><Icon name={getCategoryIcon(detailPost.category)} />{getCategory(detailPost.category).name}</span>
           </p>
@@ -1379,7 +1394,7 @@ function App() {
                 <article className="comment-item" key={comment.id}>
                   <strong>{comment.nickname}<span>{comment.role}</span></strong>
                   <p>{comment.content}</p>
-                  <small>{comment.createdAt}</small>
+                  <small>{formatDateTime(comment.createdAt)}</small>
                 </article>
               ))}
               {comments.length === 0 ? <div className="empty-state">还没有评论。</div> : null}
@@ -1526,7 +1541,7 @@ function App() {
                           <Icon name={getCategoryIcon(post.category)} />
                           {category.name}
                           <Icon name="calendar" />
-                          {post.updatedAt}
+                          {formatDateTime(post.updatedAt)}
                           <Icon name="clock" />
                           {calculateReadingMinutes(post.content)} 分钟
                         </small>
@@ -1738,7 +1753,8 @@ function App() {
                           <span>
                             <strong>{category.name} · {entry.account}</strong>
                             <small>
-                              {entry.spentAt}{entry.note ? ` · ${entry.note}` : ''}
+                              {formatDateTime(entry.createdAt || entry.spentAt)} · 发生 {entry.spentAt}
+                              {entry.note ? ` · ${entry.note}` : ''}
                               <em className={`entry-saving-badge ${entry.includeInSaving ? 'active' : ''}`}>
                                 {entry.includeInSaving ? '存钱项目' : '普通流水'}
                               </em>

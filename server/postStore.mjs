@@ -1,4 +1,4 @@
-import { createId, sortPostsByDate, today, uniqueSlug } from './blogModel.mjs';
+import { createId, nowIso, sortPostsByDate, uniqueSlug } from './blogModel.mjs';
 import { seedPosts } from './seedPosts.mjs';
 import { createSqliteDatabase } from './sqliteDatabase.mjs';
 
@@ -124,7 +124,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
 
     create(draft) {
       const posts = selectAll(db);
-      const now = today();
+      const now = nowIso();
       const post = {
         ...draft,
         id: createId(),
@@ -147,7 +147,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         ...current,
         ...patch,
         slug: patch.title ? uniqueSlug(patch.title, posts, id) : current.slug,
-        updatedAt: today()
+        updatedAt: nowIso()
       };
 
       db.run(
@@ -198,7 +198,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         nickname: String(user?.nickname || draft.nickname || '匿名访客').trim() || '匿名访客',
         role: user?.permission === 'admin' ? '管理员' : '阅读用户',
         content,
-        createdAt: today()
+        createdAt: nowIso()
       };
       db.run(
         `INSERT INTO post_comments (id, post_id, nickname, role, content, created_at)

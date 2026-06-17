@@ -20,6 +20,10 @@ export function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+export function nowIso() {
+  return new Date().toISOString();
+}
+
 export function monthOf(date) {
   return String(date || today()).slice(0, 7);
 }

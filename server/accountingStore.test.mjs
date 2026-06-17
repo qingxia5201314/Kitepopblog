@@ -58,6 +58,30 @@ describe('accounting store', () => {
     expect(summary.summary.topExpenseCategory).toEqual({ category: 'food', amountCents: 3500 });
   });
 
+  it('stores precise entry timestamps and lists newest same-day entries first', () => {
+    const first = store.createEntry({
+      type: 'expense',
+      amountYuan: '5',
+      category: 'food',
+      account: 'wechat',
+      spentAt: '2026-06-17',
+      note: 'first'
+    });
+    const second = store.createEntry({
+      type: 'expense',
+      amountYuan: '12',
+      category: 'food',
+      account: 'wechat',
+      spentAt: '2026-06-17',
+      note: 'second'
+    });
+    const monthData = store.getMonthData({ month: '2026-06' });
+
+    expect(first.createdAt).toContain('T');
+    expect(first.updatedAt).toContain('T');
+    expect(monthData.entries.map((entry) => entry.id)).toEqual([second.id, first.id]);
+  });
+
   it('defaults entries into the saving project and persists opt-outs', () => {
     const defaultEntry = store.createEntry({
       type: 'expense',
@@ -83,8 +107,8 @@ describe('accounting store', () => {
     expect(excludedIncome.includeInSaving).toBe(false);
     expect(updated.includeInSaving).toBe(false);
     expect(monthData.entries.map((entry) => [entry.id, entry.includeInSaving])).toEqual([
-      [defaultEntry.id, false],
-      [excludedIncome.id, false]
+      [excludedIncome.id, false],
+      [defaultEntry.id, false]
     ]);
     expect(monthData.summary.incomeCents).toBe(500000);
     expect(monthData.summary.budgetRemainingCents).toBe(0);
