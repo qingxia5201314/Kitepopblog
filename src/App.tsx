@@ -1645,7 +1645,7 @@ function App() {
                       </button>
                     ))}
                   </div>
-                  <div className="form-grid">
+                  <div className="ledger-filter-grid">
                     <label>
                       金额
                       <input
@@ -1750,7 +1750,7 @@ function App() {
                       return (
                         <div className="entry-item" key={entry.id}>
                           <span className={`entry-type entry-${entry.type}`}>{entry.type === 'expense' ? '支' : '收'}</span>
-                          <span>
+                          <span className="entry-main">
                             <strong>{category.name} · {entry.account}</strong>
                             <small>
                               {formatDateTime(entry.createdAt || entry.spentAt)} · 发生 {entry.spentAt}
@@ -1763,8 +1763,10 @@ function App() {
                           <strong className={entry.type === 'expense' ? 'money-expense' : 'money-income'}>
                             {entry.type === 'expense' ? '-' : '+'}{formatMoney(entry.amountCents)}
                           </strong>
-                          <button onClick={() => startEditAccountingEntry(entry)} type="button">编辑</button>
-                          <button className="danger" onClick={() => removeAccountingEntry(entry)} type="button">删除</button>
+                          <span className="entry-actions">
+                            <button onClick={() => startEditAccountingEntry(entry)} type="button">编辑</button>
+                            <button className="danger" onClick={() => removeAccountingEntry(entry)} type="button">删除</button>
+                          </span>
                         </div>
                       );
                     })}
@@ -2149,20 +2151,34 @@ function App() {
                           </button>
                         ))}
                       </div>
-                      {adminPosts.map((post) => (
-                        <div className="admin-post" key={post.id}>
-                          <button onClick={() => startEdit(post)} type="button">
-                            <strong>{post.title}</strong>
-                            <small>{getCategory(post.category).name} · {post.status === 'published' ? '已发布' : '草稿'}</small>
-                          </button>
-                          <div>
-                            <button onClick={() => updateStatus(post.id, post.status === 'published' ? 'draft' : 'published')} type="button">
-                              {post.status === 'published' ? '设草稿' : '发布'}
+                      {adminPosts.map((post) => {
+                        const category = getCategory(post.category);
+                        const isPublished = post.status === 'published';
+                        return (
+                          <div className="admin-post" key={post.id}>
+                            <button className="admin-post-main" onClick={() => startEdit(post)} type="button">
+                              <span className="admin-post-title-row">
+                                <strong>{post.title}</strong>
+                                <em className={`status-badge ${isPublished ? 'published' : 'draft'}`}>
+                                  {isPublished ? '已发布' : '草稿'}
+                                </em>
+                              </span>
+                              <small>
+                                <Icon name={getCategoryIcon(post.category)} />
+                                {category.name}
+                                <Icon name="calendar" />
+                                {formatDateTime(post.updatedAt)}
+                              </small>
                             </button>
-                            <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
+                            <div className="admin-post-actions">
+                              <button onClick={() => updateStatus(post.id, isPublished ? 'draft' : 'published')} type="button">
+                                {isPublished ? '设草稿' : '发布'}
+                              </button>
+                              <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </>
                   ) : null}
                 </section>

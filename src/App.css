@@ -228,6 +228,8 @@ button:active,
 .accounting-actions button,
 .admin-group button,
 .admin-post div button,
+.admin-post-actions button,
+.entry-actions button,
 .file-toolbar button,
 .folder-item button,
 .file-dropzone button,
@@ -1423,26 +1425,74 @@ textarea {
 }
 
 .admin-post {
-  border-top: 1px solid #eadfce;
-  display: grid;
-  gap: 8px;
-  padding: 12px 0;
+  background: #fff;
+  border: 1px solid #eadfce;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
 }
 
-.admin-post > button {
+.admin-post-main {
   background: transparent;
   border: 0;
   color: inherit;
+  display: grid;
+  gap: 8px;
   padding: 0;
   text-align: left;
 }
 
-.admin-post div {
+.admin-post-title-row {
+  align-items: center;
   display: flex;
-  gap: 8px;
+  gap: 10px;
+  justify-content: space-between;
 }
 
-.admin-post div button {
+.admin-post-main strong {
+  color: #231511;
+  font-size: 1.02rem;
+}
+
+.admin-post-main small {
+  color: #68706a;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-post-main .ui-icon {
+  margin-right: 2px;
+}
+
+.status-badge {
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 800;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.status-badge.published {
+  background: rgba(71, 163, 120, 0.12);
+  color: #2f7d67;
+}
+
+.status-badge.draft {
+  background: rgba(196, 86, 79, 0.12);
+  color: #9e2f28;
+}
+
+.admin-post-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.admin-post-actions button {
   min-height: 32px;
   padding: 5px 10px;
 }
@@ -1469,6 +1519,22 @@ textarea {
   display: grid;
   gap: 12px;
   grid-template-columns: 1fr 1fr;
+}
+
+.ledger-filter-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ledger-filter-grid label {
+  background: rgba(255, 253, 249, 0.72);
+  border: 1px solid rgba(216, 75, 73, 0.12);
+  border-radius: 12px;
+  display: grid;
+  font-weight: 850;
+  gap: 8px;
+  padding: 10px;
 }
 
 .segmented-control {
@@ -1796,17 +1862,25 @@ textarea {
   align-items: center;
   background: #fff;
   border: 1px solid #e3d7c6;
-  border-radius: 8px;
+  border-radius: 10px;
   display: grid;
-  gap: 8px;
-  grid-template-columns: 30px minmax(0, 1fr) auto auto auto;
-  padding: 8px 9px;
+  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  padding: 10px 11px;
+}
+
+.entry-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
 }
 
 .entry-item small {
   color: #68706a;
-  display: block;
-  margin-top: 2px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 0;
 }
 
 .entry-saving-badge {
@@ -1817,7 +1891,6 @@ textarea {
   display: inline-flex;
   font-style: normal;
   font-weight: 800;
-  margin-left: 6px;
   padding: 1px 7px;
 }
 
@@ -1827,9 +1900,35 @@ textarea {
   color: #2f7d67;
 }
 
-.entry-item button {
-  min-height: 30px;
-  padding: 5px 8px;
+.entry-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.entry-actions button {
+  min-height: 34px;
+  padding: 5px 10px;
+}
+
+@media (max-width: 720px) {
+  .ledger-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .entry-item {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .entry-item > strong {
+    justify-self: end;
+    grid-column: 2;
+  }
+
+  .entry-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
 }
 
 .entry-type {
