@@ -1457,10 +1457,14 @@ textarea {
 }
 
 .admin-post-main small {
-  color: #68706a;
+  background: rgba(255, 253, 249, 0.82);
+  border: 1px solid rgba(42, 19, 15, 0.12);
+  border-radius: 8px;
+  color: #31423d;
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
+  padding: 6px 8px;
 }
 
 .admin-post-main .ui-icon {
@@ -1565,6 +1569,27 @@ textarea {
 .custom-category-controls input,
 .custom-category-controls select {
   min-height: 42px;
+}
+
+.custom-category-list {
+  display: grid;
+  gap: 8px;
+}
+
+.custom-category-item {
+  align-items: center;
+  background: #fffdf9;
+  border: 1px solid rgba(42, 19, 15, 0.12);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 110px auto auto;
+  padding: 8px;
+}
+
+.custom-category-item input,
+.custom-category-item select {
+  min-height: 38px;
 }
 
 .segmented-control {

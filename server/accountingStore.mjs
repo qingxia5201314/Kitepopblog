@@ -100,6 +100,10 @@ function normalizeCategoryDraft(draft) {
   return { name: name.slice(0, 18), type };
 }
 
+function isDefaultCategory(id) {
+  return DEFAULT_ACCOUNTING_CATEGORIES.some((category) => category.id === id);
+}
+
 function normalizeEntryDraft(draft) {
   assertEntryDraft(draft);
   return {
@@ -225,6 +229,30 @@ export function createAccountingStore({ database }) {
       ]);
       database.persist();
       return category;
+    },
+
+    updateCategory(id, patch) {
+      if (isDefaultCategory(id)) throw new Error('Default category cannot be edited');
+      const current = selectRows(db, 'SELECT * FROM accounting_categories WHERE id = ?', [id]).map(rowToCategory)[0];
+      if (!current) return undefined;
+      const normalized = normalizeCategoryDraft({
+        name: patch.name ?? current.name,
+        type: patch.type ?? current.type
+      });
+      db.run('UPDATE accounting_categories SET name = ?, type = ? WHERE id = ?', [normalized.name, normalized.type, id]);
+      database.persist();
+      return { ...current, ...normalized };
+    },
+
+    removeCategory(id) {
+      if (isDefaultCategory(id)) throw new Error('Default category cannot be deleted');
+      const current = selectRows(db, 'SELECT id FROM accounting_categories WHERE id = ?', [id])[0];
+      if (!current) return false;
+      const used = selectRows(db, 'SELECT id FROM accounting_entries WHERE category = ? LIMIT 1', [id])[0];
+      if (used) throw new Error('Category is used by entries');
+      db.run('DELETE FROM accounting_categories WHERE id = ?', [id]);
+      database.persist();
+      return true;
     },
 
     createEntry(draft) {

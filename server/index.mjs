@@ -173,6 +173,11 @@ function getAccountingEntryId(pathname) {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+function getAccountingCategoryId(pathname) {
+  const match = pathname.match(/^\/api\/accounting\/categories\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
 function getFileId(pathname) {
   const match = pathname.match(/^\/api\/files\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : '';
@@ -432,6 +437,28 @@ async function handleAccounting(request, response, accountingStore, accountingSe
       sendJson(response, 201, { category: accountingStore.createCategory(body) });
     } catch (error) {
       sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Invalid request body' });
+    }
+    return;
+  }
+
+  const categoryId = getAccountingCategoryId(url.pathname);
+  if (categoryId && request.method === 'PUT') {
+    try {
+      const body = await readJsonBody(request);
+      const category = accountingStore.updateCategory(categoryId, body);
+      sendJson(response, category ? 200 : 404, category ? { category } : { ok: false, message: 'Category not found' });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Category update failed' });
+    }
+    return;
+  }
+
+  if (categoryId && request.method === 'DELETE') {
+    try {
+      const removed = accountingStore.removeCategory(categoryId);
+      sendJson(response, removed ? 200 : 404, removed ? { ok: true } : { ok: false, message: 'Category not found' });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error instanceof Error ? error.message : 'Category delete failed' });
     }
     return;
   }

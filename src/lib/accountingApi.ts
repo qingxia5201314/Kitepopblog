@@ -73,6 +73,30 @@ export async function createAccountingCategory(
   return payload.category;
 }
 
+export async function updateAccountingCategory(
+  id: string,
+  patch: { name?: string; type?: AccountingCategory['type'] },
+  token: string
+): Promise<AccountingCategory> {
+  const payload = await parseResponse<{ category: AccountingCategory }>(
+    await fetch(`/api/accounting/categories/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      body: JSON.stringify(patch)
+    })
+  );
+  return payload.category;
+}
+
+export async function deleteAccountingCategory(id: string, token: string): Promise<void> {
+  await parseResponse<{ ok: boolean }>(
+    await fetch(`/api/accounting/categories/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(token)
+    })
+  );
+}
+
 export async function updateAccountingEntry(
   id: string,
   patch: Partial<AccountingEntryDraft>,

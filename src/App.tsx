@@ -49,8 +49,10 @@ import {
   createAccountingEntry,
   createAccountingCategory,
   deleteAccountingEntry,
+  deleteAccountingCategory,
   getAccountingMonth,
   loginAccounting,
+  updateAccountingCategory,
   updateAccountingEntry,
   updateAccountingSettings
 } from './lib/accountingApi';
@@ -433,6 +435,7 @@ function App() {
     useState<AccountingSettingsDraft>(EMPTY_ACCOUNTING_SETTINGS);
   const [customAccountingCategoryName, setCustomAccountingCategoryName] = useState('');
   const [customAccountingCategoryType, setCustomAccountingCategoryType] = useState<AccountingEntryType>('expense');
+  const [categoryDrafts, setCategoryDrafts] = useState<Record<string, { name: string; type: 'income' | 'expense' | 'both' }>>({});
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -452,6 +455,8 @@ function App() {
     const categories = accountingData?.categories?.length ? accountingData.categories : ACCOUNTING_CATEGORIES;
     return categories.filter((category) => category.type === 'both' || category.type === accountingForm.type);
   }, [accountingData?.categories, accountingForm.type]);
+  const allAccountingCategories = accountingData?.categories?.length ? accountingData.categories : ACCOUNTING_CATEGORIES;
+  const customAccountingCategories = allAccountingCategories.filter((category) => category.custom);
   const accountingPaymentMethods = useMemo(() => {
     const methods = [...ACCOUNTING_PAYMENT_METHODS];
     if (accountingForm.account && !methods.includes(accountingForm.account as (typeof ACCOUNTING_PAYMENT_METHODS)[number])) {
@@ -1241,6 +1246,36 @@ function App() {
     }
   };
 
+  const saveCustomAccountingCategory = async (id: string) => {
+    if (!accountingToken) return;
+    const draft = categoryDrafts[id];
+    if (!draft?.name?.trim()) {
+      notify('error', '分类名称不能为空');
+      return;
+    }
+
+    try {
+      await updateAccountingCategory(id, { name: draft.name.trim(), type: draft.type }, accountingToken);
+      await loadAccountingData();
+      notify('success', '分类已更新');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '分类更新失败');
+    }
+  };
+
+  const removeCustomAccountingCategory = async (id: string) => {
+    if (!accountingToken) return;
+    if (!window.confirm('确认删除这个自定义分类吗？')) return;
+
+    try {
+      await deleteAccountingCategory(id, accountingToken);
+      await loadAccountingData();
+      notify('success', '分类已删除');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '分类删除失败');
+    }
+  };
+
   const startEditAccountingEntry = (entry: AccountingEntry) => {
     setEditingAccountingId(entry.id);
     setAccountingForm({
@@ -1730,6 +1765,41 @@ function App() {
                       </select>
                       <button onClick={() => void addCustomAccountingCategory()} type="button">添加</button>
                     </div>
+                    {customAccountingCategories.length ? (
+                      <div className="custom-category-list">
+                        {customAccountingCategories.map((category) => {
+                          const draft = categoryDrafts[category.id] ?? { name: category.name, type: category.type };
+                          return (
+                            <div className="custom-category-item" key={category.id}>
+                              <input
+                                onChange={(event) =>
+                                  setCategoryDrafts((current) => ({
+                                    ...current,
+                                    [category.id]: { ...draft, name: event.target.value }
+                                  }))
+                                }
+                                value={draft.name}
+                              />
+                              <select
+                                onChange={(event) =>
+                                  setCategoryDrafts((current) => ({
+                                    ...current,
+                                    [category.id]: { ...draft, type: event.target.value as 'income' | 'expense' | 'both' }
+                                  }))
+                                }
+                                value={draft.type}
+                              >
+                                <option value="expense">支出</option>
+                                <option value="income">收入</option>
+                                <option value="both">通用</option>
+                              </select>
+                              <button onClick={() => void saveCustomAccountingCategory(category.id)} type="button">保存</button>
+                              <button className="danger" onClick={() => void removeCustomAccountingCategory(category.id)} type="button">删除</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : null}
                   </div>
                   <label>
                     备注

@@ -131,6 +131,30 @@ describe('accounting store', () => {
     expect(monthData.categories.some((item) => item.id === category.id && item.name === '咖啡')).toBe(true);
   });
 
+  it('updates and deletes custom categories safely', () => {
+    const category = store.createCategory({ name: '订阅', type: 'expense' });
+    const updated = store.updateCategory(category.id, { name: '服务订阅', type: 'both' });
+    const deleted = store.removeCategory(category.id);
+
+    expect(updated.name).toBe('服务订阅');
+    expect(updated.type).toBe('both');
+    expect(deleted).toBe(true);
+  });
+
+  it('refuses to delete a category already used by entries', () => {
+    const category = store.createCategory({ name: '咖啡', type: 'expense' });
+    store.createEntry({
+      type: 'expense',
+      amountYuan: '18',
+      category: category.id,
+      account: 'wechat',
+      spentAt: '2026-06-17',
+      note: 'latte'
+    });
+
+    expect(() => store.removeCategory(category.id)).toThrow('Category is used by entries');
+  });
+
   it('stores budget and one-month saving goal settings', () => {
     store.updateSettings({
       monthlyBudgetYuan: '3000',

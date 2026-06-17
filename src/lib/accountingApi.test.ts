@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createAccountingCategory, createAccountingEntry, getAccountingMonth, loginAccounting, updateAccountingSettings } from './accountingApi';
+import {
+  createAccountingCategory,
+  createAccountingEntry,
+  deleteAccountingCategory,
+  getAccountingMonth,
+  loginAccounting,
+  updateAccountingCategory,
+  updateAccountingSettings
+} from './accountingApi';
 
 describe('accounting api client', () => {
   afterEach(() => {
@@ -57,6 +65,8 @@ describe('accounting api client', () => {
       'accounting-token'
     );
     await createAccountingCategory({ name: '咖啡', type: 'expense' }, 'accounting-token');
+    await updateAccountingCategory('custom-1', { name: '咖啡馆', type: 'both' }, 'accounting-token');
+    await deleteAccountingCategory('custom-1', 'accounting-token');
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/accounting/month?month=2026-06', {
       headers: { Authorization: 'Bearer accounting-token' }
@@ -75,6 +85,15 @@ describe('accounting api client', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json', Authorization: 'Bearer accounting-token' },
       body: JSON.stringify({ name: '咖啡', type: 'expense' })
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/accounting/categories/custom-1', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer accounting-token' },
+      body: JSON.stringify({ name: '咖啡馆', type: 'both' })
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/accounting/categories/custom-1', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer accounting-token' }
     });
   });
 });
