@@ -16,13 +16,17 @@ import {
 import {
   createPost,
   createPostComment,
+  createUser,
+  deletePostComment,
   deletePost,
+  deleteUser,
   getCurrentUser,
   listPostComments,
   listPosts,
   listUsers,
   loginUser,
   registerUser,
+  updatePostComment,
   updatePost,
   updateUser
 } from './lib/blogApi';
@@ -125,6 +129,13 @@ const EMPTY_USER_FORM = {
   username: '',
   password: '',
   nickname: ''
+};
+
+const EMPTY_ADMIN_USER_FORM = {
+  username: '',
+  password: '',
+  nickname: '',
+  permission: 'reader' as BlogUser['permission']
 };
 
 const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
@@ -386,11 +397,14 @@ function App() {
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
   const [comments, setComments] = useState<PostComment[]>([]);
   const [commentForm, setCommentForm] = useState(EMPTY_COMMENT_FORM);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [commentEditDrafts, setCommentEditDrafts] = useState<Record<string, string>>({});
   const [commentLoading, setCommentLoading] = useState(false);
   const [userSession, setUserSession] = useState<UserSession | null>(() => loadUserSession());
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [userForm, setUserForm] = useState(EMPTY_USER_FORM);
   const [adminUsers, setAdminUsers] = useState<BlogUser[]>([]);
+  const [adminUserForm, setAdminUserForm] = useState(EMPTY_ADMIN_USER_FORM);
   const [adminPanelOpen, setAdminPanelOpen] = useState({ content: false, users: false });
   const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(loadAdminSession()));
   const [adminToken, setAdminToken] = useState(() => loadAdminSession()?.token ?? '');
@@ -789,6 +803,45 @@ function App() {
     notify('info', '已退出当前用户');
   };
 
+  const startEditComment = (comment: PostComment) => {
+    setEditingCommentId(comment.id);
+    setCommentEditDrafts((current) => ({ ...current, [comment.id]: comment.content }));
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+  };
+
+  const saveCommentEdit = async (comment: PostComment) => {
+    if (!detailPost || !userToken) return;
+    const content = (commentEditDrafts[comment.id] ?? '').trim();
+    if (!content) {
+      notify('error', '评论内容不能为空');
+      return;
+    }
+    try {
+      const updated = await updatePostComment(detailPost.slug, comment.id, { content }, userToken);
+      setComments((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setEditingCommentId(null);
+      notify('success', '评论已更新');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '评论更新失败');
+    }
+  };
+
+  const removeComment = async (comment: PostComment) => {
+    if (!detailPost || !userToken) return;
+    if (!window.confirm('确定删除这条评论吗？')) return;
+    try {
+      await deletePostComment(detailPost.slug, comment.id, userToken);
+      setComments((current) => current.filter((item) => item.id !== comment.id));
+      if (editingCommentId === comment.id) setEditingCommentId(null);
+      notify('success', '评论已删除');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '评论删除失败');
+    }
+  };
+
   const saveAdminUser = async (user: BlogUser) => {
     try {
       const updated = await updateUser(user.id, user, adminToken);
@@ -796,6 +849,33 @@ function App() {
       notify('success', '用户资料已更新');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '用户更新失败');
+    }
+  };
+
+  const submitAdminUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!adminUserForm.username.trim() || !adminUserForm.password.trim()) {
+      notify('error', '请填写用户名和密码');
+      return;
+    }
+    try {
+      const user = await createUser(adminUserForm, adminToken);
+      setAdminUsers((current) => [user, ...current]);
+      setAdminUserForm(EMPTY_ADMIN_USER_FORM);
+      notify('success', '用户已创建');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '用户创建失败');
+    }
+  };
+
+  const removeAdminUser = async (user: BlogUser) => {
+    if (!window.confirm(`确定删除用户 ${user.username} 吗？`)) return;
+    try {
+      await deleteUser(user.id, adminToken);
+      setAdminUsers((current) => current.filter((item) => item.id !== user.id));
+      notify('success', '用户已删除');
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '用户删除失败');
     }
   };
 
@@ -1450,8 +1530,30 @@ function App() {
               {comments.map((comment) => (
                 <article className="comment-item" key={comment.id}>
                   <strong>{comment.nickname}<span>{comment.role}</span></strong>
-                  <p>{comment.content}</p>
-                  <small>{formatDateTime(comment.createdAt)}</small>
+                  {editingCommentId === comment.id ? (
+                    <div className="comment-edit-box">
+                      <textarea
+                        aria-label="编辑评论"
+                        onChange={(event) => setCommentEditDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
+                        value={commentEditDrafts[comment.id] ?? ''}
+                      />
+                      <div className="comment-actions">
+                        <button onClick={() => void saveCommentEdit(comment)} type="button">保存</button>
+                        <button className="ghost" onClick={cancelEditComment} type="button">取消</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p>{comment.content}</p>
+                  )}
+                  <div className="comment-meta">
+                    <small>{formatDateTime(comment.updatedAt || comment.createdAt)}</small>
+                    {userSession && (userSession.user.permission === 'admin' || comment.userId === userSession.user.id) ? (
+                      <div className="comment-actions">
+                        <button className="ghost" onClick={() => startEditComment(comment)} type="button">编辑</button>
+                        <button className="danger" onClick={() => void removeComment(comment)} type="button">删除</button>
+                      </div>
+                    ) : null}
+                  </div>
                 </article>
               ))}
               {comments.length === 0 ? <div className="empty-state">还没有评论。</div> : null}
@@ -2305,8 +2407,35 @@ function App() {
                   </div>
                   {adminPanelOpen.users ? (
                     <div className="admin-user-list">
+                      <form className="admin-user admin-user-create" onSubmit={submitAdminUser}>
+                        <input
+                          onChange={(event) => setAdminUserForm((current) => ({ ...current, username: event.target.value }))}
+                          placeholder="用户名"
+                          value={adminUserForm.username}
+                        />
+                        <input
+                          onChange={(event) => setAdminUserForm((current) => ({ ...current, password: event.target.value }))}
+                          placeholder="初始密码"
+                          type="password"
+                          value={adminUserForm.password}
+                        />
+                        <input
+                          onChange={(event) => setAdminUserForm((current) => ({ ...current, nickname: event.target.value }))}
+                          placeholder="昵称"
+                          value={adminUserForm.nickname}
+                        />
+                        <select
+                          onChange={(event) => setAdminUserForm((current) => ({ ...current, permission: event.target.value as BlogUser['permission'] }))}
+                          value={adminUserForm.permission}
+                        >
+                          <option value="reader">阅读用户</option>
+                          <option value="admin">管理员</option>
+                        </select>
+                        <button type="submit">新增用户</button>
+                      </form>
                       {adminUsers.map((user) => (
                         <div className="admin-user" key={user.id}>
+                          <span className="admin-user-name">{user.username}</span>
                           <input
                             onChange={(event) => setAdminUsers((current) => current.map((item) => (
                               item.id === user.id ? { ...item, nickname: event.target.value } : item
@@ -2324,6 +2453,7 @@ function App() {
                             <option value="admin">管理员</option>
                           </select>
                           <button onClick={() => void saveAdminUser(user)} type="button">保存</button>
+                          <button className="danger" onClick={() => void removeAdminUser(user)} type="button">删除</button>
                         </div>
                       ))}
                     </div>

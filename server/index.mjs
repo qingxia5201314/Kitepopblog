@@ -168,6 +168,14 @@ function getPostCommentsId(pathname) {
   return match ? decodeURIComponent(match[1]) : '';
 }
 
+function getPostCommentRoute(pathname) {
+  const match = pathname.match(/^\/api\/posts\/([^/]+)\/comments\/([^/]+)$/);
+  return match ? {
+    postId: decodeURIComponent(match[1]),
+    commentId: decodeURIComponent(match[2])
+  } : null;
+}
+
 function getAccountingEntryId(pathname) {
   const match = pathname.match(/^\/api\/accounting\/entries\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : '';
@@ -274,6 +282,35 @@ async function handlePosts(request, response, store, sessions, userStore) {
     return;
   }
 
+  const commentRoute = getPostCommentRoute(url.pathname);
+  if (commentRoute) {
+    const user = userStore.verify(request.headers.authorization || '');
+    if (!user) {
+      sendJson(response, 401, { ok: false, message: 'Unauthorized' });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      try {
+        const body = await readJsonBody(request);
+        const comment = store.updateComment(commentRoute.commentId, body, user);
+        sendJson(response, comment ? 200 : 403, comment ? { comment } : { ok: false, message: 'Forbidden' });
+      } catch (error) {
+        sendJson(response, 400, { ok: false, message: error?.message || 'Invalid request body' });
+      }
+      return;
+    }
+
+    if (request.method === 'DELETE') {
+      const removed = store.removeComment(commentRoute.commentId, user);
+      sendJson(response, removed ? 200 : 403, removed ? { ok: true } : { ok: false, message: 'Forbidden' });
+      return;
+    }
+
+    sendJson(response, 405, { ok: false, message: 'Method not allowed' });
+    return;
+  }
+
   const commentsPostId = getPostCommentsId(url.pathname);
   if (commentsPostId) {
     if (request.method === 'GET') {
@@ -377,6 +414,16 @@ async function handleAdminUsers(request, response, sessions, userStore) {
     return;
   }
 
+  if (url.pathname === '/api/admin/users' && request.method === 'POST') {
+    try {
+      const body = await readJsonBody(request);
+      sendJson(response, 201, { user: userStore.createUser(body) });
+    } catch (error) {
+      sendJson(response, 400, { ok: false, message: error?.message || 'User create failed' });
+    }
+    return;
+  }
+
   const match = url.pathname.match(/^\/api\/admin\/users\/([^/]+)$/);
   if (match && request.method === 'PUT') {
     try {
@@ -386,6 +433,12 @@ async function handleAdminUsers(request, response, sessions, userStore) {
     } catch (error) {
       sendJson(response, 400, { ok: false, message: error?.message || 'User update failed' });
     }
+    return;
+  }
+
+  if (match && request.method === 'DELETE') {
+    const removed = userStore.removeUser(decodeURIComponent(match[1]));
+    sendJson(response, removed ? 200 : 404, removed ? { ok: true } : { ok: false, message: 'User not found' });
     return;
   }
 

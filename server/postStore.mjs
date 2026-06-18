@@ -23,10 +23,12 @@ function rowToComment(row) {
   return {
     id: row.id,
     postId: row.post_id,
+    userId: row.user_id || '',
     nickname: row.nickname,
     role: row.role || '',
     content: row.content,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    updatedAt: row.updated_at || row.created_at
   };
 }
 
@@ -78,12 +80,19 @@ function initSchema(db) {
     CREATE TABLE IF NOT EXISTS post_comments (
       id TEXT PRIMARY KEY,
       post_id TEXT NOT NULL,
+      user_id TEXT NOT NULL DEFAULT '',
       nickname TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT '',
       content TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT ''
     );
   `);
+
+  const commentColumns = db.exec('PRAGMA table_info(post_comments)')?.[0]?.values?.map((row) => row[1]) ?? [];
+  if (!commentColumns.includes('user_id')) db.run("ALTER TABLE post_comments ADD COLUMN user_id TEXT NOT NULL DEFAULT ''");
+  if (!commentColumns.includes('updated_at')) db.run("ALTER TABLE post_comments ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
+  db.run("UPDATE post_comments SET updated_at = created_at WHERE updated_at = ''");
 }
 
 function selectComments(db, postId) {
@@ -91,6 +100,17 @@ function selectComments(db, postId) {
   if (rows.length === 0) return [];
   const { columns, values } = rows[0];
   return values.map((value) => rowToComment(Object.fromEntries(columns.map((column, index) => [column, value[index]]))));
+}
+
+function selectComment(db, commentId) {
+  const rows = db.exec('SELECT * FROM post_comments WHERE id = ?', [commentId]);
+  if (rows.length === 0) return undefined;
+  const { columns, values } = rows[0];
+  return rowToComment(Object.fromEntries(columns.map((column, index) => [column, values[0][index]])));
+}
+
+function canManageComment(comment, user) {
+  return Boolean(user && (user.permission === 'admin' || comment.userId === user.id));
 }
 
 function insertPost(db, post) {
@@ -195,18 +215,56 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       const comment = {
         id: createId(),
         postId: post.id,
+        userId: user?.id || '',
         nickname: String(user?.nickname || draft.nickname || '匿名访客').trim() || '匿名访客',
         role: user?.permission === 'admin' ? '管理员' : '阅读用户',
         content,
-        createdAt: nowIso()
+        createdAt: nowIso(),
+        updatedAt: nowIso()
       };
       db.run(
-        `INSERT INTO post_comments (id, post_id, nickname, role, content, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [comment.id, comment.postId, comment.nickname, comment.role, comment.content, comment.createdAt]
+        `INSERT INTO post_comments (id, post_id, user_id, nickname, role, content, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          comment.id,
+          comment.postId,
+          comment.userId,
+          comment.nickname,
+          comment.role,
+          comment.content,
+          comment.createdAt,
+          comment.updatedAt
+        ]
       );
       sqlite.persist();
       return comment;
+    },
+
+    updateComment(commentId, patch, user) {
+      const current = selectComment(db, commentId);
+      if (!current || !canManageComment(current, user)) return undefined;
+      const content = String(patch.content || '').trim();
+      if (!content) throw new Error('Comment content is required');
+      const updated = {
+        ...current,
+        content,
+        updatedAt: nowIso()
+      };
+      db.run('UPDATE post_comments SET content = ?, updated_at = ? WHERE id = ?', [
+        updated.content,
+        updated.updatedAt,
+        commentId
+      ]);
+      sqlite.persist();
+      return updated;
+    },
+
+    removeComment(commentId, user) {
+      const current = selectComment(db, commentId);
+      if (!current || !canManageComment(current, user)) return false;
+      db.run('DELETE FROM post_comments WHERE id = ?', [commentId]);
+      sqlite.persist();
+      return true;
     }
   };
 }

@@ -83,4 +83,20 @@ describe('post store', () => {
     expect(store.listComments(post.slug).map((item) => item.content)).toEqual(['这篇文章有用。']);
     expect(() => store.createComment(post.id, { nickname: '', role: '', content: '' })).toThrow('Comment content is required');
   });
+
+  it('updates and deletes comments with owner or admin permissions', async () => {
+    const store = await createPostStore({ dbPath: join(tempDir, 'blog.sqlite') });
+    const post = store.list({ includeDrafts: false })[0];
+    const owner = { id: 'user-owner', nickname: 'Owner', permission: 'reader' };
+    const other = { id: 'user-other', nickname: 'Other', permission: 'reader' };
+    const admin = { id: 'user-admin', nickname: 'Admin', permission: 'admin' };
+    const comment = store.createComment(post.id, { content: 'first' }, owner);
+
+    expect(comment.userId).toBe(owner.id);
+    expect(store.updateComment(comment.id, { content: 'blocked' }, other)).toBeUndefined();
+    expect(store.updateComment(comment.id, { content: 'owner edit' }, owner)?.content).toBe('owner edit');
+    expect(store.updateComment(comment.id, { content: 'admin edit' }, admin)?.content).toBe('admin edit');
+    expect(store.removeComment(comment.id, other)).toBe(false);
+    expect(store.removeComment(comment.id, admin)).toBe(true);
+  });
 });

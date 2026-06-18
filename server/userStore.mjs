@@ -88,33 +88,43 @@ export function createUserStore({ database, now = () => new Date() }) {
     return { token, expiresAt, user };
   }
 
+  function insertUser({ username, password, nickname, permission = 'reader' }) {
+    const cleanUsername = String(username || '').trim();
+    const cleanPassword = String(password || '');
+    if (!/^[A-Za-z0-9_]{3,24}$/.test(cleanUsername)) throw new Error('用户名需为 3-24 位字母、数字或下划线');
+    if (cleanPassword.length < 6) throw new Error('密码至少 6 位');
+    if (!['reader', 'admin'].includes(permission)) throw new Error('Invalid permission');
+    if (getByUsername(cleanUsername)) throw new Error('用户名已存在');
+    const time = now().toISOString();
+    const user = {
+      id: `user-${randomBytes(12).toString('hex')}`,
+      username: cleanUsername,
+      nickname: String(nickname || cleanUsername).trim() || cleanUsername,
+      permission,
+      createdAt: time,
+      updatedAt: time
+    };
+    db.run(
+      `INSERT INTO users (id, username, password_hash, nickname, role, permission, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [user.id, user.username, hashPassword(cleanPassword), user.nickname, user.permission, user.permission, user.createdAt, user.updatedAt]
+    );
+    database.persist();
+    return user;
+  }
+
   return {
     listUsers() {
       return rows(db, 'SELECT * FROM users ORDER BY created_at DESC').map(rowToUser);
     },
 
     register({ username, password, nickname }) {
-      const cleanUsername = String(username || '').trim();
-      const cleanPassword = String(password || '');
-      if (!/^[A-Za-z0-9_]{3,24}$/.test(cleanUsername)) throw new Error('用户名需为 3-24 位字母、数字或下划线');
-      if (cleanPassword.length < 6) throw new Error('密码至少 6 位');
-      if (getByUsername(cleanUsername)) throw new Error('用户名已存在');
-      const time = now().toISOString();
-      const user = {
-        id: `user-${randomBytes(12).toString('hex')}`,
-        username: cleanUsername,
-        nickname: String(nickname || cleanUsername).trim() || cleanUsername,
-        permission: 'reader',
-        createdAt: time,
-        updatedAt: time
-      };
-      db.run(
-        `INSERT INTO users (id, username, password_hash, nickname, role, permission, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [user.id, user.username, hashPassword(cleanPassword), user.nickname, user.permission, user.permission, user.createdAt, user.updatedAt]
-      );
-      database.persist();
+      const user = insertUser({ username, password, nickname, permission: 'reader' });
       return issueSession(user);
+    },
+
+    createUser(draft) {
+      return insertUser(draft);
     },
 
     login({ username, password }) {
@@ -150,6 +160,15 @@ export function createUserStore({ database, now = () => new Date() }) {
       ]);
       database.persist();
       return updated;
+    },
+
+    removeUser(id) {
+      const current = getById(id);
+      if (!current) return false;
+      db.run('DELETE FROM user_sessions WHERE user_id = ?', [id]);
+      db.run('DELETE FROM users WHERE id = ?', [id]);
+      database.persist();
+      return true;
     }
   };
 }

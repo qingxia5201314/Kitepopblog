@@ -1346,6 +1346,29 @@ textarea {
   color: #68706a;
 }
 
+.comment-meta,
+.comment-actions,
+.admin-user-create {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.comment-meta {
+  justify-content: space-between;
+}
+
+.comment-edit-box {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 0;
+}
+
+.comment-edit-box textarea {
+  min-height: 110px;
+}
+
 .code-rule {
   background: #17201d;
   border-radius: 6px;
@@ -1418,6 +1441,26 @@ textarea {
   gap: 8px;
   grid-template-columns: 1fr 140px auto;
   padding: 10px;
+}
+
+.admin-user-create {
+  background: #fffaf3;
+  border: 1px dashed #d6c6b1;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.admin-user-create input,
+.admin-user-create select {
+  min-width: 0;
+}
+
+.admin-user-name {
+  color: #5d5344;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .admin-user button {

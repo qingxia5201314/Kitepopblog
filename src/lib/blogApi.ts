@@ -94,6 +94,35 @@ export async function createPostComment(postIdOrSlug: string, draft: PostComment
   return payload.comment;
 }
 
+export async function updatePostComment(
+  postIdOrSlug: string,
+  commentId: string,
+  patch: PostCommentDraft,
+  token: string
+): Promise<PostComment> {
+  const payload = await parseResponse<{ comment: PostComment }>(
+    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        ...authHeaders(token)
+      },
+      body: JSON.stringify(patch)
+    })
+  );
+
+  return payload.comment;
+}
+
+export async function deletePostComment(postIdOrSlug: string, commentId: string, token: string): Promise<void> {
+  await parseResponse<{ ok: boolean }>(
+    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'DELETE',
+      headers: authHeaders(token)
+    })
+  );
+}
+
 export async function registerUser(draft: {
   username: string;
   password: string;
@@ -136,6 +165,23 @@ export async function listUsers(token: string): Promise<BlogUser[]> {
   return payload.users;
 }
 
+export async function createUser(
+  draft: { username: string; password: string; nickname: string; permission: BlogUser['permission'] },
+  token: string
+): Promise<BlogUser> {
+  const payload = await parseResponse<{ user: BlogUser }>(
+    await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...authHeaders(token)
+      },
+      body: JSON.stringify(draft)
+    })
+  );
+  return payload.user;
+}
+
 export async function updateUser(
   id: string,
   patch: Partial<Pick<BlogUser, 'nickname' | 'permission'>>,
@@ -152,4 +198,13 @@ export async function updateUser(
     })
   );
   return payload.user;
+}
+
+export async function deleteUser(id: string, token: string): Promise<void> {
+  await parseResponse<{ ok: boolean }>(
+    await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(token)
+    })
+  );
 }

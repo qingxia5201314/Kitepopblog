@@ -40,10 +40,12 @@ export type BlogPostDraft = Omit<BlogPost, 'id' | 'slug' | 'createdAt' | 'update
 export interface PostComment {
   id: string;
   postId: string;
+  userId?: string;
   nickname: string;
   role: string;
   content: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface PostCommentDraft {

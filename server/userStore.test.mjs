@@ -40,4 +40,21 @@ describe('user store', () => {
     expect(updated.nickname).toBe('新昵称');
     expect(store.verify(`Bearer ${login.token}`)?.nickname).toBe('新昵称');
   });
+
+  it('lets admins create, update, and delete users', () => {
+    const created = store.createUser({
+      username: 'admin_made',
+      password: 'secret123',
+      nickname: 'Created',
+      permission: 'admin'
+    });
+    const updated = store.updateUser(created.id, { nickname: 'Updated', permission: 'reader' });
+    const removed = store.removeUser(created.id);
+
+    expect(created.permission).toBe('admin');
+    expect(updated.nickname).toBe('Updated');
+    expect(updated.permission).toBe('reader');
+    expect(removed).toBe(true);
+    expect(store.listUsers()).toHaveLength(0);
+  });
 });
