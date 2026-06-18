@@ -1473,92 +1473,123 @@ function App() {
 
       {mode === 'home' && detailPost ? (
         <section className="article-page">
-          <button className="back-link" onClick={closePostDetail} type="button">返回文章列表</button>
-          {getSafeImageUrl(detailPost.coverImage) ? (
-            <img alt={detailPost.title} className="article-cover-image" src={getSafeImageUrl(detailPost.coverImage)} {...safeImageAttributes} />
-          ) : (
-            <div className={`article-cover cover-${detailPost.cover}`}>
-              <span>
-                <Icon name={getCategoryIcon(detailPost.category)} />
-                {getCategory(detailPost.category).name}
-              </span>
-            </div>
-          )}
-          <p className="article-meta">
-            <span><Icon name="calendar" />{formatDateTime(detailPost.updatedAt)}</span>
-            <span><Icon name="clock" />{calculateReadingMinutes(detailPost.content)} 分钟阅读</span>
-            <span><Icon name={getCategoryIcon(detailPost.category)} />{getCategory(detailPost.category).name}</span>
-          </p>
-          <h1>{detailPost.title}</h1>
-          <p className="summary">{detailPost.summary}</p>
-          <div className="tag-row">
-            {detailPost.tags.map((tag) => (
-              <button key={tag} onClick={() => toggleActiveTag(tag)} type="button">
-                <Icon name="tag" />
-                {tag}
-              </button>
-            ))}
-          </div>
-          <div className="article-body">{renderMarkdown(detailPost.content)}</div>
-          <section className="comment-panel">
-            <div className="panel-heading">
-              <h3>评论 · {comments.length}</h3>
-              {userSession ? (
-                <div className="comment-user-chip">
-                  <strong>{userSession.user.nickname}</strong>
-                  <span>{permissionLabel(userSession.user.permission)}</span>
-                </div>
-              ) : null}
-            </div>
-            {userSession ? (
-              <form className="comment-form" onSubmit={submitComment}>
-                <textarea
-                  aria-label="评论内容"
-                  onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
-                  placeholder="写点想法..."
-                  value={commentForm.content}
-                />
-                <button disabled={commentLoading} type="submit">{commentLoading ? '发布中...' : '发布评论'}</button>
-              </form>
-            ) : (
-              <div className="comment-empty-card">
-                <strong>登录后可评论</strong>
-                <p>注册后默认只有阅读权限，评论会自动显示你的昵称和权限身份。</p>
+          <div className="article-page-shell">
+            <aside className="article-page-rail">
+              <button className="back-link" onClick={closePostDetail} type="button">{'\u8fd4\u56de\u6587\u7ae0\u5217\u8868'}</button>
+              <div className="article-rail-card">
+                <p className="eyebrow">Reading Focus</p>
+                <strong>{getCategory(detailPost.category).name}</strong>
+                <span>{formatDateTime(detailPost.updatedAt)}</span>
+                <span>{calculateReadingMinutes(detailPost.content)} {'\u5206\u949f\u9605\u8bfb'}</span>
               </div>
-            )}
-            <div className="comment-list">
-              {comments.map((comment) => (
-                <article className="comment-item" key={comment.id}>
-                  <strong>{comment.nickname}<span>{comment.role}</span></strong>
-                  {editingCommentId === comment.id ? (
-                    <div className="comment-edit-box">
-                      <textarea
-                        aria-label="编辑评论"
-                        onChange={(event) => setCommentEditDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
-                        value={commentEditDrafts[comment.id] ?? ''}
-                      />
-                      <div className="comment-actions">
-                        <button onClick={() => void saveCommentEdit(comment)} type="button">保存</button>
-                        <button className="ghost" onClick={cancelEditComment} type="button">取消</button>
-                      </div>
-                    </div>
+              <div className="article-rail-card">
+                <p className="eyebrow">Active Tags</p>
+                <div className="tag-row article-rail-tags">
+                  {detailPost.tags.map((tag) => (
+                    <button key={tag} onClick={() => toggleActiveTag(tag)} type="button">
+                      <Icon name="tag" />
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+            <div className="article-page-main">
+              <section className="article-header-card">
+                <div className="article-header-media">
+                  {getSafeImageUrl(detailPost.coverImage) ? (
+                    <img alt={detailPost.title} className="article-cover-image" src={getSafeImageUrl(detailPost.coverImage)} {...safeImageAttributes} />
                   ) : (
-                    <p>{comment.content}</p>
+                    <div className={`article-cover cover-${detailPost.cover}`}>
+                      <span>
+                        <Icon name={getCategoryIcon(detailPost.category)} />
+                        {getCategory(detailPost.category).name}
+                      </span>
+                    </div>
                   )}
-                  <div className="comment-meta">
-                    <small>{formatDateTime(comment.updatedAt || comment.createdAt)}</small>
-                    {userSession && (userSession.user.permission === 'admin' || comment.userId === userSession.user.id) ? (
-                      <div className="comment-actions">
-                        <button className="ghost" onClick={() => startEditComment(comment)} type="button">编辑</button>
-                        <button className="danger" onClick={() => void removeComment(comment)} type="button">删除</button>
-                      </div>
-                    ) : null}
+                </div>
+                <div className="article-header-copy">
+                  <p className="article-meta">
+                    <span><Icon name="calendar" />{formatDateTime(detailPost.updatedAt)}</span>
+                    <span><Icon name="clock" />{calculateReadingMinutes(detailPost.content)} {'\u5206\u949f\u9605\u8bfb'}</span>
+                    <span><Icon name={getCategoryIcon(detailPost.category)} />{getCategory(detailPost.category).name}</span>
+                  </p>
+                  <h1>{detailPost.title}</h1>
+                  <p className="summary">{detailPost.summary}</p>
+                  <div className="tag-row">
+                    {detailPost.tags.map((tag) => (
+                      <button key={tag} onClick={() => toggleActiveTag(tag)} type="button">
+                        <Icon name="tag" />
+                        {tag}
+                      </button>
+                    ))}
                   </div>
-                </article>
-              ))}
-              {comments.length === 0 ? <div className="empty-state">还没有评论。</div> : null}
+                </div>
+              </section>
+              <section className="article-body-card">
+                <div className="article-body">{renderMarkdown(detailPost.content)}</div>
+              </section>
+              <section className="comment-panel">
+                <div className="panel-heading">
+                  <h3>{'\u8bc4\u8bba'} {'\u00b7'} {comments.length}</h3>
+                  {userSession ? (
+                    <div className="comment-user-chip">
+                      <strong>{userSession.user.nickname}</strong>
+                      <span>{permissionLabel(userSession.user.permission)}</span>
+                    </div>
+                  ) : null}
+                </div>
+                {userSession ? (
+                  <form className="comment-form" onSubmit={submitComment}>
+                    <textarea
+                      aria-label={'\u8bc4\u8bba\u5185\u5bb9'}
+                      onChange={(event) => setCommentForm((current) => ({ ...current, content: event.target.value }))}
+                      placeholder={'\u5199\u70b9\u60f3\u6cd5...'}
+                      value={commentForm.content}
+                    />
+                    <button disabled={commentLoading} type="submit">{commentLoading ? '\u53d1\u5e03\u4e2d...' : '\u53d1\u5e03\u8bc4\u8bba'}</button>
+                  </form>
+                ) : (
+                  <div className="comment-empty-card">
+                    <strong>{'\u767b\u5f55\u540e\u53ef\u8bc4\u8bba'}</strong>
+                    <p>{'\u6ce8\u518c\u540e\u9ed8\u8ba4\u53ea\u6709\u9605\u8bfb\u6743\u9650\uff0c\u8bc4\u8bba\u4f1a\u81ea\u52a8\u663e\u793a\u4f60\u7684\u6635\u79f0\u548c\u6743\u9650\u8eab\u4efd\u3002'}</p>
+                  </div>
+                )}
+                <div className="comment-list">
+                  {comments.map((comment) => (
+                    <article className="comment-item" key={comment.id}>
+                      <strong>{comment.nickname}<span>{comment.role}</span></strong>
+                      {editingCommentId === comment.id ? (
+                        <div className="comment-edit-box">
+                          <textarea
+                            aria-label={'\u7f16\u8f91\u8bc4\u8bba'}
+                            onChange={(event) => setCommentEditDrafts((current) => ({ ...current, [comment.id]: event.target.value }))}
+                            value={commentEditDrafts[comment.id] ?? ''}
+                          />
+                          <div className="comment-actions">
+                            <button onClick={() => void saveCommentEdit(comment)} type="button">{'\u4fdd\u5b58'}</button>
+                            <button className="ghost" onClick={cancelEditComment} type="button">{'\u53d6\u6d88'}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p>{comment.content}</p>
+                      )}
+                      <div className="comment-meta">
+                        <small>{formatDateTime(comment.updatedAt || comment.createdAt)}</small>
+                        {userSession && (userSession.user.permission === 'admin' || comment.userId === userSession.user.id) ? (
+                          <div className="comment-actions">
+                            <button className="ghost" onClick={() => startEditComment(comment)} type="button">{'\u7f16\u8f91'}</button>
+                            <button className="danger" onClick={() => void removeComment(comment)} type="button">{'\u5220\u9664'}</button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                  {comments.length === 0 ? <div className="empty-state">{'\u8fd8\u6ca1\u6709\u8bc4\u8bba\u3002'}</div> : null}
+                </div>
+              </section>
             </div>
-          </section>
+          </div>
         </section>
       ) : mode === 'home' ? (
         <>
@@ -1569,6 +1600,10 @@ function App() {
               <p>
                 这里沉淀个人生活、SRC 挖掘案例、专业学习和知识点记录。
               </p>
+              <div className="hero-notes">
+                <span>Poster-led identity</span>
+                <span>Life / SRC / Study / Notes</span>
+              </div>
               <div className="hero-actions">
                 <button onClick={() => setMode('admin')} type="button">{'SOS \u53d1\u6587'}</button>
                 <button className="ghost" onClick={() => setActiveCategory('src')} type="button">查看 SRC 复盘</button>
@@ -1629,15 +1664,23 @@ function App() {
           </section>
 
           <section className="home-post-section">
-            <aside className="post-panel home-post-panel">
-              <div className="panel-heading">
-                <h2>文章列表</h2>
-                <input
-                  aria-label="搜索文章"
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索标题、标签、正文"
-                  value={query}
-                />
+            <div className="home-post-shell">
+              <aside className="post-panel home-filter-panel">
+                <div className="home-filter-header">
+                  <div>
+                    <p className="eyebrow">Index / Filter</p>
+                    <h2>文章索引</h2>
+                  </div>
+                  <span className="filter-total">{indexedPosts.length} 篇</span>
+                </div>
+                <div className="home-filter-search">
+                  <input
+                    aria-label="搜索文章"
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="搜索标题、标签、正文"
+                    value={query}
+                  />
+                </div>
                 <div className="index-filters" aria-label="文章索引筛选">
                   <FilterMenu
                     label={dateFilter === 'all' ? '全部时间' : dateFilter === '7d' ? '最近 7 天' : dateFilter === '30d' ? '最近 30 天' : '今年'}
@@ -1674,42 +1717,56 @@ function App() {
                       清空
                     </button>
                   </div>
-                ) : null}
-              </div>
-              <div className="post-list">
-                {indexedPosts.map((post) => {
-                  const category = getCategory(post.category);
-                  const coverImage = getSafeImageUrl(post.coverImage);
-                  return (
-                    <button
-                      className="post-item"
-                      key={post.id}
-                      onClick={() => openPostDetail(post)}
-                      type="button"
-                    >
-                      {coverImage ? (
-                        <img alt="" className="cover-thumb" src={coverImage} {...safeImageAttributes} />
-                      ) : (
-                        <span className={`cover-dot cover-${post.cover}`}>
-                          <Icon name={getCategoryIcon(post.category)} />
+                ) : (
+                  <p className="home-filter-hint">点击文章页标签可加入筛选，这里会保留当前标签组合。</p>
+                )}
+              </aside>
+              <section className="post-panel home-post-panel">
+                <div className="home-post-header">
+                  <div>
+                    <p className="eyebrow">Selected Writing</p>
+                    <h2>最近文章</h2>
+                  </div>
+                  <p>从生活记录到漏洞复盘，按时间与标签继续展开。</p>
+                </div>
+                <div className="post-list">
+                  {indexedPosts.map((post) => {
+                    const category = getCategory(post.category);
+                    const coverImage = getSafeImageUrl(post.coverImage);
+                    return (
+                      <button
+                        className="post-item"
+                        key={post.id}
+                        onClick={() => openPostDetail(post)}
+                        type="button"
+                      >
+                        <span className="post-item-cover">
+                          {coverImage ? (
+                            <img alt="" className="cover-thumb" src={coverImage} {...safeImageAttributes} />
+                          ) : (
+                            <span className={`cover-dot cover-${post.cover}`}>
+                              <Icon name={getCategoryIcon(post.category)} />
+                            </span>
+                          )}
                         </span>
-                      )}
-                      <span>
-                        <strong>{post.title}</strong>
-                        <small>
-                          <Icon name={getCategoryIcon(post.category)} />
-                          {category.name}
-                          <Icon name="calendar" />
-                          {formatDateTime(post.updatedAt)}
-                          <Icon name="clock" />
-                          {calculateReadingMinutes(post.content)} 分钟
-                        </small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </aside>
+                        <span className="post-item-copy">
+                          <span className="post-item-topline">
+                            <em>{category.name}</em>
+                            <span>{formatDateTime(post.updatedAt)}</span>
+                          </span>
+                          <strong>{post.title}</strong>
+                          <small>{post.summary}</small>
+                          <span className="post-item-footer">
+                            <span><Icon name="clock" />{calculateReadingMinutes(post.content)} 分钟</span>
+                            <span><Icon name="tag" />{post.tags.slice(0, 2).join(' · ') || '未设标签'}</span>
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
           </section>
         </>
       ) : mode === 'accounting' ? (
