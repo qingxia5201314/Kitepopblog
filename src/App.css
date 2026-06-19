@@ -3041,28 +3041,28 @@ body::before {
   box-shadow: 0 8px 18px rgba(42, 19, 15, 0.05);
   color: #694039;
   display: inline-flex;
-  font-size: 0.96rem;
+  font-size: 0.92rem;
   font-weight: 900;
-  gap: 8px;
-  min-height: 40px;
-  padding: 5px 14px 5px 8px;
+  gap: 7px;
+  min-height: 34px;
+  padding: 3px 12px 3px 9px;
 }
 
 .article-meta span .ui-icon {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
+  background: rgba(216, 75, 73, 0.1);
+  border: 1px solid rgba(216, 75, 73, 0.18);
+  border-radius: 50%;
   box-shadow: none;
   color: #d83f42;
   font-size: 1rem;
-  height: 30px;
-  width: 30px;
+  height: 24px;
+  width: 24px;
 }
 
 .article-meta span .ui-icon svg {
-  height: 28px;
-  stroke-width: 3.5;
-  width: 28px;
+  height: 16px;
+  stroke-width: 3.2;
+  width: 16px;
 }
 
 .hero-notes {
@@ -3597,19 +3597,19 @@ button:hover,
 }
 
 .article-header-copy .article-meta span .ui-icon {
-  background: transparent;
-  border: 0;
-  border-radius: 0;
+  background: rgba(216, 75, 73, 0.1);
+  border: 1px solid rgba(216, 75, 73, 0.18);
+  border-radius: 50%;
   box-shadow: none;
   color: #d83f42;
-  height: 30px;
-  width: 30px;
+  height: 24px;
+  width: 24px;
 }
 
 .article-header-copy .article-meta span .ui-icon svg {
-  height: 28px;
-  stroke-width: 3.5;
-  width: 28px;
+  height: 16px;
+  stroke-width: 3.2;
+  width: 16px;
 }
 
 .user-auth-card > div {
