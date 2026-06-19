@@ -177,13 +177,45 @@ describe('accounting store', () => {
     expect(after.expenseCents).toBe(before.expenseCents);
   });
 
-  it('keeps income and expense custom categories with the same name as separate categories', () => {
+  it('merges income and expense custom categories with the same name into one category', () => {
     const expense = store.createCategory({ name: 'codex', type: 'expense' });
     const income = store.createCategory({ name: 'codex', type: 'income' });
+    const matching = store.getMonthData({ month: '2026-06' }).categories.filter((category) => category.name === 'codex');
 
-    expect(expense.id).not.toBe(income.id);
+    expect(income.id).toBe(expense.id);
     expect(expense.type).toBe('expense');
-    expect(income.type).toBe('income');
+    expect(income.type).toBe('both');
+    expect(matching).toHaveLength(1);
+    expect(matching[0].type).toBe('both');
+  });
+
+  it('coalesces existing duplicate custom categories and keeps their entries', () => {
+    const expense = store.createCategory({ name: 'codex', type: 'expense' });
+    const income = store.createCategory({ name: 'codex-income', type: 'income' });
+    store.createEntry({
+      type: 'expense',
+      amountYuan: '8',
+      category: expense.id,
+      account: 'wechat',
+      spentAt: '2026-06-19',
+      note: ''
+    });
+    store.createEntry({
+      type: 'income',
+      amountYuan: '12',
+      category: income.id,
+      account: 'wechat',
+      spentAt: '2026-06-19',
+      note: ''
+    });
+    store.updateCategory(income.id, { name: 'codex', type: 'income' });
+
+    const monthData = store.getMonthData({ month: '2026-06' });
+    const matching = monthData.categories.filter((category) => category.name === 'codex');
+
+    expect(matching).toHaveLength(1);
+    expect(matching[0].type).toBe('both');
+    expect(monthData.entries.every((entry) => entry.category === matching[0].id)).toBe(true);
   });
 
   it('keeps dashboard summary based on the whole month when entries are filtered', () => {

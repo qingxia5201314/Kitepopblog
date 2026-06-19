@@ -104,6 +104,12 @@ function isDefaultCategory(id) {
   return DEFAULT_ACCOUNTING_CATEGORIES.some((category) => category.id === id);
 }
 
+function mergeCategoryTypes(...types) {
+  const unique = [...new Set(types.filter(Boolean))];
+  if (unique.includes('both') || unique.length > 1) return 'both';
+  return unique[0] || 'both';
+}
+
 function normalizeEntryDraft(draft) {
   assertEntryDraft(draft);
   return {
@@ -176,7 +182,38 @@ export function createAccountingStore({ database }) {
     return { monthlyBudgetCents: 0, savingGoal: null };
   }
 
+  function coalesceCustomCategories() {
+    const rows = selectRows(
+      db,
+      'SELECT rowid AS rowid, id, name, type, accent, created_at FROM accounting_categories ORDER BY created_at ASC, rowid ASC'
+    );
+    const groups = new Map();
+    rows.forEach((row) => {
+      const key = String(row.name || '').trim();
+      groups.set(key, [...(groups.get(key) || []), row]);
+    });
+
+    let changed = false;
+    groups.forEach((group) => {
+      if (group.length === 0) return;
+      const keeper = group[0];
+      const mergedType = mergeCategoryTypes(...group.map((row) => row.type));
+      if (keeper.type !== mergedType) {
+        db.run('UPDATE accounting_categories SET type = ? WHERE id = ?', [mergedType, keeper.id]);
+        changed = true;
+      }
+      group.slice(1).forEach((duplicate) => {
+        db.run('UPDATE accounting_entries SET category = ? WHERE category = ?', [keeper.id, duplicate.id]);
+        db.run('DELETE FROM accounting_categories WHERE id = ?', [duplicate.id]);
+        changed = true;
+      });
+    });
+
+    if (changed) database.persist();
+  }
+
   function listCategories() {
+    coalesceCustomCategories();
     return [
       ...DEFAULT_ACCOUNTING_CATEGORIES,
       ...selectRows(db, 'SELECT * FROM accounting_categories ORDER BY created_at ASC, rowid ASC').map(rowToCategory)
@@ -212,8 +249,16 @@ export function createAccountingStore({ database }) {
 
     createCategory(draft) {
       const normalized = normalizeCategoryDraft(draft);
-      const existing = listCategories().find((category) => category.name === normalized.name && category.type === normalized.type);
-      if (existing) return existing;
+      const existing = listCategories().find((category) => category.name === normalized.name);
+      if (existing?.custom) {
+        const mergedType = mergeCategoryTypes(existing.type, normalized.type);
+        if (mergedType !== existing.type) {
+          db.run('UPDATE accounting_categories SET type = ? WHERE id = ?', [mergedType, existing.id]);
+          database.persist();
+        }
+        return { ...existing, type: mergedType };
+      }
+      if (existing && (existing.type === 'both' || existing.type === normalized.type)) return existing;
       const category = {
         id: `custom-${Date.now()}-${Math.random().toString(16).slice(2)}`,
         ...normalized,
@@ -241,7 +286,8 @@ export function createAccountingStore({ database }) {
       });
       db.run('UPDATE accounting_categories SET name = ?, type = ? WHERE id = ?', [normalized.name, normalized.type, id]);
       database.persist();
-      return { ...current, ...normalized };
+      coalesceCustomCategories();
+      return listCategories().find((category) => category.name === normalized.name && category.custom) ?? { ...current, ...normalized };
     },
 
     removeCategory(id) {
