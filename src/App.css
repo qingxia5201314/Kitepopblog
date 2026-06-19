@@ -2978,6 +2978,13 @@ body::before {
   min-width: 0;
 }
 
+.article-header-media .article-cover-image {
+  aspect-ratio: auto;
+  background: rgba(255, 250, 243, 0.92);
+  max-height: min(52vh, 520px);
+  object-fit: contain;
+}
+
 .article-header-copy {
   align-self: center;
   display: grid;
