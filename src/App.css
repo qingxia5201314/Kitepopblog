@@ -3876,6 +3876,273 @@ textarea {
   }
 }
 
+/* Layout polish: clearer rhythm across the public reading pages. */
+.app-shell {
+  padding-inline: clamp(14px, 3vw, 32px);
+}
+
+.topbar,
+.hero-band,
+.metrics-strip,
+.user-auth-card,
+.home-post-section,
+.article-page {
+  width: min(100%, 1240px);
+}
+
+.topbar {
+  margin-bottom: 22px;
+}
+
+.hero-band {
+  display: grid;
+  grid-template-columns: minmax(0, 0.96fr) minmax(360px, 0.82fr);
+  min-height: clamp(430px, 48vw, 560px);
+  padding: clamp(28px, 4vw, 46px);
+}
+
+.hero-copy {
+  max-width: 620px;
+}
+
+.hero-copy h1 {
+  font-size: clamp(3.5rem, 7vw, 5.9rem);
+  line-height: 0.94;
+  margin: 8px 0 18px;
+}
+
+.hero-copy p {
+  max-width: 560px;
+}
+
+.hero-actions {
+  margin-top: 24px;
+}
+
+.hero-visual {
+  min-height: 0;
+}
+
+.hero-art img {
+  max-height: min(50vw, 560px);
+}
+
+.metrics-strip {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-inline: auto;
+  padding: 12px;
+}
+
+.metrics-strip span {
+  background: rgba(255, 253, 249, 0.08);
+  border: 1px solid rgba(255, 253, 249, 0.1);
+  border-radius: 12px;
+  justify-content: center;
+  min-height: 52px;
+}
+
+.user-auth-card {
+  margin-inline: auto;
+}
+
+.home-post-section {
+  margin-top: 22px;
+}
+
+.home-post-shell {
+  align-items: start;
+  gap: 22px;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+}
+
+.home-filter-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.home-filter-panel,
+.home-post-panel {
+  padding: 22px;
+}
+
+.home-post-panel .post-list {
+  gap: 14px;
+}
+
+.home-post-panel .post-item {
+  border-radius: 14px;
+  grid-template-columns: 82px minmax(0, 1fr);
+  min-height: 176px;
+  padding: 18px;
+}
+
+.home-post-panel .cover-dot,
+.home-post-panel .cover-thumb {
+  height: 82px;
+  width: 82px;
+}
+
+.post-item-copy strong {
+  font-size: 1.16rem;
+}
+
+.post-item-copy small {
+  -webkit-line-clamp: 3;
+}
+
+.article-page {
+  margin-top: 22px;
+}
+
+.article-header-card {
+  grid-template-columns: minmax(300px, 0.78fr) minmax(0, 1fr);
+  padding: 22px;
+}
+
+.article-body-card {
+  padding: clamp(24px, 4vw, 44px);
+}
+
+.article-body-card .article-body {
+  font-size: 1.05rem;
+  line-height: 1.9;
+  margin-inline: auto;
+  max-width: 780px;
+}
+
+@media (max-width: 980px) {
+  .hero-band {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-copy {
+    max-width: 100%;
+  }
+
+  .home-filter-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 620px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .app-shell {
+    padding-inline: 10px;
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    gap: 10px;
+    margin-bottom: 12px;
+    max-width: calc(100vw - 20px);
+    padding: 12px;
+  }
+
+  .brand-button strong {
+    font-size: 1.16rem;
+  }
+
+  .topbar nav {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    min-width: 0;
+    width: 100%;
+  }
+
+  .topbar nav button {
+    min-height: 40px;
+    min-width: 0;
+    padding-inline: 6px;
+  }
+
+  .hero-band {
+    gap: 10px;
+    max-width: calc(100vw - 20px);
+    min-height: 0;
+    padding: 18px;
+  }
+
+  .hero-visual {
+    min-height: 218px;
+  }
+
+  .hero-art img {
+    max-height: 292px;
+    max-width: min(96%, 292px);
+  }
+
+  .hero-copy {
+    padding-top: 6px;
+  }
+
+  .hero-copy h1 {
+    font-size: 2.55rem;
+    max-width: none;
+  }
+
+  .hero-actions {
+    margin-top: 16px;
+  }
+
+  .metrics-strip {
+    gap: 8px;
+    max-width: calc(100vw - 20px);
+    padding: 8px;
+  }
+
+  .metrics-strip span {
+    align-content: center;
+    flex-wrap: wrap;
+    min-height: 58px;
+    min-width: 0;
+    padding: 6px;
+  }
+
+  .user-auth-card {
+    max-width: calc(100vw - 20px);
+    padding: 10px;
+  }
+
+  .home-filter-panel,
+  .home-post-panel {
+    max-width: calc(100vw - 20px);
+    padding: 16px;
+  }
+
+  .home-post-panel .post-item {
+    grid-template-columns: 58px minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .home-post-panel .cover-dot,
+  .home-post-panel .cover-thumb {
+    height: 58px;
+    width: 58px;
+  }
+
+  .post-item-topline {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .article-page {
+    padding: 14px;
+  }
+
+  .article-header-card,
+  .article-body-card,
+  .comment-panel {
+    padding: 16px;
+  }
+}
+
 @keyframes hero-spin {
   from {
     transform: translate(-50%, -52%) rotate(0deg);
