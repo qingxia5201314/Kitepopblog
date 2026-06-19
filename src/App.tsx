@@ -34,6 +34,7 @@ import {
   ACCOUNTING_CATEGORIES,
   ACCOUNTING_ENTRY_COLLAPSE_LIMIT,
   ACCOUNTING_PAYMENT_METHODS,
+  AccountingCategory,
   AccountingCategoryId,
   AccountingEntry,
   AccountingEntryDraft,
@@ -137,6 +138,17 @@ const EMPTY_ADMIN_USER_FORM = {
   nickname: '',
   permission: 'reader' as BlogUser['permission']
 };
+
+const ACCOUNTING_CATEGORY_TYPE_LABELS: Record<AccountingCategory['type'], string> = {
+  expense: '支出',
+  income: '收入',
+  both: '通用'
+};
+
+function getAccountingCategoryLabel(category: AccountingCategory, categories: AccountingCategory[]) {
+  const hasDuplicateName = categories.some((item) => item.id !== category.id && item.name === category.name);
+  return hasDuplicateName ? `${category.name} · ${ACCOUNTING_CATEGORY_TYPE_LABELS[category.type]}` : category.name;
+}
 
 const EMPTY_ACCOUNTING_ENTRY: AccountingEntryDraft = {
   type: 'expense',
@@ -1949,7 +1961,9 @@ function App() {
                         value={accountingForm.category}
                       >
                         {accountingCategories.map((category) => (
-                          <option key={category.id} value={category.id}>{category.name}</option>
+                          <option key={category.id} value={category.id}>
+                            {getAccountingCategoryLabel(category, allAccountingCategories)}
+                          </option>
                         ))}
                       </select>
                     </label>
@@ -1975,11 +1989,11 @@ function App() {
                       </select>
                     </label>
                   </div>
-                  <div className="custom-category-panel">
-                    <div>
+                  <details className="custom-category-panel">
+                    <summary>
                       <strong>自定义分类</strong>
                       <small>添加后会同步出现在记账分类和流水筛选里。</small>
-                    </div>
+                    </summary>
                     <div className="custom-category-controls">
                       <input
                         onChange={(event) => setCustomAccountingCategoryName(event.target.value)}
@@ -2030,7 +2044,7 @@ function App() {
                         })}
                       </div>
                     ) : null}
-                  </div>
+                  </details>
                   <label>
                     备注
                     <input
@@ -2082,7 +2096,9 @@ function App() {
                       >
                         <option value="all">全部分类</option>
                         {(accountingData?.categories?.length ? accountingData.categories : ACCOUNTING_CATEGORIES).map((category) => (
-                          <option key={category.id} value={category.id}>{category.name}</option>
+                          <option key={category.id} value={category.id}>
+                            {getAccountingCategoryLabel(category, allAccountingCategories)}
+                          </option>
                         ))}
                       </select>
                     </label>

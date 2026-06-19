@@ -248,8 +248,6 @@ export function createAccountingStore({ database }) {
       if (isDefaultCategory(id)) throw new Error('Default category cannot be deleted');
       const current = selectRows(db, 'SELECT id FROM accounting_categories WHERE id = ?', [id])[0];
       if (!current) return false;
-      const used = selectRows(db, 'SELECT id FROM accounting_entries WHERE category = ? LIMIT 1', [id])[0];
-      if (used) throw new Error('Category is used by entries');
       db.run('DELETE FROM accounting_categories WHERE id = ?', [id]);
       database.persist();
       return true;
@@ -362,7 +360,8 @@ export function createAccountingStore({ database }) {
     getMonthData(options = {}) {
       const settings = getSettings();
       const entries = this.listEntries(options);
-      const summary = summarizeEntries(entries, settings);
+      const summaryEntries = this.listEntries({ month: options.month });
+      const summary = summarizeEntries(summaryEntries, settings);
       return {
         entries,
         categories: listCategories(),

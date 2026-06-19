@@ -141,7 +141,7 @@ describe('accounting store', () => {
     expect(deleted).toBe(true);
   });
 
-  it('refuses to delete a category already used by entries', () => {
+  it('allows deleting a category already used by entries', () => {
     const category = store.createCategory({ name: '咖啡', type: 'expense' });
     store.createEntry({
       type: 'expense',
@@ -152,7 +152,65 @@ describe('accounting store', () => {
       note: 'latte'
     });
 
-    expect(() => store.removeCategory(category.id)).toThrow('Category is used by entries');
+    expect(store.removeCategory(category.id)).toBe(true);
+  });
+
+  it('does not change monthly summary when deleting a used custom category', () => {
+    store.updateSettings({ monthlyBudgetYuan: '100' });
+    const category = store.createCategory({ name: 'codex', type: 'expense' });
+    store.createEntry({
+      type: 'expense',
+      amountYuan: '18',
+      category: category.id,
+      account: 'wechat',
+      spentAt: '2026-06-17',
+      note: 'latte'
+    });
+
+    const before = store.getMonthData({ month: '2026-06' }).summary;
+    const deleted = store.removeCategory(category.id);
+    const after = store.getMonthData({ month: '2026-06' }).summary;
+
+    expect(deleted).toBe(true);
+    expect(store.getMonthData({ month: '2026-06' }).categories.some((item) => item.id === category.id)).toBe(false);
+    expect(after.budgetRemainingCents).toBe(before.budgetRemainingCents);
+    expect(after.expenseCents).toBe(before.expenseCents);
+  });
+
+  it('keeps income and expense custom categories with the same name as separate categories', () => {
+    const expense = store.createCategory({ name: 'codex', type: 'expense' });
+    const income = store.createCategory({ name: 'codex', type: 'income' });
+
+    expect(expense.id).not.toBe(income.id);
+    expect(expense.type).toBe('expense');
+    expect(income.type).toBe('income');
+  });
+
+  it('keeps dashboard summary based on the whole month when entries are filtered', () => {
+    store.updateSettings({ monthlyBudgetYuan: '100' });
+    const traffic = store.createCategory({ name: 'traffic', type: 'expense' });
+    store.createEntry({
+      type: 'expense',
+      amountYuan: '10',
+      category: 'food',
+      account: 'wechat',
+      spentAt: '2026-06-17',
+      note: ''
+    });
+    store.createEntry({
+      type: 'expense',
+      amountYuan: '5',
+      category: traffic.id,
+      account: 'wechat',
+      spentAt: '2026-06-18',
+      note: ''
+    });
+
+    const filtered = store.getMonthData({ month: '2026-06', category: traffic.id });
+
+    expect(filtered.entries).toHaveLength(1);
+    expect(filtered.summary.expenseCents).toBe(1500);
+    expect(filtered.summary.budgetRemainingCents).toBe(8500);
   });
 
   it('stores budget and one-month saving goal settings', () => {
