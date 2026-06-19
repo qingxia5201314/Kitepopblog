@@ -175,12 +175,12 @@ button:active,
 .ui-icon svg {
   display: block;
   fill: none;
-  height: 72%;
+  height: 78%;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.25;
-  width: 72%;
+  stroke-width: 2.5;
+  width: 78%;
 }
 
 .icon-sun::before {
@@ -1232,9 +1232,15 @@ textarea {
 
 .tag-row .ui-icon {
   color: #8a5a19;
-  font-size: 0.75rem;
-  height: 1em;
-  width: 1em;
+  font-size: 0.9rem;
+  height: 1.15em;
+  width: 1.15em;
+}
+
+.tag-row .ui-icon svg {
+  height: 100%;
+  stroke-width: 2.7;
+  width: 100%;
 }
 
 .tag-row button:hover .ui-icon,
@@ -3030,35 +3036,33 @@ body::before {
 .article-meta span {
   align-items: center;
   background: linear-gradient(135deg, rgba(255, 253, 249, 0.95), rgba(255, 241, 237, 0.92));
-  border: 1px solid rgba(216, 75, 73, 0.2);
+  border: 2px solid rgba(216, 75, 73, 0.22);
   border-radius: 999px;
   box-shadow: 0 10px 22px rgba(42, 19, 15, 0.06);
   color: #694039;
   display: inline-flex;
-  font-size: 0.92rem;
+  font-size: 0.96rem;
   font-weight: 900;
-  gap: 9px;
-  min-height: 42px;
-  padding: 4px 15px 4px 7px;
+  gap: 10px;
+  min-height: 46px;
+  padding: 4px 16px 4px 6px;
 }
 
 .article-meta span .ui-icon {
-  background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.95), rgba(247, 228, 204, 0.86)),
-    linear-gradient(135deg, rgba(216, 75, 73, 0.14), rgba(215, 184, 121, 0.2));
-  border: 1px solid rgba(216, 75, 73, 0.16);
+  background: linear-gradient(135deg, #e24d4f, #c93436);
+  border: 2px solid rgba(255, 255, 255, 0.86);
   border-radius: 50%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
-  color: var(--sos-red);
+  box-shadow: 0 0 0 2px rgba(216, 75, 73, 0.18), 0 8px 16px rgba(216, 75, 73, 0.16);
+  color: #fff;
   font-size: 1rem;
-  height: 32px;
-  width: 32px;
+  height: 36px;
+  width: 36px;
 }
 
 .article-meta span .ui-icon svg {
-  height: 19px;
-  stroke-width: 2.8;
-  width: 19px;
+  height: 23px;
+  stroke-width: 3.2;
+  width: 23px;
 }
 
 .hero-notes {
@@ -3590,6 +3594,22 @@ button:hover,
 
 .article-meta .ui-icon {
   color: var(--sos-red);
+}
+
+.article-header-copy .article-meta span .ui-icon {
+  background: linear-gradient(135deg, #e24d4f, #c93436);
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(216, 75, 73, 0.18), 0 8px 16px rgba(216, 75, 73, 0.16);
+  color: #fff;
+  height: 36px;
+  width: 36px;
+}
+
+.article-header-copy .article-meta span .ui-icon svg {
+  height: 23px;
+  stroke-width: 3.2;
+  width: 23px;
 }
 
 .user-auth-card > div {
