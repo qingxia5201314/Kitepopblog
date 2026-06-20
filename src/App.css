@@ -5420,3 +5420,44 @@ p {
     transform: none;
   }
 }
+
+/* Admin content list: use two columns when there is enough room. */
+@media (min-width: 980px) {
+  .admin-layout {
+    grid-template-columns: minmax(540px, 0.95fr) minmax(0, 1.05fr);
+  }
+}
+
+.admin-content-group.open {
+  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-content-group .panel-heading,
+.admin-content-group .admin-create,
+.admin-content-group .segmented-control {
+  grid-column: 1 / -1;
+}
+
+.admin-content-group .admin-post {
+  height: 100%;
+  min-width: 0;
+}
+
+.admin-content-group .admin-post-main {
+  min-height: 82px;
+}
+
+.admin-content-group .admin-post-actions {
+  justify-content: flex-start;
+}
+
+@media (max-width: 620px) {
+  .admin-content-group.open {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-content-group .admin-post-main {
+    min-height: auto;
+  }
+}

@@ -19,3 +19,20 @@
 - `src/assets/haruhi-cutout.png`: replaced with the cleaned transparent hero cutout source.
 - `src/assets/haruhi-cutout.webp`: added the transparent hero asset used by the page.
 - Rollback: run `git checkout -- index.html src/App.css src/App.tsx src/assets/haruhi-cutout.png progress.md` and delete `src/assets/haruhi-avatar.jpg` plus `src/assets/haruhi-cutout.webp`.
+
+## 2026-06-20 - Task: Make admin content management list two-column
+### What was done
+- Added a dedicated `admin-content-group` class to the admin content management panel.
+- Changed the expanded content management panel to a two-column grid when there is enough room.
+- Kept the panel heading, create button, and status filter spanning the full width.
+- Kept the layout responsive by falling back to one column on narrow screens.
+
+### Testing
+- `npm run build`: passed. Vite production build completed successfully.
+- `npm test -- --run`: passed. 24 test files and 83 tests passed.
+- CSS/structure check: the admin content panel now has a dedicated class, while the user management panel is not affected by the new grid rules.
+
+### Notes
+- `src/pages/AdminPage.tsx`: added the content-management-specific class name.
+- `src/App.css`: added the responsive two-column grid rules for admin content cards.
+- Rollback: run `git checkout -- src/pages/AdminPage.tsx src/App.css progress.md`.

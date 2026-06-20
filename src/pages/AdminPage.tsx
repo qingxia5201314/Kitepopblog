@@ -366,7 +366,7 @@ export function AdminPage() {
   return (
     <section className="admin-layout">
       <aside className="admin-list">
-        <section className={adminPanelOpen.content ? 'admin-group open' : 'admin-group'}>
+        <section className={adminPanelOpen.content ? 'admin-group admin-content-group open' : 'admin-group admin-content-group'}>
           <div className="panel-heading">
             <h2>内容管理</h2>
             <button
