@@ -36,3 +36,17 @@
 - `src/pages/AdminPage.tsx`: added the content-management-specific class name.
 - `src/App.css`: added the responsive two-column grid rules for admin content cards.
 - Rollback: run `git checkout -- src/pages/AdminPage.tsx src/App.css progress.md`.
+
+## 2026-06-20 - Task: Narrow admin content management panel
+### What was done
+- Reduced the visual width of the admin content management area on narrower admin layouts.
+- Tightened the two-column card spacing so the list feels less stretched.
+- Changed the responsive breakpoint so the two-column list falls back to one column before the cards become cramped.
+
+### Testing
+- `npm run build`: passed. Vite production build completed successfully.
+- `npm test -- --run`: passed. 24 test files and 83 tests passed.
+
+### Notes
+- `src/App.css`: limited the admin list width under 980px, tightened the content grid gap, and adjusted the single-column breakpoint to 760px.
+- Rollback: run `git checkout -- src/App.css progress.md`.
