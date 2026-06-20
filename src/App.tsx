@@ -516,6 +516,7 @@ function App() {
   const [editorTab, setEditorTab] = useState<EditorTab>('edit');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [adminStatusFilter, setAdminStatusFilter] = useState<AdminStatusFilter>('all');
+  const [expandedAdminPostId, setExpandedAdminPostId] = useState<string | null>(null);
   const [notification, setNotification] = useState<AppNotification | null>(null);
   const [autosaveNote, setAutosaveNote] = useState('');
   const [accountingSession, setAccountingSession] = useState(() => loadAccountingSession());
@@ -2510,9 +2511,15 @@ function App() {
                       {adminPosts.map((post) => {
                         const category = getCategory(post.category);
                         const isPublished = post.status === 'published';
+                        const isExpanded = expandedAdminPostId === post.id;
                         return (
-                          <div className="admin-post" key={post.id}>
-                            <button className="admin-post-main" onClick={() => startEdit(post)} type="button">
+                          <div className={isExpanded ? 'admin-post is-expanded' : 'admin-post'} key={post.id}>
+                            <button
+                              aria-expanded={isExpanded}
+                              className="admin-post-main"
+                              onClick={() => setExpandedAdminPostId((current) => (current === post.id ? null : post.id))}
+                              type="button"
+                            >
                               <span className="admin-post-title-row">
                                 <strong>{post.title}</strong>
                                 <em className={`status-badge ${isPublished ? 'published' : 'draft'}`}>
@@ -2522,16 +2529,19 @@ function App() {
                               <small>
                                 <Icon name={getCategoryIcon(post.category)} />
                                 {category.name}
-                                <Icon name="calendar" />
+                                <span className="admin-post-meta-sep">·</span>
                                 {formatDateTime(post.updatedAt)}
                               </small>
                             </button>
-                            <div className="admin-post-actions">
-                              <button onClick={() => updateStatus(post.id, isPublished ? 'draft' : 'published')} type="button">
-                                {isPublished ? '设草稿' : '发布'}
-                              </button>
-                              <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
-                            </div>
+                            {isExpanded ? (
+                              <div className="admin-post-actions">
+                                <button onClick={() => startEdit(post)} type="button">编辑</button>
+                                <button onClick={() => updateStatus(post.id, isPublished ? 'draft' : 'published')} type="button">
+                                  {isPublished ? '设草稿' : '发布'}
+                                </button>
+                                <button className="danger" onClick={() => removePost(post)} type="button">删除</button>
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })}
