@@ -5424,14 +5424,15 @@ p {
 /* Admin content list: use two columns when there is enough room. */
 @media (min-width: 980px) {
   .admin-layout {
-    grid-template-columns: minmax(540px, 0.95fr) minmax(0, 1.05fr);
+    grid-template-columns: 430px minmax(0, 1fr);
   }
 }
 
 .admin-content-group.open {
   align-items: start;
-  gap: 10px;
-  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: hidden;
 }
 
 .admin-content-group .panel-heading,
@@ -5446,7 +5447,57 @@ p {
 }
 
 .admin-content-group .admin-post-main {
-  min-height: 82px;
+  min-height: 66px;
+  padding: 10px 24px 10px 10px;
+}
+
+.admin-content-group .admin-post-title-row {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.admin-content-group .admin-post-main strong {
+  font-size: 0.82rem;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.admin-content-group .status-badge {
+  font-size: 0.64rem;
+  line-height: 1.1;
+  padding: 2px 6px;
+}
+
+.admin-content-group .admin-post-main small {
+  font-size: 0.7rem;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-content-group .admin-post-main small .ui-icon {
+  height: 0.9em;
+  width: 0.9em;
+}
+
+.admin-content-group .admin-post-main::after {
+  right: 8px;
+  top: 14px;
+}
+
+.admin-content-group .segmented-control {
+  gap: 3px;
+  padding: 3px;
+}
+
+.admin-content-group .segmented-control button {
+  font-size: 0.82rem;
+  min-height: 28px;
+  padding-inline: 6px;
 }
 
 .admin-content-group .admin-post-actions {

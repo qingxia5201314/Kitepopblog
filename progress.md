@@ -50,3 +50,32 @@
 ### Notes
 - `src/App.css`: limited the admin list width under 980px, tightened the content grid gap, and adjusted the single-column breakpoint to 760px.
 - Rollback: run `git checkout -- src/App.css progress.md`.
+
+## 2026-06-20 - Task: Fix admin two-column layout proportions
+### What was done
+- Reduced the admin page's left column share so it no longer takes about half of the desktop layout.
+- Made the content-management two-column cards scale down inside the narrower column.
+- Tightened the content-management filter tabs, post title, status badge, and metadata text so they no longer push into the editor area.
+
+### Testing
+- `npm run build`: passed. Vite production build completed successfully.
+- `npm test -- --run`: passed. 24 test files and 83 tests passed.
+
+### Notes
+- `src/App.css`: adjusted the admin grid column ratio and added scoped compact styles for the content-management double-column list.
+- Rollback: run `git checkout -- src/App.css progress.md`.
+
+## 2026-06-20 - Task: Force compact admin content column
+### What was done
+- Replaced the proportional admin left column with a fixed 430px desktop column so it no longer visually takes about half of the page.
+- Converted the content-management cards to a compact two-column mode with smaller title, badge, icon, metadata, and filter-tab sizing.
+- Removed the previous 500px minimum-width behavior that prevented the prior narrowing from being visible.
+
+### Testing
+- `npm run build`: passed. Vite production build completed successfully.
+- `npm test -- --run`: passed. 24 test files and 83 tests passed.
+- Local preview with mocked admin data: measured `.admin-layout` at 959px wide, `.admin-list` at 430px, `.editor-panel` at 509px, content cards at 175px each, and horizontal overflow at 0px.
+
+### Notes
+- `src/App.css`: changed the admin desktop grid to `430px minmax(0, 1fr)` and added compact scoped styles for `.admin-content-group`.
+- Rollback: run `git checkout -- src/App.css progress.md`.
