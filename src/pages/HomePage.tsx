@@ -489,6 +489,7 @@ export function HomePage() {
             <p className="home-filter-hint">
               点击文章页标签可加入筛选，这里会保留当前标签组合。
             </p>
+<<<<<<< HEAD
             {activeTags.length > 0 && (
               <div className="tag-filter-group">
                 {activeTags.map((tag) => (

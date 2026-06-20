@@ -26,7 +26,10 @@ export function useBlog(posts: BlogPost[]) {
   const [query, setQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<PostDateFilter>('all');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [detailPostId, setDetailPostId] = useState<string | null>(null);
+  const [detailPostId, setDetailPostId] = useState<string | null>(() => {
+    const match = window.location.hash.match(/^#\/posts\/(.+)$/);
+    return match ? decodeURIComponent(match[1]) : null;
+  });
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -55,10 +58,12 @@ export function useBlog(posts: BlogPost[]) {
   const openPostDetail = (post: BlogPost) => {
     setSelectedPostId(post.id);
     setDetailPostId(post.slug);
+    window.location.hash = `/posts/${post.slug}`;
   };
 
   const closePostDetail = () => {
     setDetailPostId(null);
+    window.location.hash = '';
   };
 
   return {

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { isAdmin } from '../middleware/auth.mjs';
 import { createRawFileHeaders } from '../fileDownloadHeaders.mjs';
 import { parseMultipartFile } from '../utils/multipart.mjs';
@@ -37,7 +37,7 @@ function publicFolderView(view) {
 }
 
 // Public: raw file download with token
-app.get('/raw/:id', async (c) => {
+app.get('/raw/:id', (c) => {
   const fileStore = c.get('fileStore');
   const id = c.req.param('id');
   const token = c.req.query('token') || '';
@@ -48,9 +48,9 @@ app.get('/raw/:id', async (c) => {
   }
 
   const headers = createRawFileHeaders(file);
-  const buffer = await readFile(file.filePath);
+  const stream = createReadStream(file.filePath);
 
-  return new Response(buffer, {
+  return new Response(stream, {
     headers: new Headers(headers)
   });
 });

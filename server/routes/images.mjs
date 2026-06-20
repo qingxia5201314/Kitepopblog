@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { isAdmin } from '../middleware/auth.mjs';
 import { createRawFileHeaders } from '../fileDownloadHeaders.mjs';
 import { parseMultipartFile } from '../utils/multipart.mjs';
@@ -18,7 +18,7 @@ function publicImage(image) {
 }
 
 // Public: raw image download
-app.get('/raw/:id', async (c) => {
+app.get('/raw/:id', (c) => {
   const imageStore = c.get('imageStore');
   const id = c.req.param('id');
   const image = imageStore.getImage(id);
@@ -28,9 +28,9 @@ app.get('/raw/:id', async (c) => {
   }
 
   const headers = createRawFileHeaders(image);
-  const buffer = await readFile(image.filePath);
+  const stream = createReadStream(image.filePath);
 
-  return new Response(buffer, {
+  return new Response(stream, {
     headers: new Headers(headers)
   });
 });
