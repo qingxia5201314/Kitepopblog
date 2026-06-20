@@ -79,3 +79,18 @@
 ### Notes
 - `src/App.css`: changed the admin desktop grid to `430px minmax(0, 1fr)` and added compact scoped styles for `.admin-content-group`.
 - Rollback: run `git checkout -- src/App.css progress.md`.
+
+## 2026-06-20 - Task: Fix compact admin card expansion behavior
+### What was done
+- Stopped unexpanded cards in the same row from stretching when a neighboring content card is expanded.
+- Changed the compact content-card action area to a three-column button row so edit, status, and delete actions stay on one line.
+- Reduced the compact action button size so the row fits inside the narrow double-column card.
+
+### Testing
+- `npm run build`: passed. Vite production build completed successfully.
+- `npm test -- --run`: passed. 24 test files and 83 tests passed.
+- Local preview with mocked admin data: expanded card measured 112px tall, neighboring unexpanded card stayed 70px tall, the three action buttons stayed on the same row at 49px each, and horizontal overflow was 0px.
+
+### Notes
+- `src/App.css`: removed equal-height stretching from compact content cards and added scoped three-column compact action-button rules.
+- Rollback: run `git checkout -- src/App.css progress.md`.

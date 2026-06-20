@@ -5442,7 +5442,7 @@ p {
 }
 
 .admin-content-group .admin-post {
-  height: 100%;
+  align-self: start;
   min-width: 0;
 }
 
@@ -5501,7 +5501,20 @@ p {
 }
 
 .admin-content-group .admin-post-actions {
-  justify-content: flex-start;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: stretch;
+  padding: 7px 8px 8px;
+}
+
+.admin-content-group .admin-post-actions button {
+  box-shadow: 1px 1px 0 rgba(42, 19, 15, 0.08);
+  font-size: 0.62rem;
+  min-height: 26px;
+  min-width: 0;
+  padding: 3px 4px;
+  white-space: nowrap;
 }
 
 @media (max-width: 980px) {
