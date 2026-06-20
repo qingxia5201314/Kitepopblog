@@ -4970,3 +4970,104 @@ p {
     --rhythm: 1rem;
   }
 }
+
+/* ============================================================
+   UI v4 — admin content list fix
+   修复后台「内容管理」列表：标题点击区被误套红色按钮皮肤、
+   操作按钮溢出截断、整体排版拥挤。叠加覆盖，不改结构。
+   ============================================================ */
+
+/* 标题点击区是 <button>，被 .admin-group button 皮肤误套成红块。
+   还原为透明的整行点击区，干净利落。 */
+.admin-group .admin-post-main,
+.admin-post .admin-post-main {
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: none;
+  clip-path: none;
+  color: inherit;
+  padding: 8px;
+  width: 100%;
+  transition: background 0.18s var(--ease-out, ease);
+}
+
+.admin-group .admin-post-main:hover {
+  background: rgba(216, 75, 73, 0.06);
+  transform: none;
+  box-shadow: none;
+}
+
+/* 标题行：标题与状态徽标对齐，标题可换行不挤压徽标 */
+.admin-post-title-row {
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.admin-post-main strong {
+  font-size: 1.05rem;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.status-badge {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+/* 元信息行：低调的浅色胶囊，与红色标题脱钩 */
+.admin-post-main small {
+  background: rgba(42, 19, 15, 0.04);
+  border: 1px solid rgba(42, 19, 15, 0.08);
+  border-radius: 8px;
+  color: #5a4a44;
+  font-size: var(--text-sm, 0.875rem);
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 2px;
+  padding: 6px 10px;
+}
+
+.admin-post-main small .ui-icon {
+  color: var(--sos-red);
+}
+
+/* 卡片：留出阴影空间，操作按钮不再被右缘截断 */
+.admin-post {
+  gap: 6px;
+  overflow: visible;
+  padding: 14px 16px;
+}
+
+/* 操作按钮区：与标题区之间加分隔，右对齐保留呼吸位 */
+.admin-post-actions {
+  border-top: 1px solid rgba(42, 19, 15, 0.07);
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 10px 2px 2px;
+}
+
+/* 缩小切角按钮的偏移阴影，避免溢出卡片 */
+.admin-post-actions button {
+  box-shadow: 3px 3px 0 rgba(42, 19, 15, 0.08);
+  min-height: 36px;
+  padding: 6px 16px;
+}
+
+/* 移动端：操作按钮两等分铺满，触摸友好 */
+@media (max-width: 620px) {
+  .admin-post {
+    padding: 14px;
+  }
+
+  .admin-post-actions {
+    justify-content: stretch;
+  }
+
+  .admin-post-actions button {
+    flex: 1 1 0;
+    min-height: 42px;
+  }
+}
