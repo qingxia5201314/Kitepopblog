@@ -111,3 +111,23 @@
 - `src/pages/AdminPage.tsx`: loads admin users through `listUsers`, syncs restored admin sessions into the page state, and fetches users once per active admin token.
 - `src/App.css`: added scoped compact styles for `.admin-user-group` forms, user rows, inputs, selects, and buttons.
 - Rollback: run `git checkout -- src/pages/AdminPage.tsx src/App.css progress.md`.
+
+## 2026-06-20 - Task: Fix broken article cover images
+### What was done
+- Added a reusable image fallback component so failed image loads no longer show browser broken-image icons.
+- Applied the fallback to homepage article covers, article detail covers, and markdown article images.
+- Added regression coverage for failed image loading and styled the article-image fallback state.
+
+### Testing
+- `npm test -- --run src/components/shared.test.tsx`: passed. The fallback renders after an image error event.
+- `npm test -- --run`: passed. 25 test files and 84 tests passed.
+- `npm run build`: passed. Vite production build completed successfully.
+- Checked live post cover URLs: site-hosted `/api/images/raw/...` URLs returned 200; one external `pub.mini-tools.uk` image returned 404, which is now handled by the fallback UI.
+
+### Notes
+- `src/components/shared.tsx`: added `ImageWithFallback` and used it for markdown images.
+- `src/pages/HomePage.tsx`: replaced homepage and detail cover `<img>` rendering with the fallback-aware component.
+- `src/App.css`: added the styled fallback block for failed article-body images.
+- `src/components/shared.test.tsx`: added regression coverage for image-load failure fallback.
+- `src/App.test.tsx`: kept asset mocks current after the Haruhi cutout asset changed to `.webp`.
+- Rollback: run `git checkout -- src/components/shared.tsx src/pages/HomePage.tsx src/App.css src/App.test.tsx progress.md && git rm src/components/shared.test.tsx`.

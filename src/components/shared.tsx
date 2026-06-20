@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useEffect, useState } from 'react';
 import { MarkdownBlock, parseMarkdown } from '../lib/markdown';
 import { normalizeImageUrl } from '../lib/imageUrl';
 
@@ -9,6 +9,38 @@ export const safeImageAttributes = {
   loading: 'lazy',
   referrerPolicy: 'no-referrer'
 } as const;
+
+export function ImageWithFallback({
+  alt,
+  className,
+  fallback,
+  src,
+  ...props
+}: Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'alt' | 'className' | 'onError' | 'src'> & {
+  alt: string;
+  className?: string;
+  fallback: ReactNode;
+  src?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (!src || failed) return <>{fallback}</>;
+
+  return (
+    <img
+      alt={alt}
+      className={className}
+      src={src}
+      {...safeImageAttributes}
+      {...props}
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export function Icon({ className = '', name }: { className?: string; name: UiIcon }) {
   const paths: Record<UiIcon, ReactNode> = {
@@ -209,7 +241,11 @@ export function renderMarkdownBlock(block: MarkdownBlock, index: number) {
 
   return (
     <figure className="article-image" key={index}>
-      <img alt={block.alt || '文章图片'} src={imageUrl} {...safeImageAttributes} />
+      <ImageWithFallback
+        alt={block.alt || '文章图片'}
+        src={imageUrl}
+        fallback={<div className="article-image-fallback">图片暂时无法加载</div>}
+      />
       {block.alt ? <figcaption>{block.alt}</figcaption> : null}
     </figure>
   );

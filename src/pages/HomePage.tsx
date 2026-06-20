@@ -19,11 +19,11 @@ import {
 import {
   Icon,
   FilterMenu,
+  ImageWithFallback,
   formatDateTime,
   getSafeImageUrl,
   renderMarkdown,
   renderInlineMarkdown,
-  safeImageAttributes,
   permissionLabel
 } from '../components/shared';
 import haruhiCutoutImage from '../assets/haruhi-cutout.webp';
@@ -193,21 +193,19 @@ export function HomePage() {
           <div className="article-page-main">
             <section className="article-header-card">
               <div className="article-header-media">
-                {getSafeImageUrl(detailPost.coverImage) ? (
-                  <img
-                    alt={detailPost.title}
-                    className="article-cover-image"
-                    src={getSafeImageUrl(detailPost.coverImage)}
-                    {...safeImageAttributes}
-                  />
-                ) : (
-                  <div className={`article-cover cover-${detailPost.cover}`}>
+                <ImageWithFallback
+                  alt={detailPost.title}
+                  className="article-cover-image"
+                  src={getSafeImageUrl(detailPost.coverImage)}
+                  fallback={
+                    <div className={`article-cover cover-${detailPost.cover}`}>
                     <span>
                       <Icon name={getCategoryIcon(detailPost.category)} />
                       {getCategory(detailPost.category).name}
                     </span>
-                  </div>
-                )}
+                    </div>
+                  }
+                />
               </div>
               <div className="article-header-copy">
                 <p className="article-meta">
@@ -533,13 +531,16 @@ export function HomePage() {
                     type="button"
                   >
                     <span className="post-item-cover">
-                      {coverImage ? (
-                        <img alt="" className="cover-thumb" src={coverImage} {...safeImageAttributes} />
-                      ) : (
-                        <span className={`cover-dot cover-${post.cover}`}>
+                      <ImageWithFallback
+                        alt=""
+                        className="cover-thumb"
+                        src={coverImage}
+                        fallback={
+                          <span className={`cover-dot cover-${post.cover}`}>
                           <Icon name={getCategoryIcon(post.category)} />
-                        </span>
-                      )}
+                          </span>
+                        }
+                      />
                     </span>
                     <span className="post-item-copy">
                       <span className="post-item-topline">

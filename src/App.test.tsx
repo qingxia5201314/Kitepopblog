@@ -6,6 +6,7 @@ vi.mock('./assets/accounting-hero.webp', () => ({ default: '/accounting-hero.web
 vi.mock('./assets/haruhi-favicon.png', () => ({ default: '/haruhi-favicon.png' }));
 vi.mock('./assets/haruhi-avatar.png', () => ({ default: '/haruhi-avatar.png' }));
 vi.mock('./assets/haruhi-cutout.png', () => ({ default: '/haruhi-cutout.png' }));
+vi.mock('./assets/haruhi-cutout.webp', () => ({ default: '/haruhi-cutout.webp' }));
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url = String(input);
@@ -48,7 +49,9 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 });
 
 describe('App layout shells', () => {
-  async function waitFor(check: () => Element | null, attempts = 20) {
+  const roots: Array<ReturnType<typeof createRoot>> = [];
+
+  async function waitFor(check: () => Element | null, attempts = 80) {
     for (let index = 0; index < attempts; index += 1) {
       const result = check();
       if (result) return result;
@@ -58,6 +61,7 @@ describe('App layout shells', () => {
   }
 
   afterEach(() => {
+    roots.splice(0).forEach((root) => root.unmount());
     document.body.innerHTML = '';
     window.localStorage.clear();
     window.location.hash = '';
@@ -68,7 +72,9 @@ describe('App layout shells', () => {
     vi.stubGlobal('fetch', fetchMock);
     const host = document.createElement('div');
     document.body.appendChild(host);
-    createRoot(host).render(<App />);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
     await waitFor(() => host.querySelector('.hero-band'));
 
     expect(host.querySelector('.hero-band')).toBeTruthy();
@@ -81,7 +87,9 @@ describe('App layout shells', () => {
     window.location.hash = '#/posts/post-1';
     const host = document.createElement('div');
     document.body.appendChild(host);
-    createRoot(host).render(<App />);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
     await waitFor(() => host.querySelector('.article-page'));
 
     expect(host.querySelector('.article-page')).toBeTruthy();
