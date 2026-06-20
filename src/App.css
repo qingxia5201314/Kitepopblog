@@ -5372,3 +5372,51 @@ p {
     font-size: 1.18rem;
   }
 }
+
+/* ============================================================
+   UI v7 — hero portrait bottom fade fix
+   修复首页人物立绘底部被容器硬切：收敛图片高度使其完整落在
+   hero-band 内，并让底部渐隐在可见区内柔和完成。
+   ============================================================ */
+
+/* 容器底部留出渐隐空间，避免人物贴着硬边缘 */
+.hero-band {
+  align-items: stretch;
+}
+
+.hero-visual {
+  min-height: 460px;
+  overflow: visible;
+  padding-bottom: 8px;
+}
+
+.hero-art img {
+  /* 取消向下溢出，让图片完整落在容器内 */
+  margin-bottom: 0;
+  /* 高度跟随容器，留足渐隐空间 */
+  max-height: min(100%, 540px);
+  /* 渐隐更早开始、更柔和，确保在可见区内淡完 */
+  -webkit-mask-image: linear-gradient(180deg, #000 0 70%, rgba(0, 0, 0, 0.85) 84%, transparent 99%);
+  mask-image: linear-gradient(180deg, #000 0 70%, rgba(0, 0, 0, 0.85) 84%, transparent 99%);
+}
+
+@media (max-width: 980px) {
+  .hero-visual {
+    min-height: 400px;
+  }
+
+  .hero-art img {
+    max-height: min(100%, 440px);
+  }
+}
+
+@media (max-width: 620px) {
+  .hero-visual {
+    min-height: 320px;
+  }
+
+  .hero-art img {
+    max-height: min(100%, 340px);
+    transform: none;
+  }
+}
