@@ -4435,3 +4435,322 @@ body {
       #fffdf9;
   }
 }
+
+/* ============================================================
+   UI v2 — refinement layer
+   叠加在既有 SOS 皮肤之上：扩展设计 token、统一焦点态、
+   精修微动效与视觉层次、补强移动端体验。
+   不改动既有结构，仅做增强覆盖。
+   ============================================================ */
+
+:root {
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --shadow-1: 0 1px 2px rgba(42, 19, 15, 0.05), 0 2px 6px rgba(42, 19, 15, 0.05);
+  --shadow-2: 0 4px 12px rgba(42, 19, 15, 0.08), 0 2px 4px rgba(42, 19, 15, 0.05);
+  --shadow-3: 0 12px 30px rgba(42, 19, 15, 0.12), 0 4px 10px rgba(42, 19, 15, 0.06);
+  --shadow-4: 0 24px 60px rgba(42, 19, 15, 0.16), 0 8px 18px rgba(42, 19, 15, 0.08);
+  --focus-ring: 0 0 0 3px rgba(255, 253, 249, 0.9), 0 0 0 5px var(--sos-red);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+/* ---------- 焦点可见：键盘可达性 ---------- */
+*:focus {
+  outline: none;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible,
+.post-item:focus-visible,
+.metric-card:focus-visible,
+.filter-menu summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+  position: relative;
+  z-index: 2;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  border-color: var(--sos-red);
+}
+
+/* ---------- 交互微动效 ---------- */
+.topbar nav button,
+.hero-actions button,
+.user-auth-card button,
+.accounting-actions button,
+.panel-heading button,
+.back-link,
+button.ghost,
+button.danger {
+  transition:
+    transform 0.18s var(--ease-spring),
+    box-shadow 0.2s var(--ease-out),
+    background 0.2s var(--ease-out),
+    border-color 0.2s var(--ease-out),
+    color 0.18s var(--ease-out);
+  will-change: transform;
+}
+
+.hero-actions button:not(.ghost):hover,
+.user-auth-card button[type="submit"]:hover,
+.comment-form button:hover,
+.accounting-form button[type="submit"]:hover {
+  box-shadow: var(--shadow-3);
+  transform: translateY(-2px);
+}
+
+.hero-actions button:active,
+.user-auth-card button:active,
+.comment-form button:active,
+.panel-heading button:active,
+button.ghost:active,
+button.danger:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: var(--shadow-1);
+}
+
+.topbar nav {
+  position: relative;
+}
+
+.topbar nav button {
+  position: relative;
+  overflow: hidden;
+}
+
+.topbar nav button.active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  height: 2px;
+  width: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  transform: translateX(-50%);
+  animation: nav-underline 0.32s var(--ease-spring) both;
+}
+
+@keyframes nav-underline {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 18px;
+    opacity: 1;
+  }
+}
+
+/* ---------- 视觉精修：卡片层次 ---------- */
+.post-item,
+.metric-card,
+.accounting-card,
+.file-item,
+.image-item,
+.admin-post,
+.comment-item {
+  transition:
+    transform 0.22s var(--ease-out),
+    box-shadow 0.24s var(--ease-out),
+    border-color 0.2s var(--ease-out);
+}
+
+.home-post-panel .post-item {
+  box-shadow: var(--shadow-1);
+}
+
+.home-post-panel .post-item:hover {
+  box-shadow: var(--shadow-3);
+  border-color: var(--sos-line);
+  transform: translateY(-4px);
+}
+
+.post-item-cover .cover-thumb,
+.post-item-cover .cover-dot {
+  transition: transform 0.3s var(--ease-out);
+}
+
+.home-post-panel .post-item:hover .cover-thumb,
+.home-post-panel .post-item:hover .cover-dot {
+  transform: scale(1.05);
+}
+
+.home-post-panel .post-item:hover .post-item-copy strong {
+  color: var(--sos-red-dark);
+  transition: color 0.2s var(--ease-out);
+}
+
+.metrics-strip {
+  box-shadow: var(--shadow-3);
+}
+
+.metrics-strip strong {
+  transition: transform 0.2s var(--ease-spring);
+}
+
+.metrics-strip > span:hover strong {
+  transform: scale(1.12);
+  display: inline-block;
+}
+
+.metric-card {
+  box-shadow: var(--shadow-1);
+}
+
+.metric-card:hover {
+  box-shadow: var(--shadow-3);
+}
+
+.metric-card .metric-progress span {
+  transition: width 0.6s var(--ease-out);
+}
+
+.toast {
+  box-shadow: var(--shadow-4);
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.post-list .post-item {
+  animation: card-rise 0.42s var(--ease-out) both;
+}
+
+.post-list .post-item:nth-child(1) { animation-delay: 0.02s; }
+.post-list .post-item:nth-child(2) { animation-delay: 0.06s; }
+.post-list .post-item:nth-child(3) { animation-delay: 0.1s; }
+.post-list .post-item:nth-child(4) { animation-delay: 0.14s; }
+.post-list .post-item:nth-child(5) { animation-delay: 0.18s; }
+.post-list .post-item:nth-child(6) { animation-delay: 0.22s; }
+
+/* ---------- 表单控件统一聚焦质感 ---------- */
+input,
+select,
+textarea {
+  transition:
+    border-color 0.18s var(--ease-out),
+    box-shadow 0.18s var(--ease-out),
+    background 0.18s var(--ease-out);
+}
+
+/* ---------- 移动端增强 ---------- */
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .topbar nav {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    gap: 2px;
+  }
+
+  .topbar nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .topbar nav button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .topbar nav button,
+  .hero-actions button,
+  .filter-menu summary,
+  .filter-menu div button,
+  .user-auth-card button,
+  .accounting-actions button,
+  .panel-heading button {
+    min-height: 44px;
+  }
+
+  .hero-band {
+    grid-template-columns: 1fr;
+    padding: 24px 20px;
+    min-height: auto;
+    gap: 16px;
+  }
+
+  .hero-actions button {
+    flex: 1 1 auto;
+  }
+
+  .home-post-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .home-post-panel .post-list {
+    grid-template-columns: 1fr;
+  }
+
+  .user-auth-card form {
+    grid-template-columns: 1fr;
+  }
+
+  .user-auth-card {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-copy h1 {
+    font-size: clamp(1.8rem, 9vw, 2.6rem);
+  }
+
+  .home-post-panel .post-item {
+    grid-template-columns: 56px minmax(0, 1fr);
+    min-height: auto;
+    padding: 14px;
+  }
+
+  .home-post-panel .cover-dot,
+  .home-post-panel .cover-thumb {
+    height: 56px;
+    width: 56px;
+  }
+}
+
+/* ---------- 接入 reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .post-list .post-item,
+  .topbar nav button.active::after {
+    animation: none !important;
+  }
+
+  .post-item-cover .cover-thumb,
+  .post-item-cover .cover-dot,
+  .metrics-strip strong,
+  .metric-card .metric-progress span {
+    transition: none !important;
+    transform: none !important;
+  }
+}
