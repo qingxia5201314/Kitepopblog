@@ -131,3 +131,20 @@
 - `src/components/shared.test.tsx`: added regression coverage for image-load failure fallback.
 - `src/App.test.tsx`: kept asset mocks current after the Haruhi cutout asset changed to `.webp`.
 - Rollback: run `git checkout -- src/components/shared.tsx src/pages/HomePage.tsx src/App.css src/App.test.tsx progress.md && git rm src/components/shared.test.tsx`.
+
+## 2026-06-20 - Task: Fix raw image loading root cause
+### What was done
+- Reworked the public image raw route so stored images are served from file bytes instead of an unstable Node stream response.
+- Added explicit HEAD support for `/api/images/raw/:id`, preventing image probes or cache validation requests from crashing the API process.
+- Added server route regression coverage for GET byte delivery and HEAD header-only responses.
+
+### Testing
+- `npm test -- --run server/imagesRoutes.test.mjs`: passed. GET returns image bytes and HEAD returns headers without a body.
+- `npm test -- --run`: passed. 26 test files and 85 tests passed.
+- `npm run build`: passed. Vite production build completed successfully.
+- Pre-fix VPS evidence: several existing `/api/images/raw/:id` image URLs returned 502 despite files existing in `data/images`, and service logs showed repeated `ERR_INVALID_STATE: ReadableStream is already closed` crashes.
+
+### Notes
+- `server/routes/images.mjs`: changed raw image delivery to `readFile`/Buffer responses and added a HEAD route.
+- `server/imagesRoutes.test.mjs`: added server-level coverage for raw image GET and HEAD behavior.
+- Rollback: run `git checkout -- server/routes/images.mjs progress.md && git rm server/imagesRoutes.test.mjs`.
