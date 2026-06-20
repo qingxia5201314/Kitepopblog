@@ -4754,3 +4754,219 @@ textarea {
     transform: none !important;
   }
 }
+
+/* ============================================================
+   UI v3 — typography layer
+   统一全站字号阶梯与垂直节奏，精修文章正文阅读排版、
+   列表/卡片文字层级。叠加覆盖，不改动既有结构。
+   ============================================================ */
+
+:root {
+  /* 字号阶梯（模块化 1.25 比例，基于 16px） */
+  --text-xs: 0.78rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 1.875rem;
+
+  /* 行高 */
+  --leading-tight: 1.25;
+  --leading-snug: 1.45;
+  --leading-normal: 1.7;
+  --leading-relaxed: 1.9;
+
+  /* 垂直节奏基准 */
+  --rhythm: 1.15rem;
+}
+
+/* ---------- 全局文本渲染优化 ---------- */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 标题统一收紧、避免孤字换行 */
+h1, h2, h3, h4 {
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+/* 段落与长文本优化换行 */
+p {
+  text-wrap: pretty;
+}
+
+/* ---------- 文章正文阅读排版 ---------- */
+.article-body {
+  font-size: var(--text-md);
+  line-height: var(--leading-relaxed);
+  letter-spacing: 0.01em;
+  color: #2b332e;
+}
+
+/* 段落节奏：统一段间距，首段不留多余顶距 */
+.article-body p {
+  margin: 0 0 var(--rhythm);
+}
+
+.article-body > :first-child {
+  margin-top: 0;
+}
+
+.article-body > :last-child {
+  margin-bottom: 0;
+}
+
+/* markdown 一级标题渲染为 h2——此前缺样式，补齐层级 */
+.article-body h2 {
+  font-size: var(--text-2xl);
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+  margin: 2.2rem 0 0.9rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid rgba(216, 75, 73, 0.16);
+}
+
+.article-body h3 {
+  font-size: var(--text-xl);
+  line-height: var(--leading-snug);
+  letter-spacing: -0.015em;
+  margin: 1.9rem 0 0.7rem;
+}
+
+.article-body h4 {
+  font-size: var(--text-lg);
+  line-height: var(--leading-snug);
+  margin: 1.5rem 0 0.5rem;
+}
+
+/* 标题紧跟正文时不要叠加过大顶距 */
+.article-body h2:first-child,
+.article-body h3:first-child,
+.article-body h4:first-child {
+  margin-top: 0;
+}
+
+/* 链接：下划线偏移更清晰 */
+.article-body a {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+}
+
+/* 行内代码：等宽字体 + 更克制的内距 */
+.article-body code,
+.article-code code {
+  font-family: "JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+/* 代码块：更舒适的行高与可读性 */
+.article-code {
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  padding: 16px 18px;
+  tab-size: 2;
+}
+
+/* 引用：排版更有呼吸感 */
+.article-body blockquote {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  margin: var(--rhythm) 0;
+  padding: 12px 18px;
+}
+
+.article-body blockquote p {
+  margin: 0;
+}
+
+/* 列表：统一行高与项间距 */
+.article-md-list {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+}
+
+.article-md-list li + li {
+  margin-top: 0.4rem;
+}
+
+/* 图注 */
+.article-image figcaption {
+  font-size: var(--text-sm);
+  line-height: var(--leading-snug);
+  letter-spacing: 0.01em;
+}
+
+/* 文章标题与摘要节奏 */
+.article-header-copy h1 {
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.article-header-copy .summary {
+  font-size: var(--text-md);
+  line-height: var(--leading-normal);
+  color: #5a4a44;
+}
+
+/* ---------- 列表 / 卡片文字层级 ---------- */
+.post-item-copy strong {
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.post-item-copy small {
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  letter-spacing: 0.005em;
+}
+
+.post-item-topline,
+.post-item-footer {
+  letter-spacing: 0.01em;
+}
+
+/* hero 文案 */
+.hero-copy h1 {
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.hero-copy p {
+  text-wrap: pretty;
+}
+
+/* 区块小标题（eyebrow）字距统一 */
+.eyebrow {
+  letter-spacing: 0.12em;
+}
+
+/* 面板标题节奏 */
+.panel-heading h2,
+.home-filter-header h2,
+.home-post-header h2 {
+  letter-spacing: -0.015em;
+}
+
+/* ---------- 移动端正文排版微调 ---------- */
+@media (max-width: 620px) {
+  .article-body {
+    font-size: var(--text-base);
+    line-height: 1.8;
+  }
+
+  .article-body h2 {
+    font-size: var(--text-xl);
+  }
+
+  .article-body h3 {
+    font-size: var(--text-lg);
+  }
+
+  :root {
+    --rhythm: 1rem;
+  }
+}
