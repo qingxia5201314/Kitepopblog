@@ -1,4 +1,4 @@
-import React, { useState, useRef, FormEvent, ClipboardEvent } from 'react';
+import React, { useState, useRef, useEffect, FormEvent, ClipboardEvent } from 'react';
 import { useApp } from '../context/AppContext';
 import { useEditor } from '../hooks/useEditor';
 import {
@@ -73,6 +73,7 @@ export function AdminPage() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
+  const loadedAdminUsersTokenRef = useRef('');
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const formCoverImage = form.coverImage ? normalizeImageUrl(form.coverImage) : undefined;
@@ -108,15 +109,26 @@ export function AdminPage() {
   const loadAdminUsers = async (token = localAdminToken) => {
     if (!token) return;
     try {
-      const response = await fetch('/api/blog/users', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await response.json();
-      setAdminUsers(data);
+      const users = await listUsers(token);
+      setAdminUsers(users);
+      loadedAdminUsersTokenRef.current = token;
     } catch (error) {
+      if (loadedAdminUsersTokenRef.current === token) loadedAdminUsersTokenRef.current = '';
       notify('error', error instanceof Error ? error.message : '用户列表加载失败');
     }
   };
+
+  useEffect(() => {
+    if (!adminToken || adminToken === localAdminToken) return;
+    setLocalAdminToken(adminToken);
+    setAdminUnlocked(true);
+  }, [adminToken, localAdminToken]);
+
+  useEffect(() => {
+    if (!adminUnlocked || !localAdminToken || loadedAdminUsersTokenRef.current === localAdminToken) return;
+    loadedAdminUsersTokenRef.current = localAdminToken;
+    void loadAdminUsers(localAdminToken);
+  }, [adminUnlocked, localAdminToken]);
 
   const updateForm = (patch: Partial<typeof EMPTY_FORM>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -438,7 +450,7 @@ export function AdminPage() {
           ) : null}
         </section>
 
-        <section className={adminPanelOpen.users ? 'admin-group open' : 'admin-group'}>
+        <section className={adminPanelOpen.users ? 'admin-group admin-user-group open' : 'admin-group admin-user-group'}>
           <div className="panel-heading">
             <h2>用户管理</h2>
             <button

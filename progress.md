@@ -94,3 +94,20 @@
 ### Notes
 - `src/App.css`: removed equal-height stretching from compact content cards and added scoped three-column compact action-button rules.
 - Rollback: run `git checkout -- src/App.css progress.md`.
+
+## 2026-06-20 - Task: Fix compact admin user management
+### What was done
+- Updated the user management panel to use compact form and row layouts that fit the 430px admin column.
+- Kept the new-user permission selector and submit button on the same row.
+- Fixed user-list loading after an existing admin session is restored, so the user list no longer appears empty just because the page was opened from a saved session.
+- Switched the user list loader to the existing `/api/admin/users` client wrapper.
+
+### Testing
+- `npm run build`: passed. Vite production build completed successfully.
+- `npm test -- --run`: passed. 24 test files and 83 tests passed.
+- Local preview with mocked admin data: rendered 2 user rows, measured the new-user form at 358px wide, kept the permission selector and 78px submit button on the same row, and horizontal overflow was 0px.
+
+### Notes
+- `src/pages/AdminPage.tsx`: loads admin users through `listUsers`, syncs restored admin sessions into the page state, and fetches users once per active admin token.
+- `src/App.css`: added scoped compact styles for `.admin-user-group` forms, user rows, inputs, selects, and buttons.
+- Rollback: run `git checkout -- src/pages/AdminPage.tsx src/App.css progress.md`.
