@@ -82,8 +82,7 @@ import { AppNotification, NotificationType, createNotification } from './lib/not
 import { formatTagInput, parseTagInput } from './lib/tags';
 import accountingHeroImage from './assets/accounting-hero.webp';
 import faviconImage from './assets/haruhi-favicon.png';
-import haruhiAvatarImage from './assets/haruhi-avatar.png';
-import haruhiCutoutImage from './assets/haruhi-cutout.png';
+import haruhiCutoutImage from './assets/haruhi-cutout.webp';
 import { copyTextToClipboard } from './lib/clipboard';
 
 type ViewMode = 'home' | 'accounting' | 'files' | 'images' | 'admin';
@@ -1510,9 +1509,7 @@ function App() {
     <main className="app-shell" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}>
       <header className="topbar">
         <button className="brand-button" onClick={() => setMode('home')} type="button">
-          <span className="brand-mark" aria-hidden="true">
-            <img alt="" src={haruhiAvatarImage} />
-          </span>
+          <span className="brand-mark" aria-hidden="true" />
           <span>
             <strong>Kitepop SOS</strong>
             <small>Haruhi style / life / src / study / notes</small>
