@@ -988,6 +988,15 @@ function App() {
     if (showNotice) notify('info', `正在编辑：${post.title}`);
   };
 
+  const editDetailPost = (post: BlogPost) => {
+    startEdit(post, false);
+    setDetailPostId(null);
+    window.location.hash = '';
+    setMode('admin');
+    setAdminPanelOpen((current) => ({ ...current, content: true }));
+    notify('info', `正在编辑：${post.title}`);
+  };
+
   const savePost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -1557,6 +1566,12 @@ function App() {
           <div className="article-page-shell">
             <aside className="article-page-rail">
               <button className="back-link" onClick={closePostDetail} type="button">{'\u8fd4\u56de\u6587\u7ae0\u5217\u8868'}</button>
+              {adminUnlocked ? (
+                <button className="article-edit-link" onClick={() => editDetailPost(detailPost)} type="button">
+                  <Icon name="edit" />
+                  {'\u7f16\u8f91\u6587\u7ae0'}
+                </button>
+              ) : null}
               <div className="article-rail-card">
                 <p className="eyebrow">Reading Focus</p>
                 <strong>{getCategory(detailPost.category).name}</strong>

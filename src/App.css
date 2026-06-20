@@ -5239,3 +5239,136 @@ p {
     transition: none !important;
   }
 }
+
+/* ============================================================
+   UI v6 — article detail: admin edit + tighter layout
+   详情页新增管理员「编辑文章」入口，并整体收紧排版尺寸。
+   ============================================================ */
+
+/* 侧栏「编辑文章」按钮：与返回栏同风格的轮廓胶囊 */
+.article-edit-link {
+  align-items: center;
+  background: var(--sos-red);
+  border: 2px solid var(--sos-red);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 7px;
+  justify-content: center;
+  margin-bottom: 14px;
+  min-height: 36px;
+  padding: 7px 16px;
+  transition: transform 0.18s var(--ease-spring, ease), box-shadow 0.2s var(--ease-out, ease), background 0.2s ease;
+}
+
+.article-edit-link:hover {
+  background: var(--sos-red-dark);
+  box-shadow: var(--shadow-2, 0 4px 12px rgba(42, 19, 15, 0.1));
+  transform: translateY(-2px);
+}
+
+.article-edit-link:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.article-edit-link .ui-icon {
+  color: #fff;
+  height: 1.05em;
+  width: 1.05em;
+}
+
+/* 移动端：编辑入口与返回并排铺满 */
+@media (max-width: 980px) {
+  .article-edit-link {
+    width: 100%;
+  }
+}
+
+/* ---------- 详情页排版收紧 ---------- */
+.article-page {
+  padding: 18px;
+}
+
+/* 标题更克制 */
+.article-page h1,
+.article-header-copy h1 {
+  font-size: clamp(1.6rem, 3vw, 2.5rem);
+  line-height: 1.15;
+}
+
+/* 摘要缩小 */
+.article-header-copy .summary {
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+/* 头图高度收敛，减少首屏占用 */
+.article-header-media .article-cover-image {
+  max-height: min(40vh, 380px);
+}
+
+/* 正文卡内边距与字号收紧 */
+.article-body-card {
+  padding: clamp(18px, 3vw, 32px);
+}
+
+.article-body-card .article-body {
+  font-size: 1rem;
+  line-height: 1.8;
+  max-width: 720px;
+}
+
+/* 正文标题层级相应缩小 */
+.article-body h2 {
+  font-size: 1.6rem;
+  margin: 1.8rem 0 0.75rem;
+}
+
+.article-body h3 {
+  font-size: 1.3rem;
+  margin: 1.5rem 0 0.6rem;
+}
+
+.article-body h4 {
+  font-size: 1.12rem;
+  margin: 1.25rem 0 0.45rem;
+}
+
+/* 元信息胶囊缩小 */
+.article-meta span {
+  font-size: 0.84rem;
+  min-height: 30px;
+  padding: 2px 12px;
+}
+
+/* 头部卡内边距收紧 */
+.article-header-card {
+  gap: 16px;
+  padding: 16px;
+}
+
+/* 移动端进一步收紧 */
+@media (max-width: 620px) {
+  .article-page {
+    padding: 12px;
+  }
+
+  .article-page h1,
+  .article-header-copy h1 {
+    font-size: clamp(1.45rem, 6vw, 1.9rem);
+  }
+
+  .article-body-card .article-body {
+    font-size: 0.96rem;
+    line-height: 1.75;
+  }
+
+  .article-body h2 {
+    font-size: 1.35rem;
+  }
+
+  .article-body h3 {
+    font-size: 1.18rem;
+  }
+}
