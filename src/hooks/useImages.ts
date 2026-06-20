@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { HostedImage, deleteHostedImage, listHostedImages, uploadHostedImage } from '../lib/imageApi';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { NotificationType } from '../lib/notification';
@@ -11,14 +11,19 @@ export function useImages(adminToken: string, notify: NotifyFn) {
   const [imageDragActive, setImageDragActive] = useState(false);
   const [copiedImageLink, setCopiedImageLink] = useState('');
 
-  const loadHostedImages = async (token = adminToken) => {
+  const loadHostedImages = useCallback(async (token = adminToken) => {
     if (!token) return;
     try {
       setHostedImages(await listHostedImages(token));
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '图床列表加载失败');
     }
-  };
+  }, [adminToken, notify]);
+
+  useEffect(() => {
+    if (!adminToken) return;
+    void loadHostedImages(adminToken);
+  }, [adminToken, loadHostedImages]);
 
   const handleHostedImageUpload = async (file?: File) => {
     if (!file || !adminToken) return;

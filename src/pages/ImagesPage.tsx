@@ -1,4 +1,4 @@
-import React, { useState, useRef, FormEvent } from 'react';
+import React, { useEffect, useState, useRef, FormEvent } from 'react';
 import { useApp } from '../context/AppContext';
 import { useImages } from '../hooks/useImages';
 import { HostedImage, deleteHostedImage, uploadHostedImage } from '../lib/imageApi';
@@ -19,6 +19,10 @@ export function ImagesPage() {
   const [imageDragActive, setImageDragActive] = useState(false);
   const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const imageHostInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setLocalAdminToken(adminToken);
+  }, [adminToken]);
 
   const handleUnlockImages = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

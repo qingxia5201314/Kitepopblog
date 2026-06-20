@@ -64,6 +64,7 @@ describe('App layout shells', () => {
     roots.splice(0).forEach((root) => root.unmount());
     document.body.innerHTML = '';
     window.localStorage.clear();
+    window.history.pushState({}, '', '/');
     window.location.hash = '';
     vi.unstubAllGlobals();
   });
@@ -97,5 +98,94 @@ describe('App layout shells', () => {
     expect(host.querySelector('.article-header-card')).toBeTruthy();
     expect(host.querySelector('.article-body-card')).toBeTruthy();
     expect(host.querySelector('.comment-panel')).toBeTruthy();
+  });
+
+  it('loads hosted images automatically when an admin session already exists', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/images');
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) {
+        return Response.json({ ok: true });
+      }
+      if (url.startsWith('/api/images')) {
+        return Response.json({
+          images: [
+            {
+              id: 'img-1',
+              originalName: 'cover.png',
+              contentType: 'image/png',
+              sizeBytes: 3,
+              uploadedAt: '2026-06-20T00:00:00.000Z',
+              path: '/api/images/raw/img-1'
+            }
+          ]
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    expect(await waitFor(() => host.querySelector('.image-item'))).toBeTruthy();
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/images', {
+      headers: { Authorization: 'Bearer admin-token' }
+    });
+  });
+
+  it('loads file storage automatically when an admin session already exists', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/files');
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) {
+        return Response.json({ ok: true });
+      }
+      if (url.startsWith('/api/files')) {
+        return Response.json({
+          folder: null,
+          breadcrumbs: [],
+          folders: [],
+          files: [
+            {
+              id: 'file-1',
+              originalName: 'rfi.txt',
+              contentType: 'text/plain',
+              sizeBytes: 7,
+              uploadedAt: '2026-06-20T00:00:00.000Z',
+              folderId: ''
+            }
+          ]
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    expect(await waitFor(() => host.querySelector('.file-item'))).toBeTruthy();
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/files', {
+      headers: { Authorization: 'Bearer admin-token' }
+    });
   });
 });

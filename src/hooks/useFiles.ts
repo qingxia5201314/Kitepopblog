@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   FileFolder,
   FileFolderView,
@@ -30,7 +30,7 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   const [fileDragActive, setFileDragActive] = useState(false);
   const [generatedFileLink, setGeneratedFileLink] = useState('');
 
-  const loadFiles = async (token = adminToken, folderId = activeFileFolderId) => {
+  const loadFiles = useCallback(async (token = adminToken, folderId = activeFileFolderId) => {
     if (!token) return;
     try {
       setFileFolderView(await getFileFolderView(token, folderId));
@@ -38,7 +38,12 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件列表加载失败');
     }
-  };
+  }, [activeFileFolderId, adminToken, notify]);
+
+  useEffect(() => {
+    if (!adminToken) return;
+    void loadFiles(adminToken, activeFileFolderId);
+  }, [activeFileFolderId, adminToken, loadFiles]);
 
   const openFolder = (folderId = '') => {
     setGeneratedFileLink('');

@@ -1,4 +1,4 @@
-import React, { useState, useRef, FormEvent } from 'react';
+import React, { useEffect, useState, useRef, FormEvent } from 'react';
 import { useApp } from '../context/AppContext';
 import { useFiles } from '../hooks/useFiles';
 import {
@@ -35,6 +35,10 @@ export function FilesPage() {
   const [fileDragActive, setFileDragActive] = useState(false);
   const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setLocalAdminToken(adminToken);
+  }, [adminToken]);
 
   const handleUnlockFiles = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

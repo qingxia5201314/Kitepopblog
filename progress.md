@@ -148,3 +148,22 @@
 - `server/routes/images.mjs`: changed raw image delivery to `readFile`/Buffer responses and added a HEAD route.
 - `server/imagesRoutes.test.mjs`: added server-level coverage for raw image GET and HEAD behavior.
 - Rollback: run `git checkout -- server/routes/images.mjs progress.md && git rm server/imagesRoutes.test.mjs`.
+
+## 2026-06-20 - Task: Auto-load file and image admin lists
+### What was done
+- Fixed image hosting so the saved admin session automatically loads the image list when the page opens.
+- Fixed file storage so the saved admin session automatically loads the current folder when the page opens or changes folders.
+- Synchronized page-local admin tokens with the restored app-level admin session so upload, delete, copy, and refresh actions do not keep using an empty initial token.
+
+### Testing
+- `npm test -- --run src/App.test.tsx`: passed. Existing admin sessions now auto-load `/api/images` and `/api/files` on page entry.
+- `npm test -- --run`: passed. 26 test files and 87 tests passed.
+- `npm run build`: passed. Vite production build completed successfully.
+
+### Notes
+- `src/hooks/useImages.ts`: added token-driven automatic image list loading.
+- `src/hooks/useFiles.ts`: added token/folder-driven automatic file folder loading.
+- `src/pages/ImagesPage.tsx`: synced local admin token from restored app admin token.
+- `src/pages/FilesPage.tsx`: synced local admin token from restored app admin token.
+- `src/App.test.tsx`: added regression coverage for auto-loading image and file lists from a saved admin session.
+- Rollback: run `git checkout -- src/hooks/useImages.ts src/hooks/useFiles.ts src/pages/ImagesPage.tsx src/pages/FilesPage.tsx src/App.test.tsx progress.md`.
