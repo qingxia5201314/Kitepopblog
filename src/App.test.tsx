@@ -83,6 +83,21 @@ describe('App layout shells', () => {
     expect(host.querySelector('.post-list')).toBeTruthy();
   });
 
+  it('marks the current top navigation item as active', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    window.history.pushState({}, '', '/images');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+    await waitFor(() => host.querySelector('.topbar nav'));
+
+    const activeNav = host.querySelector('.topbar nav button.active');
+    expect(activeNav?.getAttribute('aria-current')).toBe('page');
+    expect(activeNav?.textContent).toContain('图床');
+  });
+
   it('renders article detail shell when hash points to a post', async () => {
     vi.stubGlobal('fetch', fetchMock);
     window.location.hash = '#/posts/post-1';

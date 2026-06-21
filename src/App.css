@@ -4543,6 +4543,15 @@ button.danger:active {
   overflow: hidden;
 }
 
+.topbar nav button.active {
+  background: linear-gradient(180deg, #fffdfb 0%, #fff1ef 100%);
+  border-color: rgba(216, 75, 73, 0.34);
+  box-shadow:
+    0 8px 18px rgba(216, 75, 73, 0.12),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.82);
+  color: var(--sos-red);
+}
+
 .topbar nav button.active::after {
   content: "";
   position: absolute;
@@ -4551,7 +4560,7 @@ button.danger:active {
   height: 2px;
   width: 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(216, 75, 73, 0.62);
   transform: translateX(-50%);
   animation: nav-underline 0.32s var(--ease-spring) both;
 }

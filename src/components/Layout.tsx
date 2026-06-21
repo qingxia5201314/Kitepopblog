@@ -1,12 +1,14 @@
 import React, { useRef } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { Icon } from './shared';
 
 export function Layout() {
+  const location = useLocation();
   const navigate = useNavigate();
   const { notification, clearNotification } = useApp();
   const trailRef = useRef(0);
+  const isNavActive = (path: string) =>
+    path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
   const spawnParticle = (x: number, y: number, burst = false) => {
     const count = burst ? 10 : 1;
@@ -50,19 +52,44 @@ export function Layout() {
           </span>
         </button>
         <nav>
-          <button onClick={() => navigate('/')} type="button">
+          <button
+            aria-current={isNavActive('/') ? 'page' : undefined}
+            className={isNavActive('/') ? 'active' : ''}
+            onClick={() => navigate('/')}
+            type="button"
+          >
             阅读
           </button>
-          <button onClick={() => navigate('/accounting')} type="button">
+          <button
+            aria-current={isNavActive('/accounting') ? 'page' : undefined}
+            className={isNavActive('/accounting') ? 'active' : ''}
+            onClick={() => navigate('/accounting')}
+            type="button"
+          >
             记账
           </button>
-          <button onClick={() => navigate('/files')} type="button">
+          <button
+            aria-current={isNavActive('/files') ? 'page' : undefined}
+            className={isNavActive('/files') ? 'active' : ''}
+            onClick={() => navigate('/files')}
+            type="button"
+          >
             文件
           </button>
-          <button onClick={() => navigate('/images')} type="button">
+          <button
+            aria-current={isNavActive('/images') ? 'page' : undefined}
+            className={isNavActive('/images') ? 'active' : ''}
+            onClick={() => navigate('/images')}
+            type="button"
+          >
             图床
           </button>
-          <button onClick={() => navigate('/admin')} type="button">
+          <button
+            aria-current={isNavActive('/admin') ? 'page' : undefined}
+            className={isNavActive('/admin') ? 'active' : ''}
+            onClick={() => navigate('/admin')}
+            type="button"
+          >
             后台
           </button>
         </nav>

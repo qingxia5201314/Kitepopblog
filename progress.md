@@ -167,3 +167,20 @@
 - `src/pages/FilesPage.tsx`: synced local admin token from restored app admin token.
 - `src/App.test.tsx`: added regression coverage for auto-loading image and file lists from a saved admin session.
 - Rollback: run `git checkout -- src/hooks/useImages.ts src/hooks/useFiles.ts src/pages/ImagesPage.tsx src/pages/FilesPage.tsx src/App.test.tsx progress.md`.
+
+## 2026-06-21 - Task: Add light active state to top navigation
+### What was done
+- Added route-aware active state to the top navigation buttons.
+- Added `aria-current="page"` for the active navigation item.
+- Updated the active navigation visual style to a light selected pill with subtle red border, soft shadow, and underline.
+
+### Testing
+- `npm test -- --run src/App.test.tsx`: passed. The current route now marks the matching top nav item active.
+- `npm test -- --run`: passed. 26 test files and 88 tests passed.
+- `npm run build`: passed. Vite production build completed successfully.
+
+### Notes
+- `src/components/Layout.tsx`: reads the current route and applies active navigation attributes/classes.
+- `src/App.css`: adds the light active top-nav styling.
+- `src/App.test.tsx`: adds regression coverage for the active nav state.
+- Rollback: run `git checkout -- src/components/Layout.tsx src/App.css src/App.test.tsx progress.md`.
