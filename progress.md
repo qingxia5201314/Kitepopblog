@@ -198,3 +198,17 @@
 - `docs/superpowers/specs/2026-06-24-markdown-math-design.md`: records the approved Markdown math design.
 - `progress.md`: records this design task.
 - Rollback: run `git checkout -- progress.md && git rm docs/superpowers/specs/2026-06-24-markdown-math-design.md`.
+
+## 2026-06-24 - Task: Plan Markdown math support
+### What was done
+- Created a TDD implementation plan covering KaTeX dependency setup, display-math parsing, shared formula rendering, admin editor controls, styling, and regression verification.
+- Mapped each requirement from the approved design to exact files, test commands, and expected outcomes.
+
+### Testing
+- Plan self-review completed against the approved design: inline and display formulas, escaped dollar signs, code exclusions, shared preview/detail rendering, invalid formula handling, mobile overflow, and editor controls are covered.
+- Placeholder and type-consistency review completed with no unresolved implementation steps.
+
+### Notes
+- `docs/superpowers/plans/2026-06-24-markdown-math.md`: contains the implementation plan.
+- `progress.md`: records this planning task.
+- Rollback: run `git checkout -- progress.md && git rm docs/superpowers/plans/2026-06-24-markdown-math.md`.
