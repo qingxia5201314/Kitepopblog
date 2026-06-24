@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ImageWithFallback } from './shared';
+import { ImageWithFallback, renderInlineMarkdown, renderMarkdown } from './shared';
 
 describe('ImageWithFallback', () => {
   const roots: Array<ReturnType<typeof createRoot>> = [];
@@ -46,5 +46,38 @@ describe('ImageWithFallback', () => {
 
     expect(await waitFor(() => host.querySelector('.cover-dot'))).toBeTruthy();
     expect(host.querySelector('img.cover-thumb')).toBeFalsy();
+  });
+
+  it('renders inline formulas without parsing escaped dollars or inline code', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(
+        <p>
+          {renderInlineMarkdown('公式 $E = mc^2$，价格 \\$100，代码 `$notMath$`。')}
+        </p>
+      );
+    });
+
+    expect(host.querySelector('.math-inline .katex')).toBeTruthy();
+    expect(host.querySelector('code')?.textContent).toBe('$notMath$');
+    expect(host.textContent).toContain('价格 $100');
+    expect(host.querySelectorAll('.math-inline')).toHaveLength(1);
+  });
+
+  it('renders display formulas through the shared markdown renderer', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(<div>{renderMarkdown('$$\n\\frac{a}{b}\n$$')}</div>);
+    });
+
+    expect(host.querySelector('.math-display .katex-display')).toBeTruthy();
   });
 });

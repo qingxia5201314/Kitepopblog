@@ -675,6 +675,22 @@ export function AdminPage() {
                 ▣
               </button>
               <button
+                aria-label="行内公式"
+                onClick={() => insertMarkdownSnippet('$', '$', 'E = mc^2')}
+                title="行内公式"
+                type="button"
+              >
+                ∑
+              </button>
+              <button
+                aria-label="块级公式"
+                onClick={() => insertMarkdownSnippet('$$\n', '\n$$', '\\frac{a}{b}')}
+                title="块级公式"
+                type="button"
+              >
+                ∫
+              </button>
+              <button
                 aria-label="上传图片"
                 disabled={uploadingImage}
                 onClick={() => imageInputRef.current?.click()}
@@ -690,7 +706,7 @@ export function AdminPage() {
                 className="content-editor"
                 onChange={(event) => updateForm({ content: event.target.value })}
                 onPaste={pasteImageIntoEditor}
-                placeholder="支持 Markdown：标题、粗体、行内代码、链接、引用、列表、代码块、图片。"
+                placeholder="支持 Markdown：标题、粗体、行内代码、链接、引用、列表、代码块、图片、行内公式和块级公式。"
                 ref={contentEditorRef}
                 rows={16}
                 value={form.content}

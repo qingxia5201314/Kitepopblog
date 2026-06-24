@@ -13,12 +13,14 @@
   "dependencies": {
     "@hono/node-server": "^2.0.5",
     "hono": "^4.12.26",
+    "katex": "^0.17.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.18.0",
     "sql.js": "^1.14.1"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.8",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",

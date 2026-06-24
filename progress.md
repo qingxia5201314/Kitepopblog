@@ -212,3 +212,29 @@
 - `docs/superpowers/plans/2026-06-24-markdown-math.md`: contains the implementation plan.
 - `progress.md`: records this planning task.
 - Rollback: run `git checkout -- progress.md && git rm docs/superpowers/plans/2026-06-24-markdown-math.md`.
+
+## 2026-06-24 - Task: Implement Markdown math support
+### What was done
+- Added KaTeX rendering for inline `$...$` and display `$$...$$` formulas.
+- Kept escaped dollar signs and formulas inside code spans or fenced code blocks as normal source text.
+- Reused the shared Markdown renderer so admin preview and article detail render formulas identically.
+- Added inline and display formula insertion buttons to the admin Markdown toolbar.
+- Added responsive formula styling so long display equations scroll horizontally on narrow screens.
+
+### Testing
+- `npm test -- --run src/lib/markdown.test.ts`: passed. Display formula parsing and code-block exclusion are covered.
+- `npm test -- --run src/lib/math.test.ts src/components/shared.test.tsx src/lib/markdown.test.ts`: passed. KaTeX rendering, invalid formulas, escaped dollars, inline code, and display rendering are covered.
+- `npm test -- --run src/App.test.tsx`: passed. Admin formula toolbar controls are covered.
+- `npm test -- --run`: passed. 27 test files and 95 tests passed.
+- `npm run build`: passed. Vite emitted the KaTeX CSS and font assets; the build reports a non-blocking chunk-size warning after adding KaTeX.
+
+### Notes
+- `package.json`, `package-lock.json`: add KaTeX and its TypeScript declarations.
+- `src/lib/markdown.ts`, `src/lib/markdown.test.ts`: add display-math block parsing and regression tests.
+- `src/lib/math.ts`, `src/lib/math.test.ts`: add the non-throwing KaTeX rendering helper and tests.
+- `src/components/shared.tsx`, `src/components/shared.test.tsx`: render inline/display formulas through the shared Markdown path and test escaping/code exclusions.
+- `src/main.tsx`: loads KaTeX base styles.
+- `src/pages/AdminPage.tsx`, `src/App.test.tsx`: add and test formula toolbar controls.
+- `src/App.css`: adds inline and responsive display formula styling.
+- `docs/superpowers/plans/2026-06-24-markdown-math.md`: marks the implementation plan complete.
+- Rollback: run `git revert <implementation-commit>` after this task is committed, or restore the listed files from commit `6824d9b`.

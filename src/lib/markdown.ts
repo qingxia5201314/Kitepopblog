@@ -4,6 +4,7 @@ export type MarkdownBlock =
   | { type: 'blockquote'; text: string }
   | { type: 'list'; ordered: boolean; items: string[] }
   | { type: 'code'; language: string; code: string }
+  | { type: 'math'; formula: string }
   | { type: 'image'; alt: string; url: string };
 
 function flushParagraph(blocks: MarkdownBlock[], paragraph: string[]) {
@@ -24,6 +25,7 @@ export function parseMarkdown(markdown: string): MarkdownBlock[] {
   let currentList: { ordered: boolean; items: string[] } | undefined;
   let codeLanguage = '';
   let codeLines: string[] | undefined;
+  let mathLines: string[] | undefined;
 
   for (const line of markdown.replace(/\r\n/g, '\n').split('\n')) {
     const fenceMatch = line.match(/^```([\w-]*)\s*$/);
@@ -45,6 +47,23 @@ export function parseMarkdown(markdown: string): MarkdownBlock[] {
       currentList = flushList(blocks, currentList);
       codeLanguage = fenceMatch[1] ?? '';
       codeLines = [];
+      continue;
+    }
+
+    if (line.trim() === '$$') {
+      if (mathLines) {
+        blocks.push({ type: 'math', formula: mathLines.join('\n').trim() });
+        mathLines = undefined;
+      } else {
+        flushParagraph(blocks, paragraph);
+        currentList = flushList(blocks, currentList);
+        mathLines = [];
+      }
+      continue;
+    }
+
+    if (mathLines) {
+      mathLines.push(line);
       continue;
     }
 
@@ -105,6 +124,10 @@ export function parseMarkdown(markdown: string): MarkdownBlock[] {
 
   if (codeLines) {
     blocks.push({ type: 'code', language: codeLanguage, code: codeLines.join('\n') });
+  }
+
+  if (mathLines) {
+    blocks.push({ type: 'paragraph', text: `$$\n${mathLines.join('\n')}` });
   }
 
   flushParagraph(blocks, paragraph);

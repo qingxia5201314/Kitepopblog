@@ -98,6 +98,31 @@ describe('App layout shells', () => {
     expect(activeNav?.textContent).toContain('图床');
   });
 
+  it('shows inline and display formula controls in the admin editor', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/admin');
+    const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', adminFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    expect(await waitFor(() => host.querySelector('button[aria-label="行内公式"]'))).toBeTruthy();
+    expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
+  });
+
   it('renders article detail shell when hash points to a post', async () => {
     vi.stubGlobal('fetch', fetchMock);
     window.location.hash = '#/posts/post-1';

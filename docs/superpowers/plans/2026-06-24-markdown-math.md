@@ -1,6 +1,6 @@
 # Markdown Math Support Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Render inline and display LaTeX formulas consistently in admin Markdown preview and published articles.
 
@@ -16,7 +16,7 @@
 - Modify: `package.json`
 - Modify: `package-lock.json`
 
-- [ ] **Step 1: Install KaTeX and its TypeScript declarations**
+- [x] **Step 1: Install KaTeX and its TypeScript declarations**
 
 Run:
 
@@ -27,7 +27,7 @@ npm install -D @types/katex
 
 Expected: `katex` appears in dependencies and `@types/katex` appears in devDependencies.
 
-- [ ] **Step 2: Verify dependency resolution**
+- [x] **Step 2: Verify dependency resolution**
 
 Run:
 
@@ -43,7 +43,7 @@ Expected: Existing application builds before formula code is introduced.
 - Modify: `src/lib/markdown.ts`
 - Test: `src/lib/markdown.test.ts`
 
-- [ ] **Step 1: Write failing parser tests**
+- [x] **Step 1: Write failing parser tests**
 
 Add tests requiring:
 
@@ -57,7 +57,7 @@ expect(parseMarkdown('```text\n$notMath$\n```')).toEqual([
 ]);
 ```
 
-- [ ] **Step 2: Run parser tests and verify failure**
+- [x] **Step 2: Run parser tests and verify failure**
 
 Run:
 
@@ -67,7 +67,7 @@ npm test -- --run src/lib/markdown.test.ts
 
 Expected: display-math test fails because `MarkdownBlock` has no `math` type.
 
-- [ ] **Step 3: Implement display-math parsing**
+- [x] **Step 3: Implement display-math parsing**
 
 Extend `MarkdownBlock`:
 
@@ -83,7 +83,7 @@ blocks.push({ type: 'math', formula: mathLines.join('\n').trim() });
 
 If the document ends with an unclosed math block, preserve its source as a normal paragraph instead of dropping content.
 
-- [ ] **Step 4: Run parser tests**
+- [x] **Step 4: Run parser tests**
 
 Run:
 
@@ -101,7 +101,7 @@ Expected: all Markdown parser tests pass.
 - Modify: `src/components/shared.tsx`
 - Modify: `src/main.tsx`
 
-- [ ] **Step 1: Write failing formula helper tests**
+- [x] **Step 1: Write failing formula helper tests**
 
 Define the intended helper API:
 
@@ -118,7 +118,7 @@ expect(renderMathToHtml('\\frac{1}{2}', true)).toContain('katex-display');
 expect(() => renderMathToHtml('\\invalid{', false)).not.toThrow();
 ```
 
-- [ ] **Step 2: Run helper tests and verify failure**
+- [x] **Step 2: Run helper tests and verify failure**
 
 Run:
 
@@ -128,7 +128,7 @@ npm test -- --run src/lib/math.test.ts
 
 Expected: failure because `src/lib/math.ts` does not exist.
 
-- [ ] **Step 3: Implement the KaTeX helper**
+- [x] **Step 3: Implement the KaTeX helper**
 
 Create:
 
@@ -145,7 +145,7 @@ export function renderMathToHtml(formula: string, displayMode: boolean): string 
 }
 ```
 
-- [ ] **Step 4: Add shared React formula rendering**
+- [x] **Step 4: Add shared React formula rendering**
 
 In `renderInlineMarkdown`, preserve code spans first and split remaining text into `$...$` formula segments. Render formulas as:
 
@@ -172,7 +172,7 @@ if (block.type === 'math') {
 }
 ```
 
-- [ ] **Step 5: Load KaTeX base CSS once**
+- [x] **Step 5: Load KaTeX base CSS once**
 
 Add to `src/main.tsx`:
 
@@ -180,7 +180,7 @@ Add to `src/main.tsx`:
 import 'katex/dist/katex.min.css';
 ```
 
-- [ ] **Step 6: Run formula and shared renderer tests**
+- [x] **Step 6: Run formula and shared renderer tests**
 
 Run:
 
@@ -196,7 +196,7 @@ Expected: all targeted tests pass.
 - Modify: `src/pages/AdminPage.tsx`
 - Test: `src/App.test.tsx`
 
-- [ ] **Step 1: Add failing editor toolbar test**
+- [x] **Step 1: Add failing editor toolbar test**
 
 Render `/admin` with an existing valid admin session and assert that the toolbar contains:
 
@@ -205,7 +205,7 @@ host.querySelector('button[aria-label="行内公式"]')
 host.querySelector('button[aria-label="块级公式"]')
 ```
 
-- [ ] **Step 2: Run App tests and verify failure**
+- [x] **Step 2: Run App tests and verify failure**
 
 Run:
 
@@ -215,7 +215,7 @@ npm test -- --run src/App.test.tsx
 
 Expected: formula toolbar button assertions fail.
 
-- [ ] **Step 3: Add formula insertion buttons**
+- [x] **Step 3: Add formula insertion buttons**
 
 Add buttons beside the existing Markdown controls:
 
@@ -240,7 +240,7 @@ Add buttons beside the existing Markdown controls:
 
 Update the textarea placeholder to include formulas.
 
-- [ ] **Step 4: Run App tests**
+- [x] **Step 4: Run App tests**
 
 Run:
 
@@ -255,7 +255,7 @@ Expected: all App tests pass.
 **Files:**
 - Modify: `src/App.css`
 
-- [ ] **Step 1: Add scoped formula styles**
+- [x] **Step 1: Add scoped formula styles**
 
 Add:
 
@@ -290,7 +290,7 @@ Add:
 
 Use the existing responsive rules; no viewport-scaled font sizes.
 
-- [ ] **Step 2: Build for CSS and type verification**
+- [x] **Step 2: Build for CSS and type verification**
 
 Run:
 
@@ -306,7 +306,7 @@ Expected: production build succeeds and includes KaTeX font assets.
 - Modify: `progress.md`
 - Modify: `docs/superpowers/plans/2026-06-24-markdown-math.md`
 
-- [ ] **Step 1: Run full tests**
+- [x] **Step 1: Run full tests**
 
 Run:
 
@@ -316,7 +316,7 @@ npm test -- --run
 
 Expected: all test files pass.
 
-- [ ] **Step 2: Run production build**
+- [x] **Step 2: Run production build**
 
 Run:
 
@@ -326,7 +326,7 @@ npm run build
 
 Expected: TypeScript and Vite build pass.
 
-- [ ] **Step 3: Append progress log**
+- [x] **Step 3: Append progress log**
 
 Record:
 
@@ -336,11 +336,11 @@ Record:
 - test/build output;
 - changed file list and rollback command.
 
-- [ ] **Step 4: Mark completed plan checkboxes**
+- [x] **Step 4: Mark completed plan checkboxes**
 
-Update each completed `- [ ]` to `- [x]`.
+Update each completed `- [x]` to `- [x]`.
 
-- [ ] **Step 5: Commit implementation**
+- [x] **Step 5: Commit implementation**
 
 Run:
 

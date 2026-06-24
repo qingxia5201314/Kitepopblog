@@ -1,6 +1,7 @@
 import React, { ReactNode, useEffect, useState } from 'react';
 import { MarkdownBlock, parseMarkdown } from '../lib/markdown';
 import { normalizeImageUrl } from '../lib/imageUrl';
+import { renderMathToHtml } from '../lib/math';
 
 export type UiIcon = 'calendar' | 'clock' | 'tag' | 'spark' | 'grid' | 'draft' | 'edit' | 'sun' | 'shield' | 'book' | 'hash';
 
@@ -176,7 +177,9 @@ export function permissionLabel(permission?: string): string {
 }
 
 export function renderInlineMarkdown(text: string) {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+]\(https?:\/\/[^)]+\))/g);
+  const parts = text.split(
+    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+]\(https?:\/\/[^)]+\)|(?<!\\)\$[^$\n]+\$)/g
+  );
 
   return parts.map((part, index) => {
     if (part.startsWith('`') && part.endsWith('`')) {
@@ -185,6 +188,16 @@ export function renderInlineMarkdown(text: string) {
 
     if (part.startsWith('**') && part.endsWith('**')) {
       return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+
+    if (part.startsWith('$') && part.endsWith('$')) {
+      return (
+        <span
+          className="math-inline"
+          dangerouslySetInnerHTML={{ __html: renderMathToHtml(part.slice(1, -1), false) }}
+          key={index}
+        />
+      );
     }
 
     const linkMatch = part.match(/^\[([^\]]+)]\((https?:\/\/[^)]+)\)$/);
@@ -196,7 +209,7 @@ export function renderInlineMarkdown(text: string) {
       );
     }
 
-    return part;
+    return part.replace(/\\\$/g, '$');
   });
 }
 
@@ -233,6 +246,16 @@ export function renderMarkdownBlock(block: MarkdownBlock, index: number) {
         {block.language ? <span>{block.language}</span> : null}
         <code>{block.code}</code>
       </pre>
+    );
+  }
+
+  if (block.type === 'math') {
+    return (
+      <div
+        className="math-display"
+        dangerouslySetInnerHTML={{ __html: renderMathToHtml(block.formula, true) }}
+        key={index}
+      />
     );
   }
 

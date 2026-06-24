@@ -23,6 +23,22 @@ describe('markdown parser', () => {
     ]);
   });
 
+  it('parses display math blocks without treating code formulas as math', () => {
+    expect(parseMarkdown('$$\nE = mc^2\n$$')).toEqual([
+      { type: 'math', formula: 'E = mc^2' }
+    ]);
+
+    expect(parseMarkdown('```text\n$notMath$\n```')).toEqual([
+      { type: 'code', language: 'text', code: '$notMath$' }
+    ]);
+  });
+
+  it('preserves an unclosed display math block as paragraph text', () => {
+    expect(parseMarkdown('$$\nE = mc^2')).toEqual([
+      { type: 'paragraph', text: '$$\nE = mc^2' }
+    ]);
+  });
+
   it('parses standalone markdown images', () => {
     expect(parseMarkdown('![封面](https://img.example.com/a.png)')).toEqual([
       { type: 'image', alt: '封面', url: 'https://img.example.com/a.png' }
