@@ -184,3 +184,17 @@
 - `src/App.css`: adds the light active top-nav styling.
 - `src/App.test.tsx`: adds regression coverage for the active nav state.
 - Rollback: run `git checkout -- src/components/Layout.tsx src/App.css src/App.test.tsx progress.md`.
+
+## 2026-06-24 - Task: Design Markdown math support
+### What was done
+- Defined the supported inline and display LaTeX syntax for blog Markdown.
+- Specified a shared KaTeX rendering path so admin preview and article detail remain consistent.
+- Defined editor controls, error handling, responsive styling, tests, and out-of-scope behavior.
+
+### Testing
+- Design self-review completed: no placeholders, contradictory requirements, database changes, or undefined rendering paths remain.
+
+### Notes
+- `docs/superpowers/specs/2026-06-24-markdown-math-design.md`: records the approved Markdown math design.
+- `progress.md`: records this design task.
+- Rollback: run `git checkout -- progress.md && git rm docs/superpowers/specs/2026-06-24-markdown-math-design.md`.
