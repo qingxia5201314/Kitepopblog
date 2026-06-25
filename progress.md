@@ -254,3 +254,17 @@
 - `src/App.test.tsx`: adds the regression test for draft visibility after session restore.
 - `progress.md`: records this bugfix task.
 - Rollback: run `git checkout -- src/context/AppContext.tsx src/App.test.tsx progress.md`.
+
+## 2026-06-25 - Task: Design website architecture optimization
+### What was done
+- Defined a phased architecture optimization design focused on unified frontend data loading, smaller admin boundaries, route-level lazy loading, and backend service/storage layering.
+- Locked in the business-safety rules for this refactor: website flows must stay usable, file/image records must remain linked to the database, and schema migration is optional rather than automatic.
+
+### Testing
+- Design self-review completed: the scope, rollout order, data-safety rules, and verification requirements are internally consistent and do not require a forced database replacement.
+- Requirement coverage review completed: session recovery, admin drafts, image hosting, file storage, accounting loading, deployment verification, and migration guardrails are all covered in the spec.
+
+### Notes
+- `docs/superpowers/specs/2026-06-25-architecture-optimization-design.md`: records the approved architecture direction and safety constraints for the refactor.
+- `progress.md`: records this design task.
+- Rollback: run `git checkout -- progress.md && git rm docs/superpowers/specs/2026-06-25-architecture-optimization-design.md`.
