@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo, FormEvent } from 'react';
 import { useApp } from '../context/AppContext';
+import { useBlogData } from '../context/BlogDataContext';
 import { useBlog } from '../hooks/useBlog';
 import {
   BLOG_CATEGORIES,
@@ -47,7 +48,8 @@ interface CommentFormState {
 }
 
 export function HomePage() {
-  const { userSession, notify, posts } = useApp();
+  const { userSession, notify } = useApp();
+  const { posts } = useBlogData();
   const {
     activeCategory,
     setActiveCategory,

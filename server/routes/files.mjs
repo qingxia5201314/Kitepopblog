@@ -38,10 +38,10 @@ function publicFolderView(view) {
 
 // Public: raw file download with token
 app.get('/raw/:id', (c) => {
-  const fileStore = c.get('fileStore');
+  const fileService = c.get('fileService');
   const id = c.req.param('id');
   const token = c.req.query('token') || '';
-  const file = fileStore.getFileForToken(id, token);
+  const file = fileService.getFileForToken(id, token);
 
   if (!file) {
     return c.json({ ok: false, message: 'File not found' }, 404);
@@ -61,11 +61,11 @@ app.get('/', (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const fileStore = c.get('fileStore');
+  const fileService = c.get('fileService');
   const folderId = c.req.query('folderId') || '';
 
   try {
-    return c.json(publicFolderView(fileStore.listFolder(folderId)));
+    return c.json(publicFolderView(fileService.listFolder(folderId)));
   } catch (error) {
     return c.json({ ok: false, message: error instanceof Error ? error.message : 'Folder not found' }, 404);
   }
@@ -76,7 +76,7 @@ app.post('/', async (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const fileStore = c.get('fileStore');
+  const fileService = c.get('fileService');
   const fileUploadLimitBytes = Number(process.env.FILE_UPLOAD_LIMIT || 50 * 1024 * 1024);
 
   try {
@@ -89,7 +89,7 @@ app.post('/', async (c) => {
 
     const contentType = c.req.header('content-type') || '';
     const upload = parseMultipartFile(Buffer.from(buffer), contentType);
-    const file = await fileStore.saveFile(upload);
+    const file = await fileService.saveFile(upload);
     return c.json({ file: publicFile(file) }, 201);
   } catch (error) {
     return c.json({ ok: false, message: error instanceof Error ? error.message : 'Upload failed' }, 400);
@@ -101,9 +101,9 @@ app.post('/:id/link', (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const fileStore = c.get('fileStore');
+  const fileService = c.get('fileService');
   const id = c.req.param('id');
-  const link = fileStore.createAccessLink(id);
+  const link = fileService.createAccessLink(id);
   return c.json(link ? { link } : { ok: false, message: 'File not found' }, link ? 200 : 404);
 });
 
@@ -112,9 +112,9 @@ app.delete('/:id', async (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const fileStore = c.get('fileStore');
+  const fileService = c.get('fileService');
   const id = c.req.param('id');
-  const removed = await fileStore.removeFile(id);
+  const removed = await fileService.removeFile(id);
   return c.json(removed ? { ok: true } : { ok: false, message: 'File not found' }, removed ? 200 : 404);
 });
 

@@ -282,3 +282,24 @@
 - `docs/superpowers/plans/2026-06-25-architecture-optimization.md`: contains the implementation plan for the architecture refactor.
 - `progress.md`: records this planning task.
 - Rollback: run `git checkout -- progress.md && git rm docs/superpowers/plans/2026-06-25-architecture-optimization.md`.
+
+## 2026-06-25 - Task: Implement website architecture optimization
+### What was done
+- Moved admin-session persistence and blog post loading into dedicated shared layers, so restored sessions now drive data loading consistently across the site.
+- Split the admin page into article management, editor panel, and user management modules while keeping existing publishing, autosave, image upload, and user operations available.
+- Unified admin unlock behavior for admin, files, and images pages so cross-page login reuse no longer depends on refresh order.
+- Added route-level lazy page bundles and preserved lightweight first-load behavior for the home route.
+- Added backend post/file/image service seams without changing API response shapes, so file storage and image-host records stay linked to SQLite while future storage swaps have a clean entry point.
+
+### Testing
+- `npm test -- --run src/App.test.tsx server/postStore.test.mjs server/fileStore.test.mjs server/imagesRoutes.test.mjs`: passed. Frontend session/data-loading regressions and backend storage/image route regressions all passed.
+- `npm run build`: passed. Production build completed successfully and emitted split route bundles for `AdminPage`, `FilesPage`, `ImagesPage`, `HomePage`, and `AccountingPage`.
+
+### Notes
+- `src/context/AppContext.tsx`, `src/lib/adminSession.ts`: keep only global app concerns in app context and centralize admin-session persistence.
+- `src/context/BlogDataContext.tsx`, `src/App.tsx`, `src/pages/lazy.ts`, `src/pages/HomePage.tsx`: move blog data loading into its own provider and lazy-load route pages.
+- `src/hooks/useAdminAccess.ts`, `src/pages/FilesPage.tsx`, `src/pages/ImagesPage.tsx`: unify admin login flow and keep file/image pages loading correctly with restored or freshly created admin sessions.
+- `src/components/admin/ArticleManager.tsx`, `src/components/admin/EditorPanel.tsx`, `src/components/admin/UserManager.tsx`, `src/pages/AdminPage.tsx`: split the admin experience into focused modules while preserving publishing, preview, formula toolbar, autosave, and user-management behavior.
+- `server/services/postService.mjs`, `server/services/fileService.mjs`, `server/services/imageService.mjs`, `server/index.mjs`, `server/routes/posts.mjs`, `server/routes/files.mjs`, `server/routes/images.mjs`, `server/imagesRoutes.test.mjs`: add backend service seams and keep current file/image/post API behavior covered by tests.
+- `src/App.test.tsx`: refresh regression checks so they validate the current stable UI labels and session-loading behavior.
+- Rollback: run `git revert <implementation-commit>` after this task is committed, or restore the listed files from commit `ed0b776` and then replay only the desired subsets.

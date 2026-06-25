@@ -11,6 +11,9 @@ import { createPostStore } from './postStore.mjs';
 import { createUserStore } from './userStore.mjs';
 import { createFileStore } from './fileStore.mjs';
 import { createImageStore } from './imageStore.mjs';
+import { createPostService } from './services/postService.mjs';
+import { createFileService } from './services/fileService.mjs';
+import { createImageService } from './services/imageService.mjs';
 import { postsRoutes } from './routes/posts.mjs';
 import { usersRoutes } from './routes/users.mjs';
 import { adminRoutes } from './routes/admin.mjs';
@@ -36,6 +39,9 @@ const accountingStore = createAccountingStore({ database });
 const accountingSessions = createAccountingSessions({ store: accountingStore });
 const fileStore = createFileStore({ database, uploadDir });
 const imageStore = createImageStore({ database, imageDir });
+const postService = createPostService({ store });
+const fileService = createFileService({ fileStore });
+const imageService = createImageService({ imageStore });
 
 const app = new Hono();
 
@@ -43,11 +49,14 @@ const app = new Hono();
 app.use('*', async (c, next) => {
   c.set('sessions', sessions);
   c.set('store', store);
+  c.set('postService', postService);
   c.set('userStore', userStore);
   c.set('accountingStore', accountingStore);
   c.set('accountingSessions', accountingSessions);
   c.set('fileStore', fileStore);
+  c.set('fileService', fileService);
   c.set('imageStore', imageStore);
+  c.set('imageService', imageService);
   c.set('adminPassword', adminPassword);
   await next();
 });

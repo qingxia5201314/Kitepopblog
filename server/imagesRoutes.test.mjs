@@ -6,18 +6,22 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSqliteDatabase } from './sqliteDatabase.mjs';
 import { createImageStore } from './imageStore.mjs';
 import { imagesRoutes } from './routes/images.mjs';
+import { createImageService } from './services/imageService.mjs';
 
 let tempDir;
 let store;
+let imageService;
 let app;
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'kitepop-image-routes-'));
   const database = await createSqliteDatabase({ dbPath: join(tempDir, 'blog.sqlite') });
   store = createImageStore({ database, imageDir: join(tempDir, 'images') });
+  imageService = createImageService({ imageStore: store });
   app = new Hono();
   app.use('*', async (c, next) => {
     c.set('imageStore', store);
+    c.set('imageService', imageService);
     await next();
   });
   app.route('/api/images', imagesRoutes);

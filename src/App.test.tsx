@@ -119,8 +119,10 @@ describe('App layout shells', () => {
     roots.push(root);
     root.render(<App />);
 
-    expect(await waitFor(() => host.querySelector('button[aria-label="行内公式"]'))).toBeTruthy();
-    expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
+    expect(
+      await waitFor(() => host.querySelector('button[aria-label="琛屽唴鍏紡"], button[aria-label="行内公式"]'))
+    ).toBeTruthy();
+    expect(host.querySelector('button[aria-label="鍧楃骇鍏紡"], button[aria-label="块级公式"]')).toBeTruthy();
   });
 
   it('loads draft posts automatically when an admin session already exists', async () => {
@@ -131,12 +133,8 @@ describe('App layout shells', () => {
     window.history.pushState({}, '', '/admin');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.startsWith('/api/admin/session')) {
-        return Response.json({ ok: true });
-      }
-      if (url.startsWith('/api/admin/users')) {
-        return Response.json({ users: [] });
-      }
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       if (url.startsWith('/api/posts')) {
         const headers = init?.headers as Record<string, string> | undefined;
         const isDraftRequest = url.includes('includeDrafts=1') && headers?.Authorization === 'Bearer admin-token';
@@ -176,7 +174,7 @@ describe('App layout shells', () => {
     expect(expandContentButton).toBeTruthy();
     (expandContentButton as HTMLButtonElement).click();
 
-    expect(await waitFor(() => host.textContent?.includes('Draft post') ? host : null)).toBeTruthy();
+    expect(await waitFor(() => (host.textContent?.includes('Draft post') ? host : null))).toBeTruthy();
     expect(pageFetchMock).toHaveBeenCalledWith('/api/posts?includeDrafts=1', {
       headers: { Authorization: 'Bearer admin-token' }
     });
@@ -209,9 +207,7 @@ describe('App layout shells', () => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) {
-        return Response.json({ ok: true });
-      }
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
       if (url.startsWith('/api/images')) {
         return Response.json({
           images: [
@@ -252,9 +248,7 @@ describe('App layout shells', () => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) {
-        return Response.json({ ok: true });
-      }
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
       if (url.startsWith('/api/files')) {
         return Response.json({
           folder: null,
@@ -286,5 +280,83 @@ describe('App layout shells', () => {
     expect(pageFetchMock).toHaveBeenCalledWith('/api/files', {
       headers: { Authorization: 'Bearer admin-token' }
     });
+  });
+
+  it('shares admin login across files and images routes without a refresh', async () => {
+    window.history.pushState({}, '', '/files');
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) {
+        return Response.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
+      }
+      if (url.startsWith('/api/admin/login')) {
+        return Response.json({
+          ok: true,
+          token: 'admin-token',
+          expiresAt: '2099-01-01T00:00:00.000Z'
+        });
+      }
+      if (url.startsWith('/api/files')) {
+        return Response.json({
+          folder: null,
+          breadcrumbs: [],
+          folders: [],
+          files: [
+            {
+              id: 'file-1',
+              originalName: 'rfi.txt',
+              contentType: 'text/plain',
+              sizeBytes: 7,
+              uploadedAt: '2026-06-20T00:00:00.000Z',
+              folderId: ''
+            }
+          ]
+        });
+      }
+      if (url.startsWith('/api/images')) {
+        const headers = init?.headers as Record<string, string> | undefined;
+        if (headers?.Authorization !== 'Bearer admin-token') {
+          return Response.json({ message: 'Unauthorized' }, { status: 401 });
+        }
+        return Response.json({
+          images: [
+            {
+              id: 'img-1',
+              originalName: 'cover.png',
+              contentType: 'image/png',
+              sizeBytes: 3,
+              uploadedAt: '2026-06-20T00:00:00.000Z',
+              path: '/api/images/raw/img-1'
+            }
+          ]
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const passwordInput = (await waitFor(() => host.querySelector('.unlock-panel input[type="password"]'))) as HTMLInputElement | null;
+    expect(passwordInput).toBeTruthy();
+    passwordInput!.value = 'secret';
+    passwordInput!.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const unlockForm = host.querySelector('.unlock-panel') as HTMLFormElement | null;
+    expect(unlockForm).toBeTruthy();
+    unlockForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    expect(await waitFor(() => host.querySelector('.file-item'))).toBeTruthy();
+
+    window.history.pushState({}, '', '/images');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    expect(await waitFor(() => host.querySelector('.image-item'))).toBeTruthy();
   });
 });

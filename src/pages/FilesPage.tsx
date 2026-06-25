@@ -1,5 +1,6 @@
-import React, { useEffect, useState, useRef, FormEvent } from 'react';
+import React, { FormEvent, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAdminAccess } from '../hooks/useAdminAccess';
 import { useFiles } from '../hooks/useFiles';
 import {
   FileFolder,
@@ -15,23 +16,13 @@ import { formatBytes } from '../components/shared';
 
 export function FilesPage() {
   const { notify, adminToken } = useApp();
-  const {
-    activeFileFolderId,
-    fileFolderView,
-    uploadingFile,
-    generatedFileLink,
-    setGeneratedFileLink,
-    loadFiles,
-    openFolder,
-    handleFileUpload,
-    copyFileLink,
-    remove,
-    createFolder,
-    renameFolder,
-    removeFolder
-  } = useFiles(adminToken, notify);
+  const { activeFileFolderId, fileFolderView, uploadingFile, generatedFileLink, setGeneratedFileLink, loadFiles, openFolder } =
+    useFiles(adminToken, notify);
+  const { password: filePassword, setPassword: setFilePassword, unlockAdmin } = useAdminAccess(
+    '已进入文件仓库',
+    '无法连接文件登录接口'
+  );
 
-  const [filePassword, setFilePassword] = useState('');
   const [fileDragActive, setFileDragActive] = useState(false);
   const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -41,29 +32,10 @@ export function FilesPage() {
   }, [adminToken]);
 
   const handleUnlockFiles = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    try {
-      const response = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ password: filePassword })
-      });
-      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string; expiresAt?: string };
-
-      if (!response.ok || !result.ok || !result.token) {
-        notify('error', result.message || '后台口令不正确');
-        return;
-      }
-
-      setLocalAdminToken(result.token);
-      window.localStorage.setItem('kitepop-admin-session', JSON.stringify({ token: result.token, expiresAt: result.expiresAt }));
-      setFilePassword('');
-      await loadFiles(result.token, activeFileFolderId);
-      notify('success', '已进入文件仓库');
-    } catch {
-      notify('error', '无法连接文件登录接口');
-    }
+    const session = await unlockAdmin(event);
+    if (!session?.token) return;
+    setLocalAdminToken(session.token);
+    await loadFiles(session.token, activeFileFolderId);
   };
 
   const handleFileUploadWrapper = async (file?: File) => {
@@ -94,9 +66,8 @@ export function FilesPage() {
 
   const handleRemoveFile = async (file: UploadedFile) => {
     if (!localAdminToken) return;
-    const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立即失效。`);
+    const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立刻失效。`);
     if (!confirmed) return;
-
     try {
       await deleteUploadedFile(file.id, localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -116,7 +87,6 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const name = window.prompt('文件夹名称');
     if (!name?.trim()) return;
-
     try {
       await createFileFolder({ name: name.trim(), parentId: activeFileFolderId }, localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -130,7 +100,6 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const name = window.prompt('新的文件夹名称', folder.name);
     if (!name?.trim() || name.trim() === folder.name) return;
-
     try {
       await renameFileFolder(folder.id, name.trim(), localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -144,7 +113,6 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const confirmed = window.confirm(`确认删除空文件夹 ${folder.name} 吗？非空文件夹不会被删除。`);
     if (!confirmed) return;
-
     try {
       await deleteFileFolder(folder.id, localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -160,9 +128,7 @@ export function FilesPage() {
         <form className="unlock-panel" onSubmit={handleUnlockFiles}>
           <p className="eyebrow">Private Files</p>
           <h1>文件仓库</h1>
-          <p>
-            输入后台口令后上传文件、生成签名访问链接。文件不限类型，但上传、管理和链接生成都需要后台鉴权。
-          </p>
+          <p>输入后台口令后即可上传文件、生成签名链接并管理目录。</p>
           <input
             aria-label="文件仓库口令"
             onChange={(event) => setFilePassword(event.target.value)}
@@ -183,9 +149,7 @@ export function FilesPage() {
           <div>
             <p className="eyebrow">Signed Storage</p>
             <h1>文件仓库</h1>
-            <p>
-              上传后的文件默认不可公开访问，只有生成签名链接后才可被外部读取。删除文件会让旧链接立即失效。
-            </p>
+            <p>上传后的文件默认不公开，只有生成签名链接后才能被外部访问。</p>
           </div>
           <button onClick={() => loadFiles(localAdminToken, activeFileFolderId)} type="button">
             刷新列表
@@ -208,7 +172,7 @@ export function FilesPage() {
               </button>
             ))}
           </div>
-          <button onClick={() => handleCreateFolder()} type="button">
+          <button onClick={handleCreateFolder} type="button">
             新建文件夹
           </button>
         </section>
@@ -247,21 +211,13 @@ export function FilesPage() {
           onDrop={(event) => {
             event.preventDefault();
             setFileDragActive(false);
-            handleFileUploadWrapper(event.dataTransfer.files[0]);
+            void handleFileUploadWrapper(event.dataTransfer.files[0]);
           }}
         >
-          <input
-            onChange={(event) => handleFileUploadWrapper(event.target.files?.[0])}
-            ref={fileInputRef}
-            type="file"
-          />
-          <strong>拖拽文件到这里，或选择上传</strong>
-          <span>不限文件类型，单文件大小受服务端 FILE_UPLOAD_LIMIT 控制。</span>
-          <button
-            disabled={uploadingFile}
-            onClick={() => fileInputRef.current?.click()}
-            type="button"
-          >
+          <input onChange={(event) => void handleFileUploadWrapper(event.target.files?.[0])} ref={fileInputRef} type="file" />
+          <strong>拖拽文件到这里，或点击选择上传</strong>
+          <span>文件大小受服务端 `FILE_UPLOAD_LIMIT` 控制。</span>
+          <button disabled={uploadingFile} onClick={() => fileInputRef.current?.click()} type="button">
             {uploadingFile ? '上传中...' : '选择文件'}
           </button>
         </section>
@@ -287,17 +243,15 @@ export function FilesPage() {
                     {formatBytes(file.sizeBytes)} · {file.contentType} · {new Date(file.uploadedAt).toLocaleString('zh-CN')}
                   </small>
                 </span>
-                <button onClick={() => handleCopyFileLink(file)} type="button">
+                <button onClick={() => void handleCopyFileLink(file)} type="button">
                   复制链接
                 </button>
-                <button className="danger" onClick={() => handleRemoveFile(file)} type="button">
+                <button className="danger" onClick={() => void handleRemoveFile(file)} type="button">
                   删除
                 </button>
               </div>
             ))}
-            {fileFolderView.files.length === 0 ? (
-              <div className="empty-state">这个目录还没有文件。</div>
-            ) : null}
+            {fileFolderView.files.length === 0 ? <div className="empty-state">这个目录还没有文件。</div> : null}
           </div>
         </section>
       </section>

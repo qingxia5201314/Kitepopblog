@@ -18,9 +18,9 @@ function publicImage(image) {
 }
 
 async function serveRawImage(c) {
-  const imageStore = c.get('imageStore');
+  const imageService = c.get('imageService');
   const id = c.req.param('id');
-  const image = imageStore.getImage(id);
+  const image = imageService.getImage(id);
 
   if (!image) {
     return c.json({ ok: false, message: 'Image not found' }, 404);
@@ -50,8 +50,8 @@ app.get('/', (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const imageStore = c.get('imageStore');
-  return c.json({ images: imageStore.listImages().map(publicImage) });
+  const imageService = c.get('imageService');
+  return c.json({ images: imageService.listImages().map(publicImage) });
 });
 
 app.post('/', async (c) => {
@@ -59,7 +59,7 @@ app.post('/', async (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const imageStore = c.get('imageStore');
+  const imageService = c.get('imageService');
   const imageUploadLimitBytes = Number(process.env.IMAGE_UPLOAD_LIMIT || 0);
 
   try {
@@ -72,7 +72,7 @@ app.post('/', async (c) => {
 
     const contentType = c.req.header('content-type') || '';
     const upload = parseMultipartFile(Buffer.from(buffer), contentType);
-    const image = await imageStore.saveImage(upload);
+    const image = await imageService.saveImage(upload);
     return c.json({ image: publicImage(image) }, 201);
   } catch (error) {
     return c.json({ ok: false, message: error instanceof Error ? error.message : 'Image upload failed' }, 400);
@@ -84,9 +84,9 @@ app.delete('/:id', async (c) => {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
 
-  const imageStore = c.get('imageStore');
+  const imageService = c.get('imageService');
   const id = c.req.param('id');
-  const removed = await imageStore.removeImage(id);
+  const removed = await imageService.removeImage(id);
   return c.json(removed ? { ok: true } : { ok: false, message: 'Image not found' }, removed ? 200 : 404);
 });
 
