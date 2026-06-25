@@ -268,3 +268,17 @@
 - `docs/superpowers/specs/2026-06-25-architecture-optimization-design.md`: records the approved architecture direction and safety constraints for the refactor.
 - `progress.md`: records this design task.
 - Rollback: run `git checkout -- progress.md && git rm docs/superpowers/specs/2026-06-25-architecture-optimization-design.md`.
+
+## 2026-06-25 - Task: Plan website architecture optimization
+### What was done
+- Created a phased implementation plan for shared admin session extraction, `AppContext` shrinkage, admin-page decomposition, route-level lazy loading, backend service wrappers, and final deploy verification.
+- Mapped the refactor into TDD-oriented tasks with explicit files, commands, and rollback-aware verification steps.
+
+### Testing
+- Plan self-review completed: the plan covers session restore, draft loading, image/file database linkage, admin split, lazy routes, backend storage seams, and VPS deployment checks.
+- Placeholder and sequencing review completed: each task stays within the approved design and keeps business continuity verification in scope.
+
+### Notes
+- `docs/superpowers/plans/2026-06-25-architecture-optimization.md`: contains the implementation plan for the architecture refactor.
+- `progress.md`: records this planning task.
+- Rollback: run `git checkout -- progress.md && git rm docs/superpowers/plans/2026-06-25-architecture-optimization.md`.
