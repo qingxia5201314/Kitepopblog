@@ -303,3 +303,21 @@
 - `server/services/postService.mjs`, `server/services/fileService.mjs`, `server/services/imageService.mjs`, `server/index.mjs`, `server/routes/posts.mjs`, `server/routes/files.mjs`, `server/routes/images.mjs`, `server/imagesRoutes.test.mjs`: add backend service seams and keep current file/image/post API behavior covered by tests.
 - `src/App.test.tsx`: refresh regression checks so they validate the current stable UI labels and session-loading behavior.
 - Rollback: run `git revert <implementation-commit>` after this task is committed, or restore the listed files from commit `ed0b776` and then replay only the desired subsets.
+
+## 2026-06-25 - Task: Fix loading fallback and new admin-page mojibake
+### What was done
+- Removed the visible bare `Loading...` fallback from route loading and replaced it with a lightweight three-dot loading state.
+- Stopped the homepage from going through lazy loading so the main route no longer flashes the fallback during normal first paint.
+- Cleaned the newly introduced admin editor mojibake so the editor toolbar, form labels, formula buttons, and preview copy render as normal Chinese text.
+
+### Testing
+- `npm test -- --run src/App.test.tsx`: passed. Route shell rendering and admin editor formula controls still work.
+- `npm run build`: passed. Production build completed successfully after the loading fallback and editor text cleanup.
+
+### Notes
+- `src/App.tsx`: switches the home route back to direct render and replaces the Suspense fallback with a minimal loader shell.
+- `src/pages/lazy.ts`: removes the now-unused lazy home export.
+- `src/App.css`: adds the three-dot loading state styling and animation.
+- `src/components/admin/EditorPanel.tsx`: rewrites the visible editor text and formula button labels to eliminate mojibake.
+- `progress.md`: records this bugfix task.
+- Rollback: run `git revert <bugfix-commit>` after this task is committed, or restore `src/App.tsx`, `src/pages/lazy.ts`, `src/App.css`, `src/components/admin/EditorPanel.tsx`, and `progress.md` from commit `435ddf3`.

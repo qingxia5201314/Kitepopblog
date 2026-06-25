@@ -69,7 +69,12 @@ export function EditorPanel({
       </label>
       <label>
         摘要
-        <textarea onChange={(event) => onUpdateForm({ summary: event.target.value })} placeholder="用一两句话说明这篇文章的价值" rows={3} value={form.summary} />
+        <textarea
+          onChange={(event) => onUpdateForm({ summary: event.target.value })}
+          placeholder="用一两句话说明这篇文章的核心内容"
+          rows={3}
+          value={form.summary}
+        />
       </label>
       <div className="form-grid">
         <label>
@@ -175,18 +180,13 @@ export function EditorPanel({
             >
               []
             </button>
-            <button
-              aria-label="琛屽唴鍏紡"
-              onClick={() => onInsertSnippet('$', '$', 'E = mc^2')}
-              title="琛屽唴鍏紡"
-              type="button"
-            >
+            <button aria-label="行内公式" onClick={() => onInsertSnippet('$', '$', 'E = mc^2')} title="行内公式" type="button">
               f(x)
             </button>
             <button
-              aria-label="鍧楃骇鍏紡"
+              aria-label="块级公式"
               onClick={() => onInsertSnippet('$$\n', '\n$$', '\\frac{a}{b}')}
-              title="鍧楃骇鍏紡"
+              title="块级公式"
               type="button"
             >
               Σ

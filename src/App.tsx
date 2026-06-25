@@ -3,17 +3,26 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { BlogDataProvider } from './context/BlogDataContext';
 import { Layout } from './components/Layout';
-import { LazyAccountingPage, LazyAdminPage, LazyFilesPage, LazyHomePage, LazyImagesPage } from './pages/lazy';
+import { HomePage } from './pages/HomePage';
+import { LazyAccountingPage, LazyAdminPage, LazyFilesPage, LazyImagesPage } from './pages/lazy';
 
 function App() {
   return (
     <BrowserRouter>
       <AppProvider>
         <BlogDataProvider>
-          <Suspense fallback={<div className="page-loading">Loading...</div>}>
+          <Suspense
+            fallback={
+              <div className="page-loading" aria-label="页面加载中" role="status">
+                <span />
+                <span />
+                <span />
+              </div>
+            }
+          >
             <Routes>
               <Route element={<Layout />}>
-                <Route path="/" element={<LazyHomePage />} />
+                <Route path="/" element={<HomePage />} />
                 <Route path="/accounting" element={<LazyAccountingPage />} />
                 <Route path="/files" element={<LazyFilesPage />} />
                 <Route path="/images" element={<LazyImagesPage />} />
