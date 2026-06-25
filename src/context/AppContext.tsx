@@ -1,4 +1,4 @@
-import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
+import { ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { BlogPost, UserSession } from '../lib/blog';
 import { AppNotification, NotificationType, createNotification } from '../lib/notification';
 import { listPosts, getCurrentUser } from '../lib/blogApi';
@@ -143,25 +143,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     link.href = faviconImage;
   }, []);
 
-  // Load posts on mount (public posts)
-  useEffect(() => {
-    void loadPosts(false, '');
-  }, []);
-
   const notify = (type: NotificationType, message: string, durationMs?: number) => {
     setNotification(createNotification(type, message, durationMs));
   };
 
   const clearNotificationFn = () => setNotification(null);
 
-  const loadPosts = async (includeDrafts = adminUnlocked, token = adminToken) => {
+  const loadPosts = useCallback(async (includeDrafts = adminUnlocked, token = adminToken) => {
     try {
       const nextPosts = await listPosts({ includeDrafts, token });
       setPosts(nextPosts);
     } catch {
       notify('error', '文章加载失败，请稍后重试');
     }
-  };
+  }, [adminToken, adminUnlocked]);
+
+  useEffect(() => {
+    void loadPosts(adminUnlocked, adminToken);
+  }, [adminToken, adminUnlocked, loadPosts]);
 
   const loginAdmin = (token: string, expiresAt?: string) => {
     setAdminUnlocked(true);

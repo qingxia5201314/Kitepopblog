@@ -238,3 +238,19 @@
 - `src/App.css`: adds inline and responsive display formula styling.
 - `docs/superpowers/plans/2026-06-24-markdown-math.md`: marks the implementation plan complete.
 - Rollback: run `git revert <implementation-commit>` after this task is committed, or restore the listed files from commit `6824d9b`.
+
+## 2026-06-25 - Task: Auto-load draft posts after restoring admin session
+### What was done
+- Fixed the admin article list so a restored backend session immediately reloads posts with draft visibility instead of staying on the public-only article snapshot.
+- Added a regression test that reproduces the exact refresh-only draft visibility bug from the admin page.
+
+### Testing
+- `npm test -- --run src/App.test.tsx`: passed. Restored admin sessions now auto-load draft posts, and existing admin shell checks still pass.
+- `npm test -- --run src/lib/blogApi.test.ts src/App.test.tsx`: passed. Draft-request API coverage and admin-page regression coverage both pass.
+- `npm run build`: passed. Vite production build completed successfully.
+
+### Notes
+- `src/context/AppContext.tsx`: reloads posts when admin session state changes so restored sessions fetch drafts automatically.
+- `src/App.test.tsx`: adds the regression test for draft visibility after session restore.
+- `progress.md`: records this bugfix task.
+- Rollback: run `git checkout -- src/context/AppContext.tsx src/App.test.tsx progress.md`.

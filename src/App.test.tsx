@@ -123,6 +123,65 @@ describe('App layout shells', () => {
     expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
   });
 
+  it('loads draft posts automatically when an admin session already exists', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/admin');
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/api/admin/session')) {
+        return Response.json({ ok: true });
+      }
+      if (url.startsWith('/api/admin/users')) {
+        return Response.json({ users: [] });
+      }
+      if (url.startsWith('/api/posts')) {
+        const headers = init?.headers as Record<string, string> | undefined;
+        const isDraftRequest = url.includes('includeDrafts=1') && headers?.Authorization === 'Bearer admin-token';
+        return Response.json({
+          posts: isDraftRequest
+            ? [
+                {
+                  id: 'post-draft',
+                  slug: 'post-draft',
+                  title: 'Draft post',
+                  summary: 'draft summary',
+                  category: 'life',
+                  tags: ['draft'],
+                  content: 'draft content',
+                  status: 'draft',
+                  createdAt: '2026-06-24T10:00:00.000Z',
+                  updatedAt: '2026-06-24T10:00:00.000Z',
+                  cover: 'life',
+                  coverImage: ''
+                }
+              ]
+            : [],
+          comments: []
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const expandContentButton = await waitFor(() => host.querySelector('.admin-content-group .panel-heading button'));
+    expect(expandContentButton).toBeTruthy();
+    (expandContentButton as HTMLButtonElement).click();
+
+    expect(await waitFor(() => host.textContent?.includes('Draft post') ? host : null)).toBeTruthy();
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/posts?includeDrafts=1', {
+      headers: { Authorization: 'Bearer admin-token' }
+    });
+  });
+
   it('renders article detail shell when hash points to a post', async () => {
     vi.stubGlobal('fetch', fetchMock);
     window.location.hash = '#/posts/post-1';
