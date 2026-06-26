@@ -1,4 +1,8 @@
 import React, { ReactNode, useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import { MarkdownBlock, parseMarkdown } from '../lib/markdown';
 import { normalizeImageUrl } from '../lib/imageUrl';
 import { renderMathToHtml } from '../lib/math';
@@ -285,5 +289,53 @@ export function renderMarkdownBlock(block: MarkdownBlock, index: number) {
 }
 
 export function renderMarkdown(content: string) {
-  return parseMarkdown(content).map(renderMarkdownBlock);
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
+      components={{
+        a({ children, href }) {
+          return (
+            <a href={href} rel="noreferrer" target="_blank">
+              {children}
+            </a>
+          );
+        },
+        h1({ children }) {
+          return <h2>{children}</h2>;
+        },
+        h2({ children }) {
+          return <h3>{children}</h3>;
+        },
+        h3({ children }) {
+          return <h4>{children}</h4>;
+        },
+        img({ alt, src }) {
+          if (!src) return null;
+          const imageUrl = normalizeImageUrl(src);
+          if (!imageUrl) return null;
+
+          return (
+            <ImageWithFallback
+              alt={alt || '文章图片'}
+              src={imageUrl}
+              fallback={<span className="article-image-fallback">图片暂时无法加载</span>}
+            />
+          );
+        },
+        pre({ children }) {
+          return <pre className="article-code">{children}</pre>;
+        },
+        table({ children }) {
+          return (
+            <div className="article-table-wrap">
+              <table>{children}</table>
+            </div>
+          );
+        }
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }

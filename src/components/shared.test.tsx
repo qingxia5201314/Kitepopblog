@@ -98,6 +98,26 @@ describe('ImageWithFallback', () => {
       root.render(<div>{renderMarkdown('$$\n\\frac{a}{b}\n$$')}</div>);
     });
 
-    expect(host.querySelector('.math-display .katex-display')).toBeTruthy();
+    expect(host.querySelector('.katex-display')).toBeTruthy();
+  });
+
+  it('renders standard markdown tables', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(
+        <div>
+          {renderMarkdown('| 项目 | RIP | OSPF |\n| --- | --- | --- |\n| 分类 | 距离向量 | 链路状态 |')}
+        </div>
+      );
+    });
+
+    expect(host.querySelector('table')).toBeTruthy();
+    expect(host.querySelectorAll('th')).toHaveLength(3);
+    expect(host.querySelectorAll('td')).toHaveLength(3);
+    expect(host.textContent).toContain('链路状态');
   });
 });

@@ -15,6 +15,7 @@ import {
 import { formatBytes } from '../components/shared';
 import { UploadProgressTip } from '../components/UploadProgressTip';
 import { UploadProgress } from '../lib/uploadProgress';
+import { copyTextToClipboard } from '../lib/clipboard';
 
 export function FilesPage() {
   const { notify, adminToken } = useApp();
@@ -70,7 +71,7 @@ export function FilesPage() {
       const link = await createFileLink(file.id, localAdminToken);
       const absoluteLink = new URL(link.path, window.location.origin).toString();
       setGeneratedFileLink(absoluteLink);
-      await navigator.clipboard.writeText(absoluteLink);
+      const copied = await copyTextToClipboard(absoluteLink);
       notify('success', '签名链接已复制');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '生成链接失败');

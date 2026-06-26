@@ -383,6 +383,64 @@ describe('App layout shells', () => {
     });
   });
 
+  it('falls back when copying file links without navigator clipboard', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/files');
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: undefined
+    });
+    const execCommand = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', {
+      configurable: true,
+      value: execCommand
+    });
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/files/file-1/link')) {
+        return Response.json({ link: { path: '/api/files/raw/file-1?token=signed-token' } });
+      }
+      if (url.startsWith('/api/files')) {
+        return Response.json({
+          folder: null,
+          breadcrumbs: [],
+          folders: [],
+          files: [
+            {
+              id: 'file-1',
+              originalName: 'rfi.txt',
+              contentType: 'text/plain',
+              sizeBytes: 7,
+              uploadedAt: '2026-06-20T00:00:00.000Z',
+              folderId: ''
+            }
+          ]
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const copyButton = (await waitFor(() => host.querySelector('.file-item button'))) as HTMLButtonElement | null;
+    expect(copyButton).toBeTruthy();
+    copyButton!.click();
+
+    expect(await waitFor(() => (execCommand.mock.calls.length ? host : null))).toBeTruthy();
+    expect(host.textContent).toContain('/api/files/raw/file-1?token=signed-token');
+  });
+
   it('shows upload progress tips for file uploads', async () => {
     window.localStorage.setItem(
       'kitepop-admin-session',

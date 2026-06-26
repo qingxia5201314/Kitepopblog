@@ -398,3 +398,25 @@
 - `src/App.test.tsx`: adds page-level coverage for upload progress tips.
 - `progress.md`: records this feature task.
 - Rollback: run `git checkout -- src/App.css src/App.test.tsx src/lib/fileApi.ts src/lib/fileApi.test.ts src/lib/imageApi.ts src/lib/imageApi.test.ts src/pages/FilesPage.tsx src/pages/ImagesPage.tsx progress.md && git rm src/lib/uploadProgress.ts src/lib/uploadProgress.test.ts src/components/UploadProgressTip.tsx`.
+
+## 2026-06-26 - Task: Fix file link copy and standard markdown rendering
+### What was done
+- Fixed file warehouse link copying so it uses the existing clipboard fallback instead of directly reading `navigator.clipboard.writeText`.
+- Replaced article Markdown rendering with `react-markdown` plus GFM, math, and KaTeX plugins, so standard Markdown tables render as real tables while existing formulas still render through KaTeX.
+- Added article table styling so rendered Markdown tables fit the existing reading layout.
+
+### Testing
+- `npm test -- --run src/components/shared.test.tsx -t "renders standard markdown tables"`: failed before the Markdown renderer change because no table was rendered, then passed after switching to the standard renderer.
+- `npm test -- --run src/App.test.tsx -t "falls back when copying file links"`: failed before the file copy fix because no clipboard fallback was used, then passed after using the shared clipboard helper.
+- `npm test -- --run src/App.test.tsx src/components/shared.test.tsx src/lib/markdown.test.ts src/lib/math.test.ts src/lib/clipboard.test.ts`: passed. All 29 related app, Markdown, math, and clipboard tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; the main bundle warning remains and is larger after adding the Markdown renderer dependencies.
+
+### Notes
+- `src/pages/FilesPage.tsx`: uses `copyTextToClipboard` for signed file link copying and keeps the generated link visible for manual copy.
+- `src/components/shared.tsx`: renders article Markdown with `react-markdown`, `remark-gfm`, `remark-math`, and `rehype-katex`, while preserving safe links and image fallback behavior.
+- `src/components/shared.test.tsx`: adds standard Markdown table coverage and updates display math expectations for the standard renderer.
+- `src/App.test.tsx`: covers file-link copy fallback when `navigator.clipboard` is unavailable.
+- `src/App.css`: adds article table styles.
+- `package.json`, `package-lock.json`: add Markdown rendering dependencies.
+- `progress.md`: records this bugfix and renderer upgrade task.
+- Rollback: run `git checkout -- package.json package-lock.json src/pages/FilesPage.tsx src/components/shared.tsx src/components/shared.test.tsx src/App.test.tsx src/App.css progress.md && npm install`.
