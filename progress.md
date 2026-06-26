@@ -340,3 +340,20 @@
 - `src/App.test.tsx`: updates admin editor label assertions and adds a regression test for readable admin manager labels.
 - `progress.md`: records this bugfix task.
 - Rollback: run `git checkout -- src/components/admin/ArticleManager.tsx src/components/admin/EditorPanel.tsx src/components/admin/UserManager.tsx src/context/BlogDataContext.tsx src/App.test.tsx progress.md`.
+
+## 2026-06-26 - Task: Fix parenthesized inline math rendering
+### What was done
+- Added support for Markdown inline LaTeX written as `\(...\)`, so formulas like `\(a\)` and `\(3\mid12\)` render through KaTeX instead of appearing as raw source text.
+- Kept the existing `$...$`, code, bold, and link inline rendering behavior unchanged.
+- Corrected the reader permission label to readable Chinese text.
+
+### Testing
+- `npm test -- --run src/components/shared.test.tsx -t "renders parenthesized LaTeX inline formulas"`: passed. The regression case for `\(...\)` inline formulas now renders two KaTeX inline nodes.
+- `npm test -- --run src/components/shared.test.tsx src/lib/markdown.test.ts src/lib/math.test.ts src/App.test.tsx`: passed. All 23 related Markdown, math, shared component, and app tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/components/shared.tsx`: extends inline Markdown parsing to recognize `\(...\)` formulas and render them as inline KaTeX; updates the reader permission label.
+- `src/components/shared.test.tsx`: adds regression coverage for parenthesized inline formulas and readable permission labels.
+- `progress.md`: records this bugfix task.
+- Rollback: run `git checkout -- src/components/shared.tsx src/components/shared.test.tsx progress.md`.

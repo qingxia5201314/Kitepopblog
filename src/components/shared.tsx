@@ -173,12 +173,12 @@ export function getSafeImageUrl(value?: string): string | undefined {
 }
 
 export function permissionLabel(permission?: string): string {
-  return permission === 'admin' ? '管理员' : '阅读用户';
+  return permission === 'admin' ? '管理员' : '读者用户';
 }
 
 export function renderInlineMarkdown(text: string) {
   const parts = text.split(
-    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+]\(https?:\/\/[^)]+\)|(?<!\\)\$[^$\n]+\$)/g
+    /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+]\(https?:\/\/[^)]+\)|(?<!\\)\$[^$\n]+\$|\\\([^)\n]+\\\))/g
   );
 
   return parts.map((part, index) => {
@@ -195,6 +195,16 @@ export function renderInlineMarkdown(text: string) {
         <span
           className="math-inline"
           dangerouslySetInnerHTML={{ __html: renderMathToHtml(part.slice(1, -1), false) }}
+          key={index}
+        />
+      );
+    }
+
+    if (part.startsWith('\\(') && part.endsWith('\\)')) {
+      return (
+        <span
+          className="math-inline"
+          dangerouslySetInnerHTML={{ __html: renderMathToHtml(part.slice(2, -2), false) }}
           key={index}
         />
       );

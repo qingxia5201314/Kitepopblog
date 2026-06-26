@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ImageWithFallback, renderInlineMarkdown, renderMarkdown } from './shared';
+import { ImageWithFallback, permissionLabel, renderInlineMarkdown, renderMarkdown } from './shared';
 
 describe('ImageWithFallback', () => {
   const roots: Array<ReturnType<typeof createRoot>> = [];
@@ -66,6 +66,26 @@ describe('ImageWithFallback', () => {
     expect(host.querySelector('code')?.textContent).toBe('$notMath$');
     expect(host.textContent).toContain('价格 $100');
     expect(host.querySelectorAll('.math-inline')).toHaveLength(1);
+  });
+
+  it('renders parenthesized LaTeX inline formulas', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(<p>{renderInlineMarkdown('如果整数 \\(a\\) 可以写成，所以 \\(3\\mid12\\)。')}</p>);
+    });
+
+    expect(host.querySelectorAll('.math-inline .katex')).toHaveLength(2);
+    expect(host.textContent).not.toContain('\\(a\\)');
+    expect(host.textContent).not.toContain('\\(3\\mid12\\)');
+  });
+
+  it('returns readable Chinese permission labels', () => {
+    expect(permissionLabel('admin')).toBe('管理员');
+    expect(permissionLabel('reader')).toBe('读者用户');
   });
 
   it('renders display formulas through the shared markdown renderer', async () => {
