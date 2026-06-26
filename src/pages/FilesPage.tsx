@@ -13,6 +13,8 @@ import {
   uploadFile
 } from '../lib/fileApi';
 import { formatBytes } from '../components/shared';
+import { UploadProgressTip } from '../components/UploadProgressTip';
+import { UploadProgress } from '../lib/uploadProgress';
 
 export function FilesPage() {
   const { notify, adminToken } = useApp();
@@ -25,6 +27,9 @@ export function FilesPage() {
 
   const [fileDragActive, setFileDragActive] = useState(false);
   const [localAdminToken, setLocalAdminToken] = useState(adminToken);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [uploadTipHidden, setUploadTipHidden] = useState(true);
+  const [uploadingFileName, setUploadingFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -40,13 +45,21 @@ export function FilesPage() {
 
   const handleFileUploadWrapper = async (file?: File) => {
     if (!file || !localAdminToken) return;
+    setUploadingFileName(file.name);
+    setUploadProgress({ loaded: 0, total: file.size, percent: 0, speedBytesPerSecond: 0 });
+    setUploadTipHidden(false);
     try {
-      await uploadFile(file, localAdminToken, activeFileFolderId);
+      await uploadFile(file, localAdminToken, activeFileFolderId, setUploadProgress);
       await loadFiles(localAdminToken, activeFileFolderId);
       notify('success', '文件已上传');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件上传失败');
     } finally {
+      window.setTimeout(() => {
+        setUploadTipHidden(true);
+        setUploadProgress(null);
+        setUploadingFileName('');
+      }, 900);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -144,6 +157,15 @@ export function FilesPage() {
 
   return (
     <section className="files-page">
+      {uploadingFileName ? (
+        <UploadProgressTip
+          fileName={uploadingFileName}
+          hidden={uploadTipHidden}
+          onClose={() => setUploadTipHidden(true)}
+          progress={uploadProgress}
+          title="文件上传"
+        />
+      ) : null}
       <section className="files-layout">
         <div className="file-hero accounting-card">
           <div>

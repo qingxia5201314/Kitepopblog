@@ -48,6 +48,31 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   } as Response;
 });
 
+class FakeUploadTarget {
+  onprogress: ((event: ProgressEvent) => void) | null = null;
+}
+
+class FakeXMLHttpRequest {
+  static latest: FakeXMLHttpRequest | null = null;
+
+  responseText = '';
+  status = 0;
+  upload = new FakeUploadTarget();
+  onabort: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onload: (() => void) | null = null;
+
+  constructor() {
+    FakeXMLHttpRequest.latest = this;
+  }
+
+  open() {}
+
+  setRequestHeader() {}
+
+  send() {}
+}
+
 describe('App layout shells', () => {
   const roots: Array<ReturnType<typeof createRoot>> = [];
 
@@ -67,6 +92,7 @@ describe('App layout shells', () => {
     window.history.pushState({}, '', '/');
     window.location.hash = '';
     vi.unstubAllGlobals();
+    FakeXMLHttpRequest.latest = null;
   });
 
   it('renders the redesigned home shell with hero and article index areas', async () => {
@@ -269,6 +295,50 @@ describe('App layout shells', () => {
     });
   });
 
+  it('shows upload progress tips for image uploads', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/images');
+    vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/images')) return Response.json({ images: [] });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const fileInput = (await waitFor(() => host.querySelector('.image-dropzone input[type="file"]'))) as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+    Object.defineProperty(fileInput!, 'files', {
+      configurable: true,
+      value: [new File(['png'], 'cover.png', { type: 'image/png' })]
+    });
+    fileInput!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const xhr = await waitFor(() => FakeXMLHttpRequest.latest as unknown as Element | null);
+    expect(xhr).toBeTruthy();
+    FakeXMLHttpRequest.latest!.upload.onprogress?.({ lengthComputable: true, loaded: 3, total: 6 } as ProgressEvent);
+    FakeXMLHttpRequest.latest!.status = 200;
+    FakeXMLHttpRequest.latest!.responseText = JSON.stringify({ image: { id: 'img-1', path: '/api/images/raw/img-1' } });
+
+    expect(await waitFor(() => host.querySelector('.upload-progress-tip'))).toBeTruthy();
+    expect(host.querySelector('.upload-progress-tip')?.textContent).toContain('cover.png');
+    expect(
+      await waitFor(() => (host.querySelector('.upload-progress-tip')?.textContent?.includes('50%') ? host : null))
+    ).toBeTruthy();
+  });
+
   it('loads file storage automatically when an admin session already exists', async () => {
     window.localStorage.setItem(
       'kitepop-admin-session',
@@ -311,6 +381,52 @@ describe('App layout shells', () => {
     expect(pageFetchMock).toHaveBeenCalledWith('/api/files', {
       headers: { Authorization: 'Bearer admin-token' }
     });
+  });
+
+  it('shows upload progress tips for file uploads', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/files');
+    vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/files')) {
+        return Response.json({ folder: null, breadcrumbs: [], folders: [], files: [] });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const fileInput = (await waitFor(() => host.querySelector('.file-dropzone input[type="file"]'))) as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+    Object.defineProperty(fileInput!, 'files', {
+      configurable: true,
+      value: [new File(['payload'], 'report.pdf', { type: 'application/pdf' })]
+    });
+    fileInput!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    const xhr = await waitFor(() => FakeXMLHttpRequest.latest as unknown as Element | null);
+    expect(xhr).toBeTruthy();
+    FakeXMLHttpRequest.latest!.upload.onprogress?.({ lengthComputable: true, loaded: 512, total: 1024 } as ProgressEvent);
+    FakeXMLHttpRequest.latest!.status = 200;
+    FakeXMLHttpRequest.latest!.responseText = JSON.stringify({ file: { id: 'file-1' } });
+
+    expect(await waitFor(() => host.querySelector('.upload-progress-tip'))).toBeTruthy();
+    expect(host.querySelector('.upload-progress-tip')?.textContent).toContain('report.pdf');
+    expect(
+      await waitFor(() => (host.querySelector('.upload-progress-tip')?.textContent?.includes('50%') ? host : null))
+    ).toBeTruthy();
   });
 
   it('shares admin login across files and images routes without a refresh', async () => {

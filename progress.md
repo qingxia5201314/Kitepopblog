@@ -374,3 +374,27 @@
 - `src/App.test.tsx`: adds regression coverage for changing ledger filters from the accounting page.
 - `progress.md`: records this bugfix task.
 - Rollback: run `git checkout -- src/pages/AccountingPage.tsx src/App.test.tsx progress.md`.
+
+## 2026-06-26 - Task: Add upload progress tips
+### What was done
+- Added an XHR upload path for file warehouse and image host uploads so the browser can report upload progress and speed.
+- Added a shared right-side upload progress tip with slide-in/slide-out animation, file name, percentage, uploaded size, total size, and current speed.
+- Wired file warehouse and image host upload actions to show the tip during upload, allow manual dismissal, and auto-close after upload completion or failure.
+
+### Testing
+- `npm test -- --run src/lib/uploadProgress.test.ts src/lib/fileApi.test.ts src/lib/imageApi.test.ts`: passed. Upload progress callbacks and API progress upload paths are covered.
+- `npm test -- --run src/App.test.tsx -t "upload progress tips"`: passed. File warehouse and image host pages both show progress tips during upload.
+- `npm test -- --run src/App.test.tsx src/lib/uploadProgress.test.ts src/lib/fileApi.test.ts src/lib/imageApi.test.ts src/lib/fileApi.test.ts src/lib/imageApi.test.ts`: passed. All 18 related tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/lib/uploadProgress.ts`: adds the XHR FormData upload helper and progress payload type.
+- `src/lib/uploadProgress.test.ts`: covers progress percentage and speed reporting.
+- `src/lib/fileApi.ts`, `src/lib/imageApi.ts`: keep existing fetch upload behavior by default and use the progress uploader only when a progress callback is provided.
+- `src/lib/fileApi.test.ts`, `src/lib/imageApi.test.ts`: cover the progress upload path for file and image uploads.
+- `src/components/UploadProgressTip.tsx`: adds the shared upload progress tip UI.
+- `src/pages/FilesPage.tsx`, `src/pages/ImagesPage.tsx`: display and auto-close upload progress tips for file warehouse and image host uploads.
+- `src/App.css`: styles the right-side slide-out progress tip, progress bar, and responsive layout.
+- `src/App.test.tsx`: adds page-level coverage for upload progress tips.
+- `progress.md`: records this feature task.
+- Rollback: run `git checkout -- src/App.css src/App.test.tsx src/lib/fileApi.ts src/lib/fileApi.test.ts src/lib/imageApi.ts src/lib/imageApi.test.ts src/pages/FilesPage.tsx src/pages/ImagesPage.tsx progress.md && git rm src/lib/uploadProgress.ts src/lib/uploadProgress.test.ts src/components/UploadProgressTip.tsx`.

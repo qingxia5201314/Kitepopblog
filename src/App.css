@@ -383,6 +383,89 @@ button.danger:hover,
   padding: 0;
 }
 
+.upload-progress-tip {
+  animation: upload-tip-slide-in 260ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 249, 0.98), rgba(255, 247, 238, 0.96)),
+    #fffdf9;
+  border: 2px solid #d84b49;
+  border-radius: 8px;
+  box-shadow: 0 22px 42px rgba(42, 19, 15, 0.18);
+  color: #2f2520;
+  display: grid;
+  gap: 10px;
+  max-width: min(390px, calc(100vw - 24px));
+  overflow: hidden;
+  padding: 16px;
+  position: fixed;
+  right: 18px;
+  top: 86px;
+  width: 360px;
+  z-index: 30;
+}
+
+.upload-progress-tip.hidden {
+  animation: upload-tip-slide-out 220ms ease-in both;
+  pointer-events: none;
+}
+
+.upload-progress-tip > button {
+  align-items: center;
+  background: #fff7f2;
+  border: 1px solid rgba(216, 75, 73, 0.45);
+  border-radius: 50%;
+  color: #9e2f28;
+  display: inline-flex;
+  font-size: 1.15rem;
+  font-weight: 800;
+  height: 30px;
+  justify-content: center;
+  min-height: 30px;
+  min-width: 30px;
+  padding: 0;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  width: 30px;
+}
+
+.upload-progress-tip strong {
+  max-width: calc(100% - 42px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-progress-kicker {
+  color: #d84b49;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.upload-progress-bar {
+  background: #f2e6da;
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.upload-progress-bar span {
+  background: linear-gradient(90deg, #d84b49, #2f7d67);
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transition: width 180ms ease;
+}
+
+.upload-progress-meta {
+  color: #68706a;
+  display: grid;
+  font-size: 0.86rem;
+  gap: 4px;
+  grid-template-columns: 0.55fr 1fr 0.8fr;
+}
+
 .page-loading {
   align-items: center;
   display: flex;
@@ -443,6 +526,28 @@ button.danger:hover,
 
   to {
     transform: scaleX(0);
+  }
+}
+
+@keyframes upload-tip-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes upload-tip-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(calc(100% + 24px));
   }
 }
 

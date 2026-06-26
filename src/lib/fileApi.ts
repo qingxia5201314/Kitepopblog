@@ -1,3 +1,5 @@
+import { UploadProgressHandler, uploadFormDataWithProgress } from './uploadProgress';
+
 export interface UploadedFile {
   id: string;
   originalName: string;
@@ -54,10 +56,24 @@ export async function getFileFolderView(token: string, folderId = ''): Promise<F
   return payload;
 }
 
-export async function uploadFile(file: File, token: string, folderId = ''): Promise<UploadedFile> {
+export async function uploadFile(
+  file: File,
+  token: string,
+  folderId = '',
+  onProgress?: UploadProgressHandler
+): Promise<UploadedFile> {
   const formData = new FormData();
   formData.set('file', file);
   if (folderId) formData.set('folderId', folderId);
+  if (onProgress) {
+    const payload = await uploadFormDataWithProgress<{ file: UploadedFile }>({
+      formData,
+      headers: authHeaders(token) as Record<string, string>,
+      onProgress,
+      url: '/api/files'
+    });
+    return payload.file;
+  }
   const payload = await parseResponse<{ file: UploadedFile }>(
     await fetch('/api/files', {
       method: 'POST',

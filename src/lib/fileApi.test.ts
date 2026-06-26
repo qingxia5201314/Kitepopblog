@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createFileFolder,
   createFileLink,
@@ -8,8 +8,18 @@ import {
   renameFileFolder,
   uploadFile
 } from './fileApi';
+import { uploadFormDataWithProgress } from './uploadProgress';
+
+vi.mock('./uploadProgress', () => ({
+  uploadFormDataWithProgress: vi.fn()
+}));
 
 describe('file api client', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it('uses admin bearer tokens for file operations', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
@@ -78,5 +88,35 @@ describe('file api client', () => {
       method: 'DELETE',
       headers: { Authorization: 'Bearer admin-token' }
     });
+  });
+
+  it('uses the progress uploader for file uploads when progress is requested', async () => {
+    vi.mocked(uploadFormDataWithProgress).mockResolvedValue({
+      file: {
+        id: 'file-1',
+        originalName: 'rfi.txt',
+        contentType: 'text/plain',
+        sizeBytes: 7,
+        uploadedAt: '2026-06-26T00:00:00.000Z',
+        folderId: 'folder-root'
+      }
+    });
+    const onProgress = vi.fn();
+
+    const file = await uploadFile(
+      new File(['payload'], 'rfi.txt', { type: 'text/plain' }),
+      'admin-token',
+      'folder-root',
+      onProgress
+    );
+
+    expect(file.id).toBe('file-1');
+    expect(uploadFormDataWithProgress).toHaveBeenCalledWith(expect.objectContaining({
+      headers: { Authorization: 'Bearer admin-token' },
+      onProgress,
+      url: '/api/files'
+    }));
+    const formData = vi.mocked(uploadFormDataWithProgress).mock.calls[0][0].formData;
+    expect(formData.get('folderId')).toBe('folder-root');
   });
 });

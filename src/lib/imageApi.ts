@@ -1,3 +1,5 @@
+import { UploadProgressHandler, uploadFormDataWithProgress } from './uploadProgress';
+
 export interface HostedImage {
   id: string;
   originalName: string;
@@ -49,9 +51,22 @@ export async function listHostedImages(token: string): Promise<HostedImage[]> {
   return payload.images;
 }
 
-export async function uploadHostedImage(file: File, token: string): Promise<HostedImage> {
+export async function uploadHostedImage(
+  file: File,
+  token: string,
+  onProgress?: UploadProgressHandler
+): Promise<HostedImage> {
   const formData = new FormData();
   formData.set('file', file);
+  if (onProgress) {
+    const payload = await uploadFormDataWithProgress<{ image: HostedImage }>({
+      formData,
+      headers: authHeaders(token) as Record<string, string>,
+      onProgress,
+      url: '/api/images'
+    });
+    return payload.image;
+  }
   const payload = await parseResponse<{ image: HostedImage }>(
     await fetch('/api/images', {
       method: 'POST',

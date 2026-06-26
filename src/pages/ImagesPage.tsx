@@ -5,6 +5,8 @@ import { useImages } from '../hooks/useImages';
 import { HostedImage, deleteHostedImage, uploadHostedImage } from '../lib/imageApi';
 import { formatBytes } from '../components/shared';
 import { copyTextToClipboard } from '../lib/clipboard';
+import { UploadProgressTip } from '../components/UploadProgressTip';
+import { UploadProgress } from '../lib/uploadProgress';
 
 export function ImagesPage() {
   const { notify, adminToken } = useApp();
@@ -16,6 +18,9 @@ export function ImagesPage() {
 
   const [imageDragActive, setImageDragActive] = useState(false);
   const [localAdminToken, setLocalAdminToken] = useState(adminToken);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [uploadTipHidden, setUploadTipHidden] = useState(true);
+  const [uploadingImageName, setUploadingImageName] = useState('');
   const imageHostInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -35,8 +40,11 @@ export function ImagesPage() {
       notify('error', '图床只允许上传图片文件');
       return;
     }
+    setUploadingImageName(file.name);
+    setUploadProgress({ loaded: 0, total: file.size, percent: 0, speedBytesPerSecond: 0 });
+    setUploadTipHidden(false);
     try {
-      const image = await uploadHostedImage(file, localAdminToken);
+      const image = await uploadHostedImage(file, localAdminToken, setUploadProgress);
       const link = new URL(image.path, window.location.origin).toString();
       setCopiedImageLink(link);
       await loadHostedImages(localAdminToken);
@@ -45,6 +53,11 @@ export function ImagesPage() {
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '图片上传失败');
     } finally {
+      window.setTimeout(() => {
+        setUploadTipHidden(true);
+        setUploadProgress(null);
+        setUploadingImageName('');
+      }, 900);
       if (imageHostInputRef.current) imageHostInputRef.current.value = '';
     }
   };
@@ -90,6 +103,15 @@ export function ImagesPage() {
 
   return (
     <section className="image-host-page">
+      {uploadingImageName ? (
+        <UploadProgressTip
+          fileName={uploadingImageName}
+          hidden={uploadTipHidden}
+          onClose={() => setUploadTipHidden(true)}
+          progress={uploadProgress}
+          title="图床上传"
+        />
+      ) : null}
       <section className="image-host-layout">
         <div className="file-hero accounting-card">
           <div>
