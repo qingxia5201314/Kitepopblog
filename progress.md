@@ -420,3 +420,23 @@
 - `package.json`, `package-lock.json`: add Markdown rendering dependencies.
 - `progress.md`: records this bugfix and renderer upgrade task.
 - Rollback: run `git checkout -- package.json package-lock.json src/pages/FilesPage.tsx src/components/shared.tsx src/components/shared.test.tsx src/App.test.tsx src/App.css progress.md && npm install`.
+
+## 2026-06-26 - Task: Fix article image and mobile detail layout
+### What was done
+- Restored standard Markdown images to the article image frame so desktop article images no longer render as oversized bare images.
+- Added desktop image containment for article body images, keeping large images centered and capped within the reading page.
+- Tightened mobile article detail layout so the page, rail, header, tags, body, code blocks, formulas, and tables stay within the phone viewport.
+- Removed the fixed character background on phone-width pages so it no longer intrudes into the article reading area.
+
+### Testing
+- `npm test -- --run src/article-mobile-layout.test.js src/components/shared.test.tsx src/App.test.tsx`: passed. The regression checks cover article image wrapping, desktop/mobile article containment styles, and the existing app shell behavior.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+- Browser screenshot verification was attempted against the local Vite server, but the Playwright browser tool failed with `net::ERR_PROXY_CONNECTION_FAILED`; this visual verification remains a tool-environment gap, not a passing visual claim.
+
+### Notes
+- `src/components/shared.tsx`: wraps standard Markdown images in the article image frame and keeps image captions.
+- `src/components/shared.test.tsx`: adds regression coverage that standard Markdown images render inside `figure.article-image`.
+- `src/App.css`: constrains desktop article body images and tightens mobile article detail layout/background behavior.
+- `src/article-mobile-layout.test.js`: adds CSS regression checks for desktop image containment and mobile article detail containment.
+- `progress.md`: records this layout bugfix task.
+- Rollback: run `git checkout -- src/App.css src/components/shared.tsx src/components/shared.test.tsx progress.md && git rm src/article-mobile-layout.test.js`.

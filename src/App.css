@@ -5828,3 +5828,115 @@ p {
     grid-column: 1 / -1;
   }
 }
+
+/* Article detail image containment */
+.article-body .article-image {
+  margin: 1.35rem auto;
+  max-width: min(100%, 860px);
+  min-width: 0;
+}
+
+.article-body .article-image img {
+  height: auto;
+  max-height: min(72vh, 720px);
+  object-fit: contain;
+  width: 100%;
+}
+
+.article-body .article-image-fallback {
+  width: 100%;
+}
+
+.article-page,
+.article-page-shell,
+.article-page-main,
+.article-header-card,
+.article-header-media,
+.article-header-copy,
+.article-body-card,
+.article-body {
+  min-width: 0;
+}
+
+.article-body {
+  overflow-wrap: break-word;
+}
+
+/* Article detail mobile containment */
+@media (max-width: 620px) {
+  body {
+    background:
+      linear-gradient(112deg, transparent 0 62%, rgba(216, 75, 73, 0.04) 62% 70%, transparent 70%),
+      #fffdf9;
+  }
+
+  .article-page {
+    border-radius: 14px;
+    margin-top: 10px;
+    max-width: calc(100vw - 20px);
+    overflow: hidden;
+    padding: 10px;
+    width: 100%;
+  }
+
+  .article-page-shell {
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .article-page-rail {
+    gap: 10px;
+  }
+
+  .article-rail-card {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .article-rail-tags button,
+  .tag-row button {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .article-header-card {
+    border-radius: 14px;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .article-header-media .article-cover-image,
+  .article-header-media .article-cover {
+    aspect-ratio: 16 / 9;
+    margin-bottom: 0;
+    max-height: 240px;
+    width: 100%;
+  }
+
+  .article-body-card {
+    border-radius: 14px;
+    padding: 14px;
+  }
+
+  .article-body {
+    overflow-wrap: anywhere;
+  }
+
+  .article-body .article-image {
+    margin: 1rem 0;
+    max-width: 100%;
+  }
+
+  .article-body .article-image img {
+    max-height: 56vh;
+  }
+
+  .article-code,
+  .math-display,
+  .article-table-wrap {
+    max-width: 100%;
+  }
+}

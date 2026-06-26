@@ -316,11 +316,14 @@ export function renderMarkdown(content: string) {
           if (!imageUrl) return null;
 
           return (
-            <ImageWithFallback
-              alt={alt || '文章图片'}
-              src={imageUrl}
-              fallback={<span className="article-image-fallback">图片暂时无法加载</span>}
-            />
+            <figure className="article-image">
+              <ImageWithFallback
+                alt={alt || '文章图片'}
+                src={imageUrl}
+                fallback={<span className="article-image-fallback">图片暂时无法加载</span>}
+              />
+              {alt ? <figcaption>{alt}</figcaption> : null}
+            </figure>
           );
         },
         pre({ children }) {

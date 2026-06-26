@@ -120,4 +120,18 @@ describe('ImageWithFallback', () => {
     expect(host.querySelectorAll('td')).toHaveLength(3);
     expect(host.textContent).toContain('链路状态');
   });
+
+  it('wraps standard markdown images in the article image frame', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(<div>{renderMarkdown('![cover](/api/images/raw/img-1)')}</div>);
+    });
+
+    expect(host.querySelector('figure.article-image img')).toBeTruthy();
+    expect(host.querySelector('.article-image figcaption')?.textContent).toBe('cover');
+  });
 });
