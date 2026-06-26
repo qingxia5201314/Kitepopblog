@@ -321,3 +321,22 @@
 - `src/components/admin/EditorPanel.tsx`: rewrites the visible editor text and formula button labels to eliminate mojibake.
 - `progress.md`: records this bugfix task.
 - Rollback: run `git revert <bugfix-commit>` after this task is committed, or restore `src/App.tsx`, `src/pages/lazy.ts`, `src/App.css`, `src/components/admin/EditorPanel.tsx`, and `progress.md` from commit `435ddf3`.
+
+## 2026-06-26 - Task: Fix remaining admin-page mojibake
+### What was done
+- Replaced the remaining mojibake in the admin content manager, editor panel, user manager, page-loading label, and blog data loading error message with readable Chinese text.
+- Added a regression check for readable admin content/user manager labels so the admin page does not silently regress to mojibake again.
+
+### Testing
+- `npm test -- --run src/App.test.tsx`: passed. All 9 App shell/admin regression tests passed, including the new readable-label check.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully.
+- `rg -n "鍐呭|鏂囩|鍚庡|鍥惧|鏂板|缂栬|鐢ㄦ|鑽夌|棰勮|鍧楃|琛屽唴|椤甸潰|閸|閺|鐏|锟|鎴|寮|璇|鏍|鍒" src --glob '!src/assets/**'`: no matches in source text files.
+
+### Notes
+- `src/components/admin/ArticleManager.tsx`: restored readable Chinese labels for content management, status filters, post badges, and actions.
+- `src/components/admin/EditorPanel.tsx`: restored readable Chinese editor labels, placeholders, toolbar titles, upload copy, and preview fallback text.
+- `src/components/admin/UserManager.tsx`: restored readable Chinese user-management labels and actions.
+- `src/context/BlogDataContext.tsx`: restored the readable article-loading failure notification.
+- `src/App.test.tsx`: updates admin editor label assertions and adds a regression test for readable admin manager labels.
+- `progress.md`: records this bugfix task.
+- Rollback: run `git checkout -- src/components/admin/ArticleManager.tsx src/components/admin/EditorPanel.tsx src/components/admin/UserManager.tsx src/context/BlogDataContext.tsx src/App.test.tsx progress.md`.

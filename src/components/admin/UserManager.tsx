@@ -54,7 +54,7 @@ export function UserManager({
               onChange={(event) => onChangeCreateForm({ permission: event.target.value as BlogUser['permission'] })}
               value={adminUserForm.permission}
             >
-              <option value="reader">阅读用户</option>
+              <option value="reader">读者用户</option>
               <option value="admin">管理员</option>
             </select>
             <button type="submit">新增用户</button>
@@ -62,16 +62,12 @@ export function UserManager({
           {adminUsers.map((user) => (
             <div className="admin-user" key={user.id}>
               <span className="admin-user-name">{user.username}</span>
-              <input
-                onChange={(event) => onChangeUser(user.id, { nickname: event.target.value })}
-                placeholder="昵称"
-                value={user.nickname}
-              />
+              <input onChange={(event) => onChangeUser(user.id, { nickname: event.target.value })} placeholder="昵称" value={user.nickname} />
               <select
                 onChange={(event) => onChangeUser(user.id, { permission: event.target.value as BlogUser['permission'] })}
                 value={user.permission}
               >
-                <option value="reader">阅读用户</option>
+                <option value="reader">读者用户</option>
                 <option value="admin">管理员</option>
               </select>
               <button onClick={() => onSaveUser(user)} type="button">

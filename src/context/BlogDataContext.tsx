@@ -19,7 +19,7 @@ export function BlogDataProvider({ children }: { children: ReactNode }) {
       const nextPosts = await listPosts({ includeDrafts, token });
       setPosts(nextPosts);
     } catch {
-      notify('error', '鏂囩珷鍔犺浇澶辫触锛岃绋嶅悗閲嶈瘯');
+      notify('error', '文章加载失败，请稍后重试');
     }
   }, [adminToken, adminUnlocked, notify]);
 

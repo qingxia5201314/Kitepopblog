@@ -120,9 +120,40 @@ describe('App layout shells', () => {
     root.render(<App />);
 
     expect(
-      await waitFor(() => host.querySelector('button[aria-label="琛屽唴鍏紡"], button[aria-label="行内公式"]'))
+      await waitFor(() => host.querySelector('button[aria-label="一级标题"], button[aria-label="行内公式"]'))
     ).toBeTruthy();
-    expect(host.querySelector('button[aria-label="鍧楃骇鍏紡"], button[aria-label="块级公式"]')).toBeTruthy();
+    expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
+  });
+
+  it('renders readable Chinese labels in the admin content managers', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/admin');
+    const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', adminFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    expect(await waitFor(() => host.querySelector('.admin-layout'))).toBeTruthy();
+    expect(host.querySelector('.admin-content-group .panel-heading h2')?.textContent).toBe('内容管理');
+    const expandContentButton = host.querySelector('.admin-content-group .panel-heading button') as HTMLButtonElement | null;
+    expect(expandContentButton?.textContent).toBe('展开');
+    expandContentButton?.click();
+    expect(await waitFor(() => host.querySelector('.admin-create'))).toBeTruthy();
+    expect(host.querySelector('.admin-create')?.textContent?.trim()).toBe('新建文章');
+    expect(host.querySelector('.admin-user-group .panel-heading h2')?.textContent).toBe('用户管理');
   });
 
   it('loads draft posts automatically when an admin session already exists', async () => {

@@ -33,15 +33,15 @@ export function ArticleManager(props: ArticleManagerProps) {
   return (
     <section className={adminPanelOpen ? 'admin-group admin-content-group open' : 'admin-group admin-content-group'}>
       <div className="panel-heading">
-        <h2>鍐呭绠＄悊</h2>
+        <h2>内容管理</h2>
         <button onClick={onTogglePanel} type="button">
-          {adminPanelOpen ? '鏀惰捣' : '灞曞紑'}
+          {adminPanelOpen ? '收起' : '展开'}
         </button>
       </div>
       {adminPanelOpen ? (
         <>
           <button className="ghost admin-create" onClick={onCreate} type="button">
-            鏂板缓
+            新建文章
           </button>
           <div className="segmented-control">
             {(['all', 'published', 'draft'] as const).map((status) => (
@@ -51,7 +51,7 @@ export function ArticleManager(props: ArticleManagerProps) {
                 onClick={() => onSetStatusFilter(status)}
                 type="button"
               >
-                {status === 'all' ? '鍏ㄩ儴' : status === 'published' ? '宸插彂甯?' : '鑽夌'}
+                {status === 'all' ? '全部' : status === 'published' ? '已发布' : '草稿'}
               </button>
             ))}
           </div>
@@ -69,27 +69,25 @@ export function ArticleManager(props: ArticleManagerProps) {
                 >
                   <span className="admin-post-title-row">
                     <strong>{post.title}</strong>
-                    <em className={`status-badge ${isPublished ? 'published' : 'draft'}`}>
-                      {isPublished ? '宸插彂甯?' : '鑽夌'}
-                    </em>
+                    <em className={`status-badge ${isPublished ? 'published' : 'draft'}`}>{isPublished ? '已发布' : '草稿'}</em>
                   </span>
                   <small>
                     <Icon name={getCategoryIcon(post.category)} />
                     {category.name}
-                    <span className="admin-post-meta-sep">路</span>
+                    <span className="admin-post-meta-sep">·</span>
                     {new Date(post.updatedAt).toLocaleString('zh-CN')}
                   </small>
                 </button>
                 {isExpanded ? (
                   <div className="admin-post-actions">
                     <button onClick={() => onEdit(post)} type="button">
-                      缂栬緫
+                      编辑
                     </button>
                     <button onClick={() => onUpdateStatus(post.id, isPublished ? 'draft' : 'published')} type="button">
-                      {isPublished ? '璁捐崏绋?' : '鍙戝竷'}
+                      {isPublished ? '设为草稿' : '发布'}
                     </button>
                     <button className="danger" onClick={() => onRemove(post)} type="button">
-                      鍒犻櫎
+                      删除
                     </button>
                   </div>
                 ) : null}

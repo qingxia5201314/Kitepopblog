@@ -159,7 +159,7 @@ export function EditorPanel({
               &lt;/&gt;
             </button>
             <button aria-label="引用" onClick={() => onInsertSnippet('> ')} title="引用" type="button">
-              ""
+              "
             </button>
             <button aria-label="列表" onClick={() => onInsertSnippet('- ')} title="列表" type="button">
               -
