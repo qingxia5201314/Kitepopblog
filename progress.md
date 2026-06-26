@@ -357,3 +357,20 @@
 - `src/components/shared.test.tsx`: adds regression coverage for parenthesized inline formulas and readable permission labels.
 - `progress.md`: records this bugfix task.
 - Rollback: run `git checkout -- src/components/shared.tsx src/components/shared.test.tsx progress.md`.
+
+## 2026-06-26 - Task: Restore accounting ledger filters
+### What was done
+- Reconnected the accounting ledger type and category filter dropdowns to their state setters and month-data reload path.
+- Reset the collapsed ledger view when a filter changes so the refreshed list starts from the top of the filtered result set.
+- Added a regression test that fails if changing either ledger filter no longer requests filtered accounting data.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "reloads accounting entries when ledger filters change"`: failed before the fix because no filtered request was made, then passed after reconnecting the dropdown handlers.
+- `npm test -- --run src/App.test.tsx src/lib/accounting.test.ts src/lib/accountingApi.test.ts server/accountingStore.test.mjs server/accountingModel.test.mjs`: passed. All 40 app/accounting regression tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/pages/AccountingPage.tsx`: wires the type/category filter selects to update filter state, reload accounting month data with the selected filter, and collapse the refreshed list.
+- `src/App.test.tsx`: adds regression coverage for changing ledger filters from the accounting page.
+- `progress.md`: records this bugfix task.
+- Rollback: run `git checkout -- src/pages/AccountingPage.tsx src/App.test.tsx progress.md`.

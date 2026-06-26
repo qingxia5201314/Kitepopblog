@@ -84,6 +84,8 @@ export function AccountingPage() {
     accountingTypeFilter,
     accountingCategoryFilter,
     setAccountingMonth,
+    setAccountingTypeFilter,
+    setAccountingCategoryFilter,
     updateAccountingForm,
     loadAccountingData,
     saveAccountingEntry,
@@ -116,6 +118,18 @@ export function AccountingPage() {
   } = useAccounting(accountingSession?.token || '', notify);
 
   const [localEditingId, setLocalEditingId] = useState<string | null>(null);
+
+  const handleAccountingTypeFilterChange = (type: AccountingEntryType | 'all') => {
+    setAccountingTypeFilter(type);
+    setAccountingEntriesExpanded(false);
+    void loadAccountingData(accountingSession?.token || '', accountingMonth, type, accountingCategoryFilter);
+  };
+
+  const handleAccountingCategoryFilterChange = (category: AccountingCategoryId | 'all') => {
+    setAccountingCategoryFilter(category);
+    setAccountingEntriesExpanded(false);
+    void loadAccountingData(accountingSession?.token || '', accountingMonth, accountingTypeFilter, category);
+  };
 
   const handleUnlockAccounting = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -407,7 +421,12 @@ export function AccountingPage() {
           <div className="form-grid">
             <label>
               类型
-              <select value={accountingTypeFilter} onChange={() => {}}>
+              <select
+                value={accountingTypeFilter}
+                onChange={(event) =>
+                  handleAccountingTypeFilterChange(event.target.value as AccountingEntryType | 'all')
+                }
+              >
                 <option value="all">全部</option>
                 <option value="expense">支出</option>
                 <option value="income">收入</option>
@@ -415,7 +434,12 @@ export function AccountingPage() {
             </label>
             <label>
               分类
-              <select value={accountingCategoryFilter} onChange={() => {}}>
+              <select
+                value={accountingCategoryFilter}
+                onChange={(event) =>
+                  handleAccountingCategoryFilterChange(event.target.value as AccountingCategoryId | 'all')
+                }
+              >
                 <option value="all">全部分类</option>
                 {allAccountingCategories.map((category) => (
                   <option key={category.id} value={category.id}>

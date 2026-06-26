@@ -390,4 +390,86 @@ describe('App layout shells', () => {
 
     expect(await waitFor(() => host.querySelector('.image-item'))).toBeTruthy();
   });
+
+  it('reloads accounting entries when ledger filters change', async () => {
+    window.localStorage.setItem(
+      'kitepop-accounting-session',
+      JSON.stringify({ token: 'accounting-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/accounting');
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/accounting/month')) {
+        return Response.json({
+          entries: [
+            {
+              id: 'entry-1',
+              type: 'expense',
+              amountCents: 2500,
+              category: 'food',
+              account: '微信',
+              spentAt: '2026-06-26',
+              note: '',
+              includeInSaving: true,
+              createdAt: '2026-06-26T00:00:00.000Z',
+              updatedAt: '2026-06-26T00:00:00.000Z'
+            }
+          ],
+          categories: [
+            { id: 'food', name: '餐饮', type: 'expense', accent: '#b6423c' },
+            { id: 'salary', name: '工资', type: 'income', accent: '#2f7d67' }
+          ],
+          settings: { monthlyBudgetCents: 0, savingGoal: null },
+          summary: {
+            incomeCents: 0,
+            expenseCents: 2500,
+            savingIncomeCents: 0,
+            savingExpenseCents: 2500,
+            savingNetExpenseCents: 2500,
+            balanceCents: -2500,
+            dailyExpenseCents: 2500,
+            budgetLimitCents: 0,
+            plannedAvailableCents: 0,
+            targetSavingCents: 0,
+            budgetUsedPercent: 0,
+            budgetRemainingCents: 0,
+            topExpenseCategory: { category: 'food', amountCents: 2500 }
+          },
+          savingGoal: null
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const ledgerCard = (await waitFor(() => host.querySelectorAll('.accounting-layout > .accounting-card')[1])) as HTMLElement | null;
+    expect(ledgerCard).toBeTruthy();
+    const [typeFilter, categoryFilter] = Array.from(ledgerCard!.querySelectorAll('select')) as HTMLSelectElement[];
+
+    typeFilter.value = 'expense';
+    typeFilter.dispatchEvent(new Event('change', { bubbles: true }));
+    categoryFilter.value = 'food';
+    categoryFilter.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(
+      await waitFor(() =>
+        pageFetchMock.mock.calls.some(([input]) => String(input).includes('/api/accounting/month?month=') && String(input).includes('type=expense'))
+          ? host
+          : null
+      )
+    ).toBeTruthy();
+    expect(
+      pageFetchMock.mock.calls.some(
+        ([input]) => String(input).includes('/api/accounting/month?month=') && String(input).includes('category=food')
+      )
+    ).toBe(true);
+  });
 });
