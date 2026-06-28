@@ -440,3 +440,25 @@
 - `src/article-mobile-layout.test.js`: adds CSS regression checks for desktop image containment and mobile article detail containment.
 - `progress.md`: records this layout bugfix task.
 - Rollback: run `git checkout -- src/App.css src/components/shared.tsx src/components/shared.test.tsx progress.md && git rm src/article-mobile-layout.test.js`.
+
+## 2026-06-28 - Task: Fix Chinese upload filename mojibake
+### What was done
+- Fixed multipart upload filename decoding so UTF-8 Chinese names from browser uploads are stored as readable text instead of mojibake.
+- Added a narrow recovery path for previously stored file and image names that were already decoded as latin1, so existing affected records display correctly when listed.
+- Applied the same filename recovery to file warehouse and image host metadata paths while keeping the existing path-safety cleanup in place.
+
+### Testing
+- `npm test -- --run server/utils/multipart.test.mjs`: failed before the fix with `å...` mojibake for `复习资料.docx`, then passed after decoding uploaded filenames correctly.
+- `npm test -- --run server/utils/multipart.test.mjs server/fileStore.test.mjs server/imageStore.test.mjs src/lib/fileApi.test.ts src/lib/imageApi.test.ts`: passed. All 14 related upload, file, and image metadata tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `server/filenameEncoding.mjs`: adds the shared UTF-8 filename recovery helper.
+- `server/utils/multipart.mjs`: decodes uploaded multipart filenames before passing them to storage.
+- `server/utils/multipart.test.mjs`: adds regression coverage for UTF-8 Chinese filenames in multipart uploads.
+- `server/fileStore.mjs`: recovers affected file names during save and list/read metadata mapping.
+- `server/fileStore.test.mjs`: covers readable Chinese file names after recovery.
+- `server/imageStore.mjs`: recovers affected image names during save and list/read metadata mapping.
+- `server/imageStore.test.mjs`: covers readable Chinese image names and extension-based content-type detection after recovery.
+- `progress.md`: records this bugfix task.
+- Rollback: run `git checkout -- server/utils/multipart.mjs server/fileStore.mjs server/fileStore.test.mjs server/imageStore.mjs server/imageStore.test.mjs progress.md && git rm server/filenameEncoding.mjs server/utils/multipart.test.mjs`.

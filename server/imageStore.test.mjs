@@ -46,6 +46,19 @@ describe('image store', () => {
     expect(store.getImage(image.id)).toMatchObject({ id: image.id, originalName: 'cover.png' });
   });
 
+  it('recovers UTF-8 image names before validating the extension', async () => {
+    const mojibakeName = Buffer.from('截图.png', 'utf8').toString('latin1');
+    const image = await store.saveImage({
+      originalName: mojibakeName,
+      contentType: 'application/octet-stream',
+      buffer: Buffer.from('png')
+    });
+
+    expect(image.originalName).toBe('截图.png');
+    expect(image.contentType).toBe('image/png');
+    expect(store.listImages()[0].originalName).toBe('截图.png');
+  });
+
   it('rejects non-image uploads and removes image files from disk', async () => {
     expect(() =>
       store.validateImageUpload({

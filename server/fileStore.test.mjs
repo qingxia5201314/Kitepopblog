@@ -90,6 +90,18 @@ describe('file store', () => {
     expect(store.listFiles()[0]).not.toHaveProperty('accessTokenHash');
   });
 
+  it('recovers UTF-8 filenames that were decoded as latin1', async () => {
+    const mojibakeName = Buffer.from('复习资料.docx', 'utf8').toString('latin1');
+    const file = await store.saveFile({
+      originalName: mojibakeName,
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: Buffer.from('docx')
+    });
+
+    expect(file.originalName).toBe('复习资料.docx');
+    expect(store.listFiles()[0].originalName).toBe('复习资料.docx');
+  });
+
   it('serves files only with the active signed token and revokes on delete', async () => {
     const file = await store.saveFile({
       originalName: 'note.txt',

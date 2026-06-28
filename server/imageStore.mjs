@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { recoverUtf8Filename } from './filenameEncoding.mjs';
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const IMAGE_TYPES_BY_EXTENSION = new Map([
@@ -25,7 +26,7 @@ function rows(db, sql, params = []) {
 }
 
 function safeOriginalName(name) {
-  const cleaned = String(name || 'image').replace(/\0/g, '').replace(/\\/g, '/');
+  const cleaned = recoverUtf8Filename(name || 'image').replace(/\0/g, '').replace(/\\/g, '/');
   return basename(cleaned).trim().slice(0, 180) || 'image';
 }
 
@@ -42,7 +43,7 @@ function normalizeImageContentType(contentType, originalName) {
 function rowToImage(row, imageDir, publicPath) {
   return {
     id: row.id,
-    originalName: row.original_name,
+    originalName: safeOriginalName(row.original_name),
     storageName: row.storage_name,
     contentType: row.content_type,
     sizeBytes: Number(row.size_bytes || 0),

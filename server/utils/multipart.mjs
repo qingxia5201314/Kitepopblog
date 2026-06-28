@@ -1,3 +1,5 @@
+import { recoverUtf8Filename } from '../filenameEncoding.mjs';
+
 export function parseMultipartFile(buffer, contentType) {
   const boundary = String(contentType || '').match(/boundary=(?:"([^"]+)"|([^;]+))/i)?.[1] ?? String(contentType || '').match(/boundary=(?:"([^"]+)"|([^;]+))/i)?.[2];
   if (!boundary) throw new Error('Missing multipart boundary');
@@ -25,7 +27,7 @@ export function parseMultipartFile(buffer, contentType) {
       if (originalName) {
         const partContentType = headerText.match(/^content-type:\s*([^\r\n]+)/im)?.[1]?.trim() || 'application/octet-stream';
         fileUpload = {
-          originalName,
+          originalName: recoverUtf8Filename(originalName),
           contentType: partContentType,
           buffer: body
         };

@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { recoverUtf8Filename } from './filenameEncoding.mjs';
 
 function rows(db, sql, params = []) {
   const statement = db.prepare(sql);
@@ -26,7 +27,7 @@ function safeEqual(left, right) {
 }
 
 function safeOriginalName(name) {
-  const cleaned = String(name || 'file').replace(/\0/g, '').replace(/\\/g, '/');
+  const cleaned = recoverUtf8Filename(name || 'file').replace(/\0/g, '').replace(/\\/g, '/');
   return basename(cleaned).trim().slice(0, 180) || 'file';
 }
 
@@ -54,7 +55,7 @@ function ensureColumn(db, tableName, columnName, definition) {
 function rowToFile(row, uploadDir) {
   return {
     id: row.id,
-    originalName: row.original_name,
+    originalName: safeOriginalName(row.original_name),
     storageName: row.storage_name,
     contentType: row.content_type || 'application/octet-stream',
     sizeBytes: Number(row.size_bytes || 0),
