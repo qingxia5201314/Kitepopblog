@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BlogCategoryId,
   BlogPost,
@@ -20,16 +20,18 @@ function filterPostsByDate(posts: BlogPost[], filter: PostDateFilter): BlogPost[
   return posts.filter((post) => Date.parse(post.updatedAt) >= minTime);
 }
 
+function getDetailPostIdFromHash() {
+  const match = window.location.hash.match(/^#\/posts\/(.+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export function useBlog(posts: BlogPost[]) {
   const [activeCategory, setActiveCategory] = useState<BlogCategoryId | 'all'>('all');
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<PostDateFilter>('all');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [detailPostId, setDetailPostId] = useState<string | null>(() => {
-    const match = window.location.hash.match(/^#\/posts\/(.+)$/);
-    return match ? decodeURIComponent(match[1]) : null;
-  });
+  const [detailPostId, setDetailPostId] = useState<string | null>(() => getDetailPostIdFromHash());
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -42,6 +44,14 @@ export function useBlog(posts: BlogPost[]) {
   const detailPost = posts.find((post) => post.id === detailPostId || post.slug === detailPostId) ?? null;
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
+
+  useEffect(() => {
+    const syncDetailPostFromHash = () => {
+      setDetailPostId(getDetailPostIdFromHash());
+    };
+    window.addEventListener('hashchange', syncDetailPostFromHash);
+    return () => window.removeEventListener('hashchange', syncDetailPostFromHash);
+  }, []);
 
   const toggleActiveTag = (tag: string) => {
     setActiveTags((current) =>

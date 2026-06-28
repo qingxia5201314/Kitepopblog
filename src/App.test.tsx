@@ -254,6 +254,28 @@ describe('App layout shells', () => {
     expect(host.querySelector('.comment-panel')).toBeTruthy();
   });
 
+  it('returns from article detail to the article list when the browser goes back', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const postButton = (await waitFor(() => host.querySelector('.post-item'))) as HTMLButtonElement | null;
+    expect(postButton).toBeTruthy();
+    postButton!.click();
+
+    expect(await waitFor(() => host.querySelector('.article-page'))).toBeTruthy();
+    expect(window.location.hash).toBe('#/posts/post-1');
+
+    window.history.back();
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+
+    expect(await waitFor(() => (host.querySelector('.article-page') ? null : host))).toBeTruthy();
+    expect(host.querySelector('.post-list')).toBeTruthy();
+  });
+
   it('loads hosted images automatically when an admin session already exists', async () => {
     window.localStorage.setItem(
       'kitepop-admin-session',

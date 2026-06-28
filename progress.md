@@ -462,3 +462,20 @@
 - `server/imageStore.test.mjs`: covers readable Chinese image names and extension-based content-type detection after recovery.
 - `progress.md`: records this bugfix task.
 - Rollback: run `git checkout -- server/utils/multipart.mjs server/fileStore.mjs server/fileStore.test.mjs server/imageStore.mjs server/imageStore.test.mjs progress.md && git rm server/filenameEncoding.mjs server/utils/multipart.test.mjs`.
+
+## 2026-06-28 - Task: Fix article detail browser-back return
+### What was done
+- Synced the article detail state with the URL hash after navigation changes, so browser Back from an article detail returns to the article list instead of leaving the detail page rendered.
+- Kept the existing article detail hash format and direct article-link behavior unchanged.
+- Added regression coverage for opening an article and returning to the list with browser Back.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "returns from article detail to the article list"`: failed before the fix because the detail page stayed mounted after `hashchange`, then passed after syncing the article detail state from the hash.
+- `npm test -- --run src/App.test.tsx`: passed. All 14 App tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/hooks/useBlog.ts`: listens for `hashchange` and updates the active article detail id from the URL hash.
+- `src/App.test.tsx`: adds regression coverage for browser Back from article detail to the article list.
+- `progress.md`: records this article navigation bugfix task.
+- Rollback: run `git checkout -- src/hooks/useBlog.ts src/App.test.tsx progress.md`.
