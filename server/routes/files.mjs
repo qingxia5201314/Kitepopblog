@@ -5,7 +5,7 @@ import { createRawFileHeaders } from '../fileDownloadHeaders.mjs';
 import { parseMultipartFile } from '../utils/multipart.mjs';
 
 const app = new Hono();
-export const DEFAULT_FILE_UPLOAD_LIMIT_BYTES = 300 * 1024 * 1024;
+export const DEFAULT_FILE_UPLOAD_LIMIT_BYTES = 0;
 
 export function getFileUploadLimitBytes(env = process.env) {
   return Number(env.FILE_UPLOAD_LIMIT || DEFAULT_FILE_UPLOAD_LIMIT_BYTES);

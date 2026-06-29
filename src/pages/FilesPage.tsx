@@ -239,7 +239,7 @@ export function FilesPage() {
         >
           <input onChange={(event) => void handleFileUploadWrapper(event.target.files?.[0])} ref={fileInputRef} type="file" />
           <strong>拖拽文件到这里，或点击选择上传</strong>
-          <span>文件大小默认上限 300 MB，可通过服务端 `FILE_UPLOAD_LIMIT` 调整。</span>
+          <span>文件仓库默认不限制大小，可通过服务端 `FILE_UPLOAD_LIMIT` 设置上限。</span>
           <button disabled={uploadingFile} onClick={() => fileInputRef.current?.click()} type="button">
             {uploadingFile ? '上传中...' : '选择文件'}
           </button>

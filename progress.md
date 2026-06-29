@@ -500,3 +500,22 @@
 - `docs/upload-limits.md`: documents file and proxy upload limits.
 - `progress.md`: records this upload limit change.
 - Rollback: run `git checkout -- .env.example server/routes/files.mjs src/pages/FilesPage.tsx progress.md && git rm server/fileUploadLimit.test.mjs docs/upload-limits.md`.
+
+## 2026-06-29 - Task: Set file uploads to unlimited
+### What was done
+- Changed the file warehouse default upload limit to unlimited by using `0` as the app-layer limit value.
+- Kept positive `FILE_UPLOAD_LIMIT` values as an explicit opt-in cap for deployments that still want one.
+- Updated the upload page copy, example environment value, and upload-limit documentation so they all describe the unlimited default and matching Nginx setting.
+
+### Testing
+- `npm test -- --run server/fileUploadLimit.test.mjs src/App.test.tsx src/lib/fileApi.test.ts`: passed. All 18 related upload-limit, app, and file API tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `.env.example`: sets `FILE_UPLOAD_LIMIT=0` for the unlimited default.
+- `server/routes/files.mjs`: changes the default file upload limit to `0`, which disables the app-layer size check.
+- `server/fileUploadLimit.test.mjs`: updates regression coverage for the unlimited default and explicit override behavior.
+- `src/pages/FilesPage.tsx`: updates the file upload hint to say the file warehouse is unlimited by default.
+- `docs/upload-limits.md`: documents the unlimited default and Nginx `client_max_body_size 0;` setting.
+- `progress.md`: records this unlimited upload limit change.
+- Rollback: run `git checkout -- .env.example docs/upload-limits.md server/routes/files.mjs server/fileUploadLimit.test.mjs src/pages/FilesPage.tsx progress.md`.
