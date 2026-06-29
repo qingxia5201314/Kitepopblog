@@ -5,6 +5,11 @@ import { createRawFileHeaders } from '../fileDownloadHeaders.mjs';
 import { parseMultipartFile } from '../utils/multipart.mjs';
 
 const app = new Hono();
+export const DEFAULT_FILE_UPLOAD_LIMIT_BYTES = 300 * 1024 * 1024;
+
+export function getFileUploadLimitBytes(env = process.env) {
+  return Number(env.FILE_UPLOAD_LIMIT || DEFAULT_FILE_UPLOAD_LIMIT_BYTES);
+}
 
 function publicFolder(folder) {
   return folder ? {
@@ -77,7 +82,7 @@ app.post('/', async (c) => {
   }
 
   const fileService = c.get('fileService');
-  const fileUploadLimitBytes = Number(process.env.FILE_UPLOAD_LIMIT || 50 * 1024 * 1024);
+  const fileUploadLimitBytes = getFileUploadLimitBytes();
 
   try {
     const buffer = await c.req.arrayBuffer();

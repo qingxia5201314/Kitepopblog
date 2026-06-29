@@ -479,3 +479,24 @@
 - `src/App.test.tsx`: adds regression coverage for browser Back from article detail to the article list.
 - `progress.md`: records this article navigation bugfix task.
 - Rollback: run `git checkout -- src/hooks/useBlog.ts src/App.test.tsx progress.md`.
+
+## 2026-06-29 - Task: Raise file upload limit for 205 MB videos
+### What was done
+- Raised the file warehouse default upload limit from 50 MB to 300 MB so a 205 MB video can pass the app-layer size check.
+- Kept `FILE_UPLOAD_LIMIT` as the explicit deployment override and updated the example environment value.
+- Updated the file upload page copy and added upload-limit documentation, including the matching Nginx `client_max_body_size` note.
+
+### Testing
+- `npm test -- --run server/fileUploadLimit.test.mjs`: failed before the helper/default limit existed, then passed after the default was raised to 300 MB.
+- `npm test -- --run server/fileUploadLimit.test.mjs server/fileStore.test.mjs src/lib/fileApi.test.ts`: passed. All 9 related upload-limit, file-store, and file API tests passed.
+- `npm test -- --run server/fileUploadLimit.test.mjs src/App.test.tsx src/lib/fileApi.test.ts`: passed. All 18 related tests passed after the upload page copy update.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `server/routes/files.mjs`: adds a 300 MB default file upload limit helper and uses it for upload checks.
+- `server/fileUploadLimit.test.mjs`: adds regression coverage that the default limit allows a 205 MB video and still respects `FILE_UPLOAD_LIMIT` overrides.
+- `.env.example`: raises the documented file upload limit to 300 MB.
+- `src/pages/FilesPage.tsx`: updates the upload hint to show the 300 MB default.
+- `docs/upload-limits.md`: documents file and proxy upload limits.
+- `progress.md`: records this upload limit change.
+- Rollback: run `git checkout -- .env.example server/routes/files.mjs src/pages/FilesPage.tsx progress.md && git rm server/fileUploadLimit.test.mjs docs/upload-limits.md`.
