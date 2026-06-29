@@ -542,3 +542,22 @@
 - `docs/media-preview.md`: documents the feature and rollback path.
 - `progress.md`: records this media preview task.
 - Rollback: run `git checkout -- server/fileDownloadHeaders.mjs server/fileDownloadHeaders.test.mjs server/routes/files.mjs server/services/fileService.mjs src/App.css src/App.tsx src/lib/fileApi.ts src/lib/fileApi.test.ts src/pages/FilesPage.tsx src/pages/lazy.ts progress.md docs/media-preview.md && git rm server/fileRangeResponses.test.mjs src/pages/MediaPreviewPage.tsx`.
+
+## 2026-06-29 - Task: Fix media preview player controls and aspect ratio
+### What was done
+- Added visible preview-page player chrome so video/audio previews no longer look like a bare frame.
+- Switched video preview layout from a fixed landscape frame to metadata-driven landscape, square, or portrait display.
+- Kept lazy loading behavior: the signed media URL is still assigned only after the user clicks play.
+- Added focused regression coverage for portrait video metadata handling.
+
+### Testing
+- `npm test -- --run src/pages/MediaPreviewPage.test.tsx src/App.test.tsx -t "MediaPreviewPage|opens the in-site media preview shell"`: passed. Both the new portrait-layout regression and the existing app preview route test passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/pages/MediaPreviewPage.tsx`: tracks loaded video metadata and exposes a player control strip plus orientation classes.
+- `src/App.css`: removes the always-16:9 preview stage and adds landscape, square, and portrait media stage styles.
+- `src/pages/MediaPreviewPage.test.tsx`: adds regression coverage for portrait video layout and native controls activation.
+- `docs/media-preview.md`: documents the visible controls and metadata-driven aspect ratio behavior.
+- `progress.md`: records this media preview fix.
+- Rollback: run `git checkout -- src/App.css src/pages/MediaPreviewPage.tsx docs/media-preview.md progress.md && git rm src/pages/MediaPreviewPage.test.tsx`.

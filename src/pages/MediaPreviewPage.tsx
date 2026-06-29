@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 interface MediaPreviewState {
@@ -17,7 +17,9 @@ export function MediaPreviewPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const state = (location.state || null) as MediaPreviewState | null;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [activated, setActivated] = useState(false);
+  const [orientation, setOrientation] = useState<'landscape' | 'portrait' | 'square'>('landscape');
 
   useEffect(() => {
     if (!state?.url) {
@@ -27,6 +29,28 @@ export function MediaPreviewPage() {
 
   const isVideo = useMemo(() => Boolean(state?.contentType?.startsWith('video/')), [state?.contentType]);
   const isAudio = useMemo(() => Boolean(state?.contentType?.startsWith('audio/')), [state?.contentType]);
+
+  useEffect(() => {
+    if (!isVideo || !activated) return;
+
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateOrientation = () => {
+      const width = video.videoWidth || 0;
+      const height = video.videoHeight || 0;
+      if (!width || !height) return;
+      if (width === height) {
+        setOrientation('square');
+        return;
+      }
+      setOrientation(width > height ? 'landscape' : 'portrait');
+    };
+
+    updateOrientation();
+    video.addEventListener('loadedmetadata', updateOrientation);
+    return () => video.removeEventListener('loadedmetadata', updateOrientation);
+  }, [activated, isVideo]);
 
   if (!state?.url) return null;
 
@@ -44,11 +68,12 @@ export function MediaPreviewPage() {
           </div>
         </div>
 
-        <div className="media-preview-stage">
+        <div className={`media-preview-stage is-${orientation}`} data-media-orientation={orientation}>
           {isVideo ? (
-            <>
+            <div className="media-preview-player-wrap">
               <video
-                className="media-preview-player"
+                ref={videoRef}
+                className={`media-preview-player${orientation === 'portrait' ? ' is-portrait' : ''}`}
                 controls={activated}
                 controlsList="nodownload noplaybackrate"
                 disablePictureInPicture
@@ -64,14 +89,14 @@ export function MediaPreviewPage() {
                   </button>
                 </div>
               ) : null}
-            </>
+            </div>
           ) : null}
 
           {isAudio ? (
             <div className="media-preview-audio-card">
               <audio
                 className="media-preview-player"
-                controls
+                controls={activated}
                 controlsList="nodownload noplaybackrate"
                 draggable="false"
                 preload="none"
@@ -84,6 +109,18 @@ export function MediaPreviewPage() {
               ) : null}
             </div>
           ) : null}
+
+          {activated ? (
+            <div className="media-preview-controls" aria-label="媒体控制区">
+              <span>{orientation === 'portrait' ? '竖屏布局' : orientation === 'square' ? '方形布局' : '横屏布局'}</span>
+            </div>
+          ) : (
+            <div className="media-preview-controls is-standby" aria-label="媒体控制区">
+              <button className="ghost" onClick={() => setActivated(true)} type="button">
+                点击播放后加载媒体
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </section>
