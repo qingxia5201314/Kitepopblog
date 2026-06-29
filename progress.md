@@ -519,3 +519,26 @@
 - `docs/upload-limits.md`: documents the unlimited default and Nginx `client_max_body_size 0;` setting.
 - `progress.md`: records this unlimited upload limit change.
 - Rollback: run `git checkout -- .env.example docs/upload-limits.md server/routes/files.mjs server/fileUploadLimit.test.mjs src/pages/FilesPage.tsx progress.md`.
+
+## 2026-06-29 - Task: Improve file media preview flow
+### What was done
+- Added a dedicated in-site media preview page for uploaded audio and video files.
+- Wired the file list to generate a signed preview link and open the preview page without forcing an immediate full stream load.
+- Enabled HTTP `Range` responses for raw file delivery so browser players can seek correctly.
+- Kept the existing signed-link access model unchanged.
+
+### Testing
+- `npm test -- --run server/fileDownloadHeaders.test.mjs server/fileRangeResponses.test.mjs src/lib/fileApi.test.ts src/App.test.tsx`: passed. All 20 related tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `server/fileDownloadHeaders.mjs`: adds `Accept-Ranges` and partial-content header helpers.
+- `server/routes/files.mjs`: serves `Range` requests and exposes the preview-link endpoint.
+- `server/services/fileService.mjs`: exposes a preview-link helper that reuses signed access links.
+- `src/pages/FilesPage.tsx`: adds the `预览` action for audio/video files.
+- `src/pages/MediaPreviewPage.tsx`: new in-site preview page that delays loading until play is clicked.
+- `src/App.tsx`, `src/pages/lazy.ts`: register the preview route and lazy loader.
+- `src/App.css`: styles the preview shell and media stage.
+- `docs/media-preview.md`: documents the feature and rollback path.
+- `progress.md`: records this media preview task.
+- Rollback: run `git checkout -- server/fileDownloadHeaders.mjs server/fileDownloadHeaders.test.mjs server/routes/files.mjs server/services/fileService.mjs src/App.css src/App.tsx src/lib/fileApi.ts src/lib/fileApi.test.ts src/pages/FilesPage.tsx src/pages/lazy.ts progress.md docs/media-preview.md && git rm server/fileRangeResponses.test.mjs src/pages/MediaPreviewPage.tsx`.

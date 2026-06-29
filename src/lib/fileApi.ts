@@ -131,6 +131,16 @@ export async function createFileLink(id: string, token: string): Promise<FileLin
   return payload.link;
 }
 
+export async function getFilePreviewLink(id: string, token: string): Promise<FileLink> {
+  const payload = await parseResponse<{ link: FileLink }>(
+    await fetch(`/api/files/${encodeURIComponent(id)}/preview-link`, {
+      method: 'POST',
+      headers: authHeaders(token)
+    })
+  );
+  return payload.link;
+}
+
 export async function deleteUploadedFile(id: string, token: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
     await fetch(`/api/files/${encodeURIComponent(id)}`, {

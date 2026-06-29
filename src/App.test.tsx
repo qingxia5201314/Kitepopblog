@@ -668,4 +668,56 @@ describe('App layout shells', () => {
       )
     ).toBe(true);
   });
+
+  it('opens the in-site media preview shell for uploaded videos', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/files');
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/files/file-1/preview-link')) {
+        return Response.json({ link: { path: '/api/files/raw/file-1?token=preview-token' } });
+      }
+      if (url.startsWith('/api/files')) {
+        return Response.json({
+          folder: null,
+          breadcrumbs: [],
+          folders: [],
+          files: [
+            {
+              id: 'file-1',
+              originalName: 'lesson.mp4',
+              contentType: 'video/mp4',
+              sizeBytes: 1024,
+              uploadedAt: '2026-06-20T00:00:00.000Z',
+              folderId: ''
+            }
+          ]
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const previewButton = await waitFor(() => host.querySelector('.file-item .ghost'));
+    expect(previewButton).toBeTruthy();
+    (previewButton as HTMLButtonElement).click();
+
+    expect(await waitFor(() => host.querySelector('.media-preview-page'))).toBeTruthy();
+    expect(host.querySelector('.media-preview-shell')?.textContent).toContain('lesson.mp4');
+    expect(host.querySelector('video.media-preview-player')).toBeTruthy();
+    expect(host.querySelector('video.media-preview-player')?.getAttribute('draggable')).toBe('false');
+    expect(host.querySelector('.media-preview-overlay button')?.textContent).toContain('播放');
+  });
 });

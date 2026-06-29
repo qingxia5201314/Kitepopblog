@@ -5,6 +5,7 @@ import {
   deleteFileFolder,
   deleteUploadedFile,
   getFileFolderView,
+  getFilePreviewLink,
   renameFileFolder,
   uploadFile
 } from './fileApi';
@@ -36,6 +37,14 @@ describe('file api client', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
+        json: async () => ({ link: { path: '/api/files/raw/file-1?token=preview-token' } })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
         json: async () => ({ ok: true })
       })
       .mockResolvedValueOnce({
@@ -55,6 +64,7 @@ describe('file api client', () => {
     await getFileFolderView('admin-token', 'folder-root');
     await uploadFile(new File(['payload'], 'rfi.txt', { type: 'text/plain' }), 'admin-token', 'folder-root');
     await createFileLink('file-1', 'admin-token');
+    await getFilePreviewLink('file-1', 'admin-token');
     await deleteUploadedFile('file-1', 'admin-token');
     await createFileFolder({ name: 'RFI', parentId: 'folder-root' }, 'admin-token');
     await renameFileFolder('folder-1', 'SRC', 'admin-token');
@@ -72,19 +82,23 @@ describe('file api client', () => {
       method: 'POST',
       headers: { Authorization: 'Bearer admin-token' }
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/files/file-1', {
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/files/file-1/preview-link', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer admin-token' }
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/files/file-1', {
       method: 'DELETE',
       headers: { Authorization: 'Bearer admin-token' }
     });
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/file-folders', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/file-folders', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ Authorization: 'Bearer admin-token' })
     }));
-    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/file-folders/folder-1', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/file-folders/folder-1', expect.objectContaining({
       method: 'PUT',
       headers: expect.objectContaining({ Authorization: 'Bearer admin-token' })
     }));
-    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/file-folders/folder-1', {
+    expect(fetchMock).toHaveBeenNthCalledWith(8, '/api/file-folders/folder-1', {
       method: 'DELETE',
       headers: { Authorization: 'Bearer admin-token' }
     });

@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAdminAccess } from '../hooks/useAdminAccess';
 import { useFiles } from '../hooks/useFiles';
@@ -9,6 +10,7 @@ import {
   createFileLink,
   deleteFileFolder,
   deleteUploadedFile,
+  getFilePreviewLink,
   renameFileFolder,
   uploadFile
 } from '../lib/fileApi';
@@ -18,9 +20,17 @@ import { UploadProgress } from '../lib/uploadProgress';
 import { copyTextToClipboard } from '../lib/clipboard';
 
 export function FilesPage() {
+  const navigate = useNavigate();
   const { notify, adminToken } = useApp();
-  const { activeFileFolderId, fileFolderView, uploadingFile, generatedFileLink, setGeneratedFileLink, loadFiles, openFolder } =
-    useFiles(adminToken, notify);
+  const {
+    activeFileFolderId,
+    fileFolderView,
+    uploadingFile,
+    generatedFileLink,
+    setGeneratedFileLink,
+    loadFiles,
+    openFolder
+  } = useFiles(adminToken, notify);
   const { password: filePassword, setPassword: setFilePassword, unlockAdmin } = useAdminAccess(
     '已进入文件仓库',
     '无法连接文件登录接口'
@@ -71,10 +81,31 @@ export function FilesPage() {
       const link = await createFileLink(file.id, localAdminToken);
       const absoluteLink = new URL(link.path, window.location.origin).toString();
       setGeneratedFileLink(absoluteLink);
-      const copied = await copyTextToClipboard(absoluteLink);
+      await copyTextToClipboard(absoluteLink);
       notify('success', '签名链接已复制');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '生成链接失败');
+    }
+  };
+
+  const handlePreviewFile = async (file: UploadedFile) => {
+    if (!localAdminToken) return;
+    if (!file.contentType.startsWith('video/') && !file.contentType.startsWith('audio/')) {
+      notify('info', '当前只提供音视频站内预览');
+      return;
+    }
+
+    try {
+      const link = await getFilePreviewLink(file.id, localAdminToken);
+      navigate('/files/preview', {
+        state: {
+          url: new URL(link.path, window.location.origin).toString(),
+          originalName: file.originalName,
+          contentType: file.contentType
+        }
+      });
+    } catch (error) {
+      notify('error', error instanceof Error ? error.message : '预览链接生成失败');
     }
   };
 
@@ -82,6 +113,7 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立刻失效。`);
     if (!confirmed) return;
+
     try {
       await deleteUploadedFile(file.id, localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -101,6 +133,7 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const name = window.prompt('文件夹名称');
     if (!name?.trim()) return;
+
     try {
       await createFileFolder({ name: name.trim(), parentId: activeFileFolderId }, localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -114,6 +147,7 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const name = window.prompt('新的文件夹名称', folder.name);
     if (!name?.trim() || name.trim() === folder.name) return;
+
     try {
       await renameFileFolder(folder.id, name.trim(), localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -127,6 +161,7 @@ export function FilesPage() {
     if (!localAdminToken) return;
     const confirmed = window.confirm(`确认删除空文件夹 ${folder.name} 吗？非空文件夹不会被删除。`);
     if (!confirmed) return;
+
     try {
       await deleteFileFolder(folder.id, localAdminToken);
       await loadFiles(localAdminToken, activeFileFolderId);
@@ -268,6 +303,9 @@ export function FilesPage() {
                 </span>
                 <button onClick={() => void handleCopyFileLink(file)} type="button">
                   复制链接
+                </button>
+                <button className="ghost" onClick={() => void handlePreviewFile(file)} type="button">
+                  预览
                 </button>
                 <button className="danger" onClick={() => void handleRemoveFile(file)} type="button">
                   删除

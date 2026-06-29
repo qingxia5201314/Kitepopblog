@@ -9,6 +9,9 @@ export function createFileService({ fileStore }) {
     createAccessLink(id) {
       return fileStore.createAccessLink(id);
     },
+    createPreviewLink(id) {
+      return fileStore.createAccessLink(id);
+    },
     getFileForToken(id, token) {
       return fileStore.getFileForToken(id, token);
     },
