@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, FormEvent } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, FormEvent } from 'react';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
 import { useBlog } from '../hooks/useBlog';
@@ -89,6 +89,36 @@ export function HomePage() {
 
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
+  const detailPostSlug = detailPost?.slug;
+
+  useEffect(() => {
+    if (!detailPostSlug) {
+      setPostComments([]);
+      setEditingCommentId(null);
+      setCommentEditDrafts({});
+      return;
+    }
+
+    let cancelled = false;
+    setPostComments([]);
+    setEditingCommentId(null);
+    setCommentEditDrafts({});
+
+    listPostComments(detailPostSlug)
+      .then((comments) => {
+        if (!cancelled) setPostComments(comments);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPostComments([]);
+          notify('error', '评论加载失败，请稍后重试');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailPostSlug]);
 
   const handleCommentSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -105,14 +135,14 @@ export function HomePage() {
 
       try {
         const comment = await createPostComment(detailPost.slug, commentForm, userSession.token);
-        setPostComments([comment, ...postComments]);
+        setPostComments((current) => [comment, ...current]);
         setCommentForm({ content: '' });
         notify('success', '评论已发布');
       } catch (error) {
         notify('error', error instanceof Error ? error.message : '评论发布失败');
       }
     },
-    [detailPost, commentLoading, userSession, commentForm, postComments, notify]
+    [detailPost, commentLoading, userSession, commentForm, notify]
   );
 
   const handleEditComment = useCallback(

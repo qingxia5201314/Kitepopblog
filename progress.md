@@ -602,3 +602,22 @@
 - `docs/user-auth.md`: documents username rules and visible failure behavior.
 - `progress.md`: records this follow-up auth feedback fix.
 - Rollback: run `git checkout -- src/App.css src/pages/HomePage.tsx src/App.test.tsx docs/user-auth.md progress.md`.
+
+## 2026-07-06 - Task: Load persisted article comments in detail view
+### What was done
+- Fixed article detail pages so they load comments from the existing `/api/posts/:slug/comments` endpoint when an article is opened.
+- Cleared local comment state when leaving an article detail page so another article cannot inherit stale comments.
+- Kept the existing SQLite `post_comments` storage path; the bug was the front-end not reading persisted comments on page entry.
+- Changed new-comment insertion to use the current comment list state so loaded database comments are not overwritten by an older render.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "loads persisted comments"`: passed. Opening an article detail page now fetches and displays persisted comments.
+- `npm test -- --run src/App.test.tsx server/postStore.test.mjs`: passed. Frontend persisted-comment loading and backend SQLite comment storage both passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/pages/HomePage.tsx`: loads article comments from the backend when `detailPost.slug` changes and clears stale local comment state on exit.
+- `src/App.test.tsx`: adds regression coverage for persisted comment loading in article detail view.
+- `docs/comments.md`: documents the comment storage and loading behavior.
+- `progress.md`: records this persisted-comment loading fix.
+- Rollback: run `git checkout -- src/pages/HomePage.tsx src/App.test.tsx progress.md && git rm docs/comments.md`.

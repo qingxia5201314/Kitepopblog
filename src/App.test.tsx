@@ -261,6 +261,40 @@ describe('App layout shells', () => {
     expect(host.querySelector('.comment-panel')).toBeTruthy();
   });
 
+  it('loads persisted comments when opening an article detail page', async () => {
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts/post-1/comments')) {
+        return Response.json({
+          comments: [
+            {
+              id: 'comment-1',
+              postId: 'post-1',
+              userId: 'user-reader',
+              nickname: 'Reader',
+              role: '阅读用户',
+              content: 'Persisted comment',
+              createdAt: '2026-07-06T10:00:00.000Z',
+              updatedAt: '2026-07-06T10:00:00.000Z'
+            }
+          ]
+        });
+      }
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+    window.location.hash = '#/posts/post-1';
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    expect(await waitFor(() => (host.textContent?.includes('Persisted comment') ? host : null))).toBeTruthy();
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/posts/post-1/comments');
+    expect(host.querySelector('.comment-panel h3')?.textContent).toContain('1');
+  });
+
   it('logs in public users from the home auth form and keeps the session', async () => {
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
