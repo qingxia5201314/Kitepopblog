@@ -561,3 +561,22 @@
 - `docs/media-preview.md`: documents the visible controls and metadata-driven aspect ratio behavior.
 - `progress.md`: records this media preview fix.
 - Rollback: run `git checkout -- src/App.css src/pages/MediaPreviewPage.tsx docs/media-preview.md progress.md && git rm src/pages/MediaPreviewPage.test.tsx`.
+
+## 2026-07-06 - Task: Fix public user registration and login submission
+### What was done
+- Fixed the home-page public account form so login and registration submit to the existing user APIs instead of doing nothing.
+- Successful login or registration now saves the returned user session through the shared app context, so the page immediately shows the current user and keeps the session.
+- Connected the public logout button to clear the saved user session.
+- Added regression coverage for both public login and registration from the home auth card.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "public users"`: passed. Both public login and public registration submit to their APIs, update the UI, and persist the returned session token.
+- `npm test -- --run src/App.test.tsx src/lib/blogApi.test.ts server/userStore.test.mjs`: passed. App auth flow, frontend user API calls, and backend user sessions all passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+
+### Notes
+- `src/pages/HomePage.tsx`: wires the auth form to `loginUser` / `registerUser` API calls and the app-level user session handlers.
+- `src/App.test.tsx`: adds public user login and registration regression tests.
+- `docs/user-auth.md`: documents the public user auth behavior and rollback path.
+- `progress.md`: records this user auth fix.
+- Rollback: run `git checkout -- src/pages/HomePage.tsx src/App.test.tsx progress.md && git rm docs/user-auth.md`.

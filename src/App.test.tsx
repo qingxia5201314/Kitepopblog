@@ -85,6 +85,13 @@ describe('App layout shells', () => {
     return null;
   }
 
+  function fillInput(input: HTMLInputElement, value: string) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   afterEach(() => {
     roots.splice(0).forEach((root) => root.unmount());
     document.body.innerHTML = '';
@@ -252,6 +259,110 @@ describe('App layout shells', () => {
     expect(host.querySelector('.article-header-card')).toBeTruthy();
     expect(host.querySelector('.article-body-card')).toBeTruthy();
     expect(host.querySelector('.comment-panel')).toBeTruthy();
+  });
+
+  it('logs in public users from the home auth form and keeps the session', async () => {
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/users/login')) {
+        return Response.json({
+          token: 'user-token',
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          user: {
+            id: 'user-1',
+            username: 'kite',
+            nickname: 'Kite',
+            permission: 'reader',
+            createdAt: '2026-07-06T00:00:00.000Z',
+            updatedAt: '2026-07-06T00:00:00.000Z'
+          }
+        });
+      }
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const authForm = (await waitFor(() => host.querySelector('.user-auth-card form'))) as HTMLFormElement | null;
+    expect(authForm).toBeTruthy();
+    const [usernameInput, passwordInput] = Array.from(authForm!.querySelectorAll('input')) as HTMLInputElement[];
+    fillInput(usernameInput, 'kite');
+    fillInput(passwordInput, 'secret123');
+    authForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    expect(
+      await waitFor(() =>
+        pageFetchMock.mock.calls.some(([input]) => String(input).startsWith('/api/users/login')) ? host : null
+      )
+    ).toBeTruthy();
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/users/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'kite', password: 'secret123' })
+    });
+    expect((await waitFor(() => host.querySelector('.user-auth-card strong')))?.textContent).toBe('Kite');
+    expect(window.localStorage.getItem('kitepop-user-session')).toContain('user-token');
+  });
+
+  it('registers public users from the home auth form and keeps the session', async () => {
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/users/register')) {
+        return Response.json(
+          {
+            token: 'registered-token',
+            expiresAt: '2099-01-01T00:00:00.000Z',
+            user: {
+              id: 'user-2',
+              username: 'newkite',
+              nickname: 'New Kite',
+              permission: 'reader',
+              createdAt: '2026-07-06T00:00:00.000Z',
+              updatedAt: '2026-07-06T00:00:00.000Z'
+            }
+          },
+          { status: 201 }
+        );
+      }
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const authForm = (await waitFor(() => host.querySelector('.user-auth-card form'))) as HTMLFormElement | null;
+    expect(authForm).toBeTruthy();
+    const registerTab = Array.from(authForm!.querySelectorAll('.segmented-control button')).find((button) =>
+      button.textContent?.includes('注册')
+    ) as HTMLButtonElement | undefined;
+    registerTab?.click();
+
+    expect(await waitFor(() => (authForm!.querySelectorAll('input').length === 3 ? authForm : null))).toBeTruthy();
+    const [usernameInput, passwordInput, nicknameInput] = Array.from(authForm!.querySelectorAll('input')) as HTMLInputElement[];
+    fillInput(usernameInput, 'newkite');
+    fillInput(passwordInput, 'secret123');
+    fillInput(nicknameInput, 'New Kite');
+    authForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+    expect(
+      await waitFor(() =>
+        pageFetchMock.mock.calls.some(([input]) => String(input).startsWith('/api/users/register')) ? host : null
+      )
+    ).toBeTruthy();
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/users/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'newkite', password: 'secret123', nickname: 'New Kite' })
+    });
+    expect((await waitFor(() => host.querySelector('.user-auth-card strong')))?.textContent).toBe('New Kite');
+    expect(window.localStorage.getItem('kitepop-user-session')).toContain('registered-token');
   });
 
   it('returns from article detail to the article list when the browser goes back', async () => {

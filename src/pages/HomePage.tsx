@@ -15,7 +15,9 @@ import {
   listPostComments,
   createPostComment,
   updatePostComment,
-  deletePostComment
+  deletePostComment,
+  loginUser as loginUserRequest,
+  registerUser as registerUserRequest
 } from '../lib/blogApi';
 import {
   Icon,
@@ -48,7 +50,7 @@ interface CommentFormState {
 }
 
 export function HomePage() {
-  const { userSession, notify } = useApp();
+  const { userSession, notify, loginUser, logoutUser } = useApp();
   const { posts } = useBlogData();
   const {
     activeCategory,
@@ -70,6 +72,7 @@ export function HomePage() {
   const [commentEditDrafts, setCommentEditDrafts] = useState<Record<string, string>>({});
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [userForm, setUserForm] = useState({ username: '', password: '', nickname: '' });
+  const [authSubmitting, setAuthSubmitting] = useState(false);
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -158,6 +161,37 @@ export function HomePage() {
       }
     },
     [detailPost, userSession, postComments, editingCommentId, notify]
+  );
+
+  const handleUserAuthSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (authSubmitting) return;
+      const username = userForm.username.trim();
+      const password = userForm.password;
+      const nickname = userForm.nickname.trim();
+
+      if (!username || !password) {
+        notify('error', '请输入用户名和密码');
+        return;
+      }
+
+      try {
+        setAuthSubmitting(true);
+        const session =
+          authMode === 'register'
+            ? await registerUserRequest({ username, password, nickname })
+            : await loginUserRequest(username, password);
+        loginUser(session);
+        setUserForm({ username: '', password: '', nickname: '' });
+        notify('success', authMode === 'register' ? '注册成功，已登录' : '登录成功');
+      } catch (error) {
+        notify('error', error instanceof Error ? error.message : authMode === 'register' ? '注册失败' : '登录失败');
+      } finally {
+        setAuthSubmitting(false);
+      }
+    },
+    [authMode, authSubmitting, loginUser, notify, userForm]
   );
 
   // Detail view
@@ -390,12 +424,12 @@ export function HomePage() {
               <strong>{userSession.user.nickname}</strong>
               <span>{userSession.user.permission === 'admin' ? '团长' : '团员'}</span>
             </div>
-            <button className="ghost" type="button">
+            <button className="ghost" onClick={logoutUser} type="button">
               退出登录
             </button>
           </>
         ) : (
-          <form>
+          <form onSubmit={handleUserAuthSubmit}>
             <div className="segmented-control compact-tabs">
               <button
                 className={authMode === 'login' ? 'active' : ''}
@@ -439,7 +473,7 @@ export function HomePage() {
                 value={userForm.nickname}
               />
             ) : null}
-            <button type="submit">
+            <button disabled={authSubmitting} type="submit">
               {authMode === 'register' ? '创建账号' : '登录评论'}
             </button>
           </form>
