@@ -580,3 +580,25 @@
 - `docs/user-auth.md`: documents the public user auth behavior and rollback path.
 - `progress.md`: records this user auth fix.
 - Rollback: run `git checkout -- src/pages/HomePage.tsx src/App.test.tsx progress.md && git rm docs/user-auth.md`.
+
+## 2026-07-06 - Task: Add visible public auth failure feedback
+### What was done
+- Verified the production user API directly: `/api/users/register` can create user sessions on the VPS, so the remaining issue was in the front-end interaction and feedback layer.
+- Updated the home auth form to reject invalid usernames and short passwords before sending requests.
+- Added an inline auth error panel inside the login/register card so failed registration or login no longer looks like no response.
+- Hardened the form against malformed auth responses so a response without token/user is treated as a failure instead of breaking the logged-in view.
+- Removed the temporary VPS test user created during diagnosis.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "public auth error|public users"`: passed. Real button-click submission, public login/register session persistence, and invalid-input feedback are covered.
+- `npm test -- --run src/App.test.tsx src/lib/blogApi.test.ts server/userStore.test.mjs`: passed. App auth flow, frontend user API calls, and backend user sessions all passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning for the main bundle.
+- Local production browser check at `http://127.0.0.1:49201/`: invalid registration showed the inline username-rule error, and valid registration switched the auth card to the logged-in user state.
+
+### Notes
+- `src/pages/HomePage.tsx`: adds client-side public auth validation, inline feedback state, and session-shape validation.
+- `src/App.css`: styles the inline auth feedback panel.
+- `src/App.test.tsx`: changes auth tests to click the real submit button and adds invalid-registration feedback coverage.
+- `docs/user-auth.md`: documents username rules and visible failure behavior.
+- `progress.md`: records this follow-up auth feedback fix.
+- Rollback: run `git checkout -- src/App.css src/pages/HomePage.tsx src/App.test.tsx docs/user-auth.md progress.md`.

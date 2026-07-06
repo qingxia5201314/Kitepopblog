@@ -813,6 +813,18 @@ p {
   font-weight: 800;
 }
 
+.auth-feedback {
+  background: rgba(182, 66, 60, 0.1);
+  border: 1px solid rgba(182, 66, 60, 0.32);
+  border-radius: 8px;
+  color: #9f2f2a;
+  font-size: 0.88rem;
+  font-weight: 800;
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 12px;
+}
+
 .compact-tabs {
   min-width: 150px;
 }

@@ -292,7 +292,7 @@ describe('App layout shells', () => {
     const [usernameInput, passwordInput] = Array.from(authForm!.querySelectorAll('input')) as HTMLInputElement[];
     fillInput(usernameInput, 'kite');
     fillInput(passwordInput, 'secret123');
-    authForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    (authForm!.querySelector('button[type="submit"]') as HTMLButtonElement).click();
 
     expect(
       await waitFor(() =>
@@ -349,7 +349,7 @@ describe('App layout shells', () => {
     fillInput(usernameInput, 'newkite');
     fillInput(passwordInput, 'secret123');
     fillInput(nicknameInput, 'New Kite');
-    authForm!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    (authForm!.querySelector('button[type="submit"]') as HTMLButtonElement).click();
 
     expect(
       await waitFor(() =>
@@ -363,6 +363,33 @@ describe('App layout shells', () => {
     });
     expect((await waitFor(() => host.querySelector('.user-auth-card strong')))?.textContent).toBe('New Kite');
     expect(window.localStorage.getItem('kitepop-user-session')).toContain('registered-token');
+  });
+
+  it('shows a clear public auth error when registration input is invalid', async () => {
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => fetchMock(input));
+    vi.stubGlobal('fetch', pageFetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const authForm = (await waitFor(() => host.querySelector('.user-auth-card form'))) as HTMLFormElement | null;
+    expect(authForm).toBeTruthy();
+    const registerTab = Array.from(authForm!.querySelectorAll('.segmented-control button')).find((button) =>
+      button.textContent?.includes('注册')
+    ) as HTMLButtonElement | undefined;
+    registerTab?.click();
+
+    expect(await waitFor(() => (authForm!.querySelectorAll('input').length === 3 ? authForm : null))).toBeTruthy();
+    const [usernameInput, passwordInput] = Array.from(authForm!.querySelectorAll('input')) as HTMLInputElement[];
+    fillInput(usernameInput, '中');
+    fillInput(passwordInput, '123');
+    (authForm!.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+
+    expect(await waitFor(() => host.querySelector('.auth-feedback'))).toBeTruthy();
+    expect(host.querySelector('.auth-feedback')?.textContent).toContain('用户名只能使用');
+    expect(pageFetchMock.mock.calls.some(([input]) => String(input).startsWith('/api/users/register'))).toBe(false);
   });
 
   it('returns from article detail to the article list when the browser goes back', async () => {

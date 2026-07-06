@@ -49,6 +49,8 @@ interface CommentFormState {
   content: string;
 }
 
+const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,24}$/;
+
 export function HomePage() {
   const { userSession, notify, loginUser, logoutUser } = useApp();
   const { posts } = useBlogData();
@@ -73,6 +75,7 @@ export function HomePage() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [userForm, setUserForm] = useState({ username: '', password: '', nickname: '' });
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState<{ type: 'error'; message: string } | null>(null);
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -172,21 +175,43 @@ export function HomePage() {
       const nickname = userForm.nickname.trim();
 
       if (!username || !password) {
-        notify('error', '请输入用户名和密码');
+        const message = '请输入用户名和密码';
+        setAuthFeedback({ type: 'error', message });
+        notify('error', message);
+        return;
+      }
+
+      if (!USERNAME_PATTERN.test(username)) {
+        const message = '用户名只能使用 3-24 位字母、数字或下划线';
+        setAuthFeedback({ type: 'error', message });
+        notify('error', message);
+        return;
+      }
+
+      if (password.length < 6) {
+        const message = '密码至少 6 位';
+        setAuthFeedback({ type: 'error', message });
+        notify('error', message);
         return;
       }
 
       try {
         setAuthSubmitting(true);
+        setAuthFeedback(null);
         const session =
           authMode === 'register'
             ? await registerUserRequest({ username, password, nickname })
             : await loginUserRequest(username, password);
+        if (!session?.token || !session?.expiresAt || !session?.user) {
+          throw new Error('Invalid user session');
+        }
         loginUser(session);
         setUserForm({ username: '', password: '', nickname: '' });
         notify('success', authMode === 'register' ? '注册成功，已登录' : '登录成功');
       } catch (error) {
-        notify('error', error instanceof Error ? error.message : authMode === 'register' ? '注册失败' : '登录失败');
+        const message = authMode === 'register' ? '注册失败，请换个用户名或检查密码' : '登录失败，请检查用户名和密码';
+        setAuthFeedback({ type: 'error', message });
+        notify('error', message);
       } finally {
         setAuthSubmitting(false);
       }
@@ -433,14 +458,20 @@ export function HomePage() {
             <div className="segmented-control compact-tabs">
               <button
                 className={authMode === 'login' ? 'active' : ''}
-                onClick={() => setAuthMode('login')}
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthFeedback(null);
+                }}
                 type="button"
               >
                 登录
               </button>
               <button
                 className={authMode === 'register' ? 'active' : ''}
-                onClick={() => setAuthMode('register')}
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthFeedback(null);
+                }}
                 type="button"
               >
                 注册
@@ -473,6 +504,7 @@ export function HomePage() {
                 value={userForm.nickname}
               />
             ) : null}
+            {authFeedback ? <p className={`auth-feedback ${authFeedback.type}`}>{authFeedback.message}</p> : null}
             <button disabled={authSubmitting} type="submit">
               {authMode === 'register' ? '创建账号' : '登录评论'}
             </button>
