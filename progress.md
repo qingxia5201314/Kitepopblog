@@ -660,3 +660,18 @@
 - `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: marks Task 1 steps complete.
 - `progress.md`: records this no-visual-change style structure split.
 - Rollback: run `git checkout -- src/main.tsx src/App.css docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md && git rm -r src/styles`.
+
+## 2026-07-08 - Task: Move media preview styles
+### What was done
+- Moved the isolated media preview page CSS out of `src/App.css` and into `src/styles/pages/media.css`.
+- Kept selector names unchanged so the existing media preview page markup and behavior do not need to change.
+- Left the rest of the page-specific CSS in `src/App.css` for later small, independently verified migrations.
+
+### Testing
+- `npm test -- --run src/pages/MediaPreviewPage.test.tsx src/App.test.tsx -t "MediaPreviewPage|opens the in-site media preview shell"`: passed. The media preview page and route shell checks still pass after the style move.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/styles/pages/media.css`: now owns the media preview shell, header, stage, player, overlay, audio card, and control strip styles.
+- `src/App.css`: no longer contains the media preview selector block.
+- Rollback: run `git checkout -- src/App.css src/styles/pages/media.css progress.md`.
