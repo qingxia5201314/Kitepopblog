@@ -621,3 +621,18 @@
 - `docs/comments.md`: documents the comment storage and loading behavior.
 - `progress.md`: records this persisted-comment loading fix.
 - Rollback: run `git checkout -- src/pages/HomePage.tsx src/App.test.tsx progress.md && git rm docs/comments.md`.
+
+## 2026-07-08 - Task: Plan structured UI and motion rollout
+### What was done
+- Wrote the UI/motion structure design for a phased front-end presentation-layer cleanup.
+- Wrote the implementation plan for style splitting, shared UI components, page polish, controlled 3D effects, and final verification.
+- Explicitly scoped the work away from database schemas, backend routes, auth token formats, and API contracts.
+
+### Testing
+- Not run; this task only created planning documentation and did not change runtime source code.
+
+### Notes
+- `docs/superpowers/specs/2026-07-08-ui-motion-structure-design.md`: defines scope, visual direction, motion rules, file structure, rollout strategy, and verification requirements.
+- `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: defines task-by-task implementation steps and validation checkpoints.
+- `progress.md`: records this planning task.
+- Rollback: run `git checkout -- progress.md && git rm docs/superpowers/specs/2026-07-08-ui-motion-structure-design.md docs/superpowers/plans/2026-07-08-ui-motion-structure.md`.
