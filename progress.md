@@ -691,3 +691,18 @@
 - `src/styles/pages/images.css`: now owns the base image host layout, image dropzone, image grid, image card, and image link code styles.
 - `src/App.css`: no longer contains that original contiguous file/image base block.
 - Rollback: run `git checkout -- src/App.css src/styles/pages/files.css src/styles/pages/images.css progress.md`.
+
+## 2026-07-08 - Task: Move accounting filter styles
+### What was done
+- Moved the accounting ledger filter grid and custom category panel base styles out of `src/App.css`.
+- Kept the accounting JSX, category CRUD behavior, budget calculations, and storage/API logic untouched.
+- Left later accounting override rules in `src/App.css` for later focused migrations.
+
+### Testing
+- `npm test -- --run src/App.test.tsx src/lib/accountingApi.test.ts`: passed. App-level and accounting API client regressions still pass after the style move.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/styles/pages/accounting.css`: now owns `.ledger-filter-grid`, `.custom-category-panel`, `.custom-category-controls`, `.custom-category-list`, and `.custom-category-item` base styles.
+- `src/App.css`: no longer contains that original contiguous accounting filter/category block.
+- Rollback: run `git checkout -- src/App.css src/styles/pages/accounting.css progress.md`.

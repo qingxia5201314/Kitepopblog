@@ -1,1 +1,98 @@
-/* Accounting page styles will be moved here during the structured UI rollout. */
+.ledger-filter-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.ledger-filter-grid label {
+  background: rgba(255, 253, 249, 0.72);
+  border: 1px solid rgba(216, 75, 73, 0.12);
+  border-radius: 12px;
+  display: grid;
+  font-weight: 850;
+  gap: 8px;
+  padding: 10px;
+}
+
+.custom-category-panel {
+  background: rgba(255, 244, 227, 0.72);
+  border: 1px solid rgba(216, 75, 73, 0.16);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.custom-category-panel[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.custom-category-panel summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  list-style: none;
+  padding-right: 26px;
+  position: relative;
+}
+
+.custom-category-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.custom-category-panel summary::after {
+  border: solid #d84b49;
+  border-width: 0 2px 2px 0;
+  content: '';
+  height: 8px;
+  position: absolute;
+  right: 4px;
+  top: 10px;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+  width: 8px;
+}
+
+.custom-category-panel[open] summary::after {
+  transform: rotate(225deg);
+}
+
+.custom-category-panel strong {
+  color: #231511;
+}
+
+.custom-category-panel small {
+  color: #68706a;
+}
+
+.custom-category-controls {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+}
+
+.custom-category-controls input,
+.custom-category-controls select {
+  min-height: 42px;
+}
+
+.custom-category-list {
+  display: grid;
+  gap: 8px;
+}
+
+.custom-category-item {
+  align-items: center;
+  background: #fffdf9;
+  border: 1px solid rgba(42, 19, 15, 0.12);
+  border-radius: 10px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 110px auto auto;
+  padding: 8px;
+}
+
+.custom-category-item input,
+.custom-category-item select {
+  min-height: 38px;
+}
