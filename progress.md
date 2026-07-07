@@ -675,3 +675,19 @@
 - `src/styles/pages/media.css`: now owns the media preview shell, header, stage, player, overlay, audio card, and control strip styles.
 - `src/App.css`: no longer contains the media preview selector block.
 - Rollback: run `git checkout -- src/App.css src/styles/pages/media.css progress.md`.
+
+## 2026-07-08 - Task: Move file and image base styles
+### What was done
+- Moved the first isolated file warehouse style block from `src/App.css` into `src/styles/pages/files.css`.
+- Moved the first isolated image hosting style block from `src/App.css` into `src/styles/pages/images.css`.
+- Kept existing class names and page markup unchanged; later historical override rules remain in `src/App.css` until they can be migrated safely in smaller steps.
+
+### Testing
+- `npm test -- --run src/App.test.tsx src/lib/fileApi.test.ts src/lib/imageApi.test.ts`: passed. The app, file API client, and image API client regressions still pass after the CSS split.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/styles/pages/files.css`: now owns the base file page layout, hero, toolbar, folder grid, dropzone, link box, file list, and file badge styles.
+- `src/styles/pages/images.css`: now owns the base image host layout, image dropzone, image grid, image card, and image link code styles.
+- `src/App.css`: no longer contains that original contiguous file/image base block.
+- Rollback: run `git checkout -- src/App.css src/styles/pages/files.css src/styles/pages/images.css progress.md`.
