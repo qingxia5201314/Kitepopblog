@@ -636,3 +636,27 @@
 - `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: defines task-by-task implementation steps and validation checkpoints.
 - `progress.md`: records this planning task.
 - Rollback: run `git checkout -- progress.md && git rm docs/superpowers/specs/2026-07-08-ui-motion-structure-design.md docs/superpowers/plans/2026-07-08-ui-motion-structure.md`.
+
+## 2026-07-08 - Task: Split base style structure
+### What was done
+- Added the `src/styles/` folder structure with a single `index.css` entrypoint for future UI organization.
+- Moved global design tokens and base reset styles out of `src/App.css` into `src/styles/tokens.css` and `src/styles/base.css`.
+- Updated `src/main.tsx` to import `src/styles/index.css` while keeping `App.css` as a compatibility import so current page visuals stay stable.
+- Marked Task 1 of the UI motion structure plan as completed.
+
+### Testing
+- `npm test -- --run src/App.test.tsx`: passed. The app shell and route regression tests still pass after the style import switch.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+- `npm test -- --run`: passed. 33 test files and 127 tests passed.
+- `npm run build`: passed again after the full test run.
+
+### Notes
+- `src/styles/index.css`: new style entrypoint that imports the structured style files and the compatibility `App.css`.
+- `src/styles/tokens.css`: owns global root color, background, font stack, and typography rendering defaults.
+- `src/styles/base.css`: owns box sizing, body baseline, form font inheritance, and default button cursor.
+- `src/styles/layout.css`, `src/styles/motion.css`, `src/styles/effects.css`, and `src/styles/pages/*.css`: created as focused destinations for the next style-splitting phases.
+- `src/main.tsx`: now imports the structured style entrypoint.
+- `src/App.css`: no longer owns the base token/reset block.
+- `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: marks Task 1 steps complete.
+- `progress.md`: records this no-visual-change style structure split.
+- Rollback: run `git checkout -- src/main.tsx src/App.css docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md && git rm -r src/styles`.

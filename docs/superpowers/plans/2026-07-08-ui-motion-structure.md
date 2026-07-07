@@ -30,7 +30,7 @@
 - Modify: `src/App.css`
 - Test: `src/App.test.tsx`
 
-- [ ] **Step 1: Add a style import index**
+- [x] **Step 1: Add a style import index**
 
 Create `src/styles/index.css`:
 
@@ -49,7 +49,7 @@ Create `src/styles/index.css`:
 @import './pages/media.css';
 ```
 
-- [ ] **Step 2: Move the top-level app CSS import**
+- [x] **Step 2: Move the top-level app CSS import**
 
 In `src/main.tsx`, replace:
 
@@ -65,7 +65,7 @@ import './styles/index.css';
 
 Expected: the app still compiles after `index.css` imports `App.css` during the first safe step.
 
-- [ ] **Step 3: Add a temporary compatibility import**
+- [x] **Step 3: Add a temporary compatibility import**
 
 At the bottom of `src/styles/index.css`, add:
 
@@ -75,7 +75,7 @@ At the bottom of `src/styles/index.css`, add:
 
 Expected: this keeps visual output unchanged while the split files are created.
 
-- [ ] **Step 4: Run baseline tests**
+- [x] **Step 4: Run baseline tests**
 
 Run:
 
@@ -86,13 +86,13 @@ npm run build
 
 Expected: PASS. If this fails, stop and restore the previous direct `App.css` import before continuing.
 
-- [ ] **Step 5: Move only CSS custom properties and resets**
+- [x] **Step 5: Move only CSS custom properties and resets**
 
 Move `:root`, `body`, generic `button`, `input`, `textarea`, `select`, and global focus rules from `src/App.css` into `src/styles/tokens.css` and `src/styles/base.css`. Do not rename selectors.
 
 Expected: `App.css` shrinks, but selectors and computed styles remain equivalent.
 
-- [ ] **Step 6: Run full regression**
+- [x] **Step 6: Run full regression**
 
 Run:
 
@@ -103,7 +103,7 @@ npm run build
 
 Expected: PASS. Commit only after both commands pass.
 
-- [ ] **Step 7: Commit Task 1**
+- [x] **Step 7: Commit Task 1**
 
 Run:
 
