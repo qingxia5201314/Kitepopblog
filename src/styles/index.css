@@ -1,8 +1,6 @@
 @import './tokens.css';
 @import './base.css';
 @import './layout.css';
-@import './motion.css';
-@import './effects.css';
 @import './pages/home.css';
 @import './pages/article.css';
 @import './pages/admin.css';
@@ -11,3 +9,5 @@
 @import './pages/images.css';
 @import './pages/media.css';
 @import '../App.css';
+@import './motion.css';
+@import './effects.css';

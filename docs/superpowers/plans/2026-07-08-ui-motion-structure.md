@@ -298,7 +298,7 @@ git commit -m "polish home and article layout"
 - Modify: `src/styles/effects.css`
 - Test: `src/App.test.tsx`
 
-- [ ] **Step 1: Create `TiltCard`**
+- [x] **Step 1: Create `TiltCard`**
 
 Create a wrapper that only adds class names and CSS variables. It must not fetch data or own feature state.
 
@@ -315,7 +315,7 @@ export function TiltCard({ className = '', children }: TiltCardProps) {
 }
 ```
 
-- [ ] **Step 2: Add CSS-only 3D hover**
+- [x] **Step 2: Add CSS-only 3D hover**
 
 In `effects.css`, add a conservative hover transform:
 
@@ -332,7 +332,7 @@ In `effects.css`, add a conservative hover transform:
 }
 ```
 
-- [ ] **Step 3: Add reduced-motion guard**
+- [x] **Step 3: Add reduced-motion guard**
 
 In `motion.css`, add:
 
@@ -353,11 +353,11 @@ In `motion.css`, add:
 }
 ```
 
-- [ ] **Step 4: Apply effects only to visual cards**
+- [x] **Step 4: Apply effects only to visual cards**
 
 Apply `tilt-card` classes to home article cards and hero visual wrappers. Do not apply it to form controls, admin rows, file upload dropzones, or accounting input cards.
 
-- [ ] **Step 5: Run regression**
+- [x] **Step 5: Run regression**
 
 Run:
 
@@ -368,7 +368,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 5**
+- [x] **Step 6: Commit Task 5**
 
 Run:
 

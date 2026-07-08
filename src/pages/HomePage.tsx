@@ -29,6 +29,7 @@ import {
   renderInlineMarkdown,
   permissionLabel
 } from '../components/shared';
+import { TiltCard } from '../components/effects/TiltCard';
 import haruhiCutoutImage from '../assets/haruhi-cutout.webp';
 
 type PostDateFilter = 'all' | '7d' | '30d' | 'year';
@@ -450,11 +451,11 @@ export function HomePage() {
             </button>
           </div>
         </div>
-        <div className="hero-visual hero-art" aria-label="blog visual cover">
+        <TiltCard className="hero-visual hero-art" aria-label="blog visual cover">
           <img alt="Haruhi Suzumiya" src={haruhiCutoutImage} />
           <span className="hero-art-ring" aria-hidden="true" />
           <span className="hero-art-corners" aria-hidden="true" />
-        </div>
+        </TiltCard>
       </section>
 
       <section className="metrics-strip">
@@ -623,7 +624,7 @@ export function HomePage() {
                 const coverImage = getSafeImageUrl(post.coverImage);
                 return (
                   <button
-                    className="post-item"
+                    className="post-item tilt-card"
                     key={post.id}
                     onClick={() => openPostDetail(post)}
                     type="button"

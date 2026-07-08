@@ -727,3 +727,26 @@
 - `src/components/shared.test.tsx`: adds smoke tests for all shared UI primitives.
 - `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: marks Task 3 steps complete.
 - Rollback: run `git checkout -- src/components/shared.test.tsx docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md && git rm -r src/components/ui`.
+
+## 2026-07-08 - Task: Add controlled motion and depth effects
+### What was done
+- Added isolated visual effect wrappers: `TiltCard` and `ParallaxStage`.
+- Added conservative CSS-only depth feedback for `.tilt-card`, using a small lift, shadow, border emphasis, and slight 3D rotation.
+- Added a reduced-motion guard so users who prefer reduced motion do not get large animation or particle effects.
+- Moved `motion.css` and `effects.css` imports after the compatibility `App.css` import so the explicit effect classes can win the cascade without moving legacy page styles.
+- Applied `tilt-card` only to the homepage hero visual and article cards; tool panels, forms, upload zones, admin rows, and accounting inputs were not given the effect.
+- Marked Task 5 of the UI motion structure plan as completed.
+
+### Testing
+- `npm test -- --run src/components/effects.test.tsx src/App.test.tsx -t "visual effect wrappers|redesigned home shell"`: first failed because the effect components and homepage classes did not exist, then passed after adding them.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/components/effects/TiltCard.tsx`: adds the state-free tilt wrapper.
+- `src/components/effects/ParallaxStage.tsx`: adds the state-free parallax stage wrapper.
+- `src/styles/effects.css`: owns the `.tilt-card` and `.parallax-stage` effect rules.
+- `src/styles/motion.css`: owns the reduced-motion guard.
+- `src/styles/index.css`: imports motion/effects after `App.css` so these explicit effect classes apply predictably.
+- `src/pages/HomePage.tsx`: applies controlled depth to the homepage hero visual and post cards only.
+- `src/components/effects.test.tsx` and `src/App.test.tsx`: cover the wrappers and homepage effect mounting points.
+- Rollback: run `git checkout -- src/App.test.tsx src/pages/HomePage.tsx src/styles/index.css src/styles/effects.css src/styles/motion.css docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md && git rm -r src/components/effects src/components/effects.test.tsx`.

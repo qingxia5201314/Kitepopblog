@@ -1,1 +1,21 @@
-/* Visual effect styles will be moved here during the structured UI rollout. */
+.parallax-stage {
+  perspective: 1000px;
+  position: relative;
+}
+
+.tilt-card {
+  transform-style: preserve-3d;
+  transition:
+    transform 180ms ease,
+    box-shadow 200ms ease,
+    border-color 200ms ease;
+  will-change: transform;
+}
+
+@media (hover: hover) {
+  .tilt-card:hover {
+    border-color: rgba(216, 75, 73, 0.42);
+    box-shadow: 0 18px 30px rgba(42, 19, 15, 0.14);
+    transform: translateY(-3px) perspective(900px) rotateX(1.2deg);
+  }
+}

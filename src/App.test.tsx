@@ -110,10 +110,13 @@ describe('App layout shells', () => {
     roots.push(root);
     root.render(<App />);
     await waitFor(() => host.querySelector('.hero-band'));
+    await waitFor(() => host.querySelector('.post-item'));
 
     expect(host.querySelector('.hero-band')).toBeTruthy();
     expect(host.querySelector('.home-post-section')).toBeTruthy();
     expect(host.querySelector('.post-list')).toBeTruthy();
+    expect(host.querySelector('.hero-visual.tilt-card')).toBeTruthy();
+    expect(host.querySelector('.post-item.tilt-card')).toBeTruthy();
   });
 
   it('marks the current top navigation item as active', async () => {
