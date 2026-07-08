@@ -2,6 +2,11 @@ import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ImageWithFallback, permissionLabel, renderInlineMarkdown, renderMarkdown } from './shared';
+import { Badge } from './ui/Badge';
+import { Button } from './ui/Button';
+import { EmptyState } from './ui/EmptyState';
+import { Panel } from './ui/Panel';
+import { SectionHeader } from './ui/SectionHeader';
 
 describe('ImageWithFallback', () => {
   const roots: Array<ReturnType<typeof createRoot>> = [];
@@ -133,5 +138,53 @@ describe('ImageWithFallback', () => {
 
     expect(host.querySelector('figure.article-image img')).toBeTruthy();
     expect(host.querySelector('.article-image figcaption')?.textContent).toBe('cover');
+  });
+});
+
+describe('shared UI presentation components', () => {
+  const roots: Array<ReturnType<typeof createRoot>> = [];
+
+  afterEach(() => {
+    roots.splice(0).forEach((root) => root.unmount());
+    document.body.innerHTML = '';
+  });
+
+  it('renders the shared panel wrapper with custom classes', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(<Panel className="article-panel">内容面板</Panel>);
+    });
+
+    expect(host.querySelector('section.ui-panel.article-panel')?.textContent).toBe('内容面板');
+  });
+
+  it('renders button, badge, empty state, and section header primitives', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    await act(async () => {
+      root.render(
+        <div>
+          <Button className="save-button">保存</Button>
+          <Badge className="tag-badge">标签</Badge>
+          <EmptyState title="暂无内容" description="稍后再来" />
+          <SectionHeader eyebrow="Kitepop" title="文章列表" description="最近更新" />
+        </div>
+      );
+    });
+
+    expect(host.querySelector('button.ui-button.save-button')?.textContent).toBe('保存');
+    expect(host.querySelector('span.ui-badge.tag-badge')?.textContent).toBe('标签');
+    expect(host.querySelector('.ui-empty-state h3')?.textContent).toBe('暂无内容');
+    expect(host.querySelector('.ui-empty-state p')?.textContent).toBe('稍后再来');
+    expect(host.querySelector('.ui-section-header .eyebrow')?.textContent).toBe('Kitepop');
+    expect(host.querySelector('.ui-section-header h2')?.textContent).toBe('文章列表');
+    expect(host.querySelectorAll('.ui-section-header p')[1]?.textContent).toBe('最近更新');
   });
 });

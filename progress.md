@@ -706,3 +706,24 @@
 - `src/styles/pages/accounting.css`: now owns `.ledger-filter-grid`, `.custom-category-panel`, `.custom-category-controls`, `.custom-category-list`, and `.custom-category-item` base styles.
 - `src/App.css`: no longer contains that original contiguous accounting filter/category block.
 - Rollback: run `git checkout -- src/App.css src/styles/pages/accounting.css progress.md`.
+
+## 2026-07-08 - Task: Add shared UI presentation components
+### What was done
+- Added thin shared presentation components for future UI cleanup: `Panel`, `Button`, `Badge`, `EmptyState`, and `SectionHeader`.
+- Kept the components state-free and API-free; they only compose semantic elements with stable class names and custom class passthroughs.
+- Added smoke coverage for the new primitives in the existing shared component test file.
+- Marked Task 3 of the UI motion structure plan as completed.
+
+### Testing
+- `npm test -- --run src/components/shared.test.tsx`: first failed because `src/components/ui/*` did not exist, then passed after adding the components. The final run passed 9 tests.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/components/ui/Panel.tsx`: adds the `ui-panel` wrapper.
+- `src/components/ui/Button.tsx`: adds the `ui-button` primitive with safe `type="button"` default.
+- `src/components/ui/Badge.tsx`: adds the `ui-badge` primitive.
+- `src/components/ui/EmptyState.tsx`: adds a reusable empty-state block.
+- `src/components/ui/SectionHeader.tsx`: adds a reusable section heading block with optional eyebrow and description.
+- `src/components/shared.test.tsx`: adds smoke tests for all shared UI primitives.
+- `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: marks Task 3 steps complete.
+- Rollback: run `git checkout -- src/components/shared.test.tsx docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md && git rm -r src/components/ui`.

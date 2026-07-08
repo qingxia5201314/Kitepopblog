@@ -197,7 +197,7 @@ git commit -m "move page styles into focused files"
 - Create: `src/components/ui/SectionHeader.tsx`
 - Test: `src/components/shared.test.tsx`
 
-- [ ] **Step 1: Create `Panel`**
+- [x] **Step 1: Create `Panel`**
 
 Create `src/components/ui/Panel.tsx`:
 
@@ -214,15 +214,15 @@ export function Panel({ className = '', children }: PanelProps) {
 }
 ```
 
-- [ ] **Step 2: Create small UI helpers**
+- [x] **Step 2: Create small UI helpers**
 
 Create `Button.tsx`, `Badge.tsx`, `EmptyState.tsx`, and `SectionHeader.tsx` with simple className passthroughs. Do not move business logic into these components.
 
-- [ ] **Step 3: Add smoke tests**
+- [x] **Step 3: Add smoke tests**
 
 Add tests that render each component and assert the expected text/class exists.
 
-- [ ] **Step 4: Run component tests**
+- [x] **Step 4: Run component tests**
 
 Run:
 
@@ -232,7 +232,7 @@ npm test -- --run src/components/shared.test.tsx
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 Run:
 
