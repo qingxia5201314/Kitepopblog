@@ -750,3 +750,22 @@
 - `src/pages/HomePage.tsx`: applies controlled depth to the homepage hero visual and post cards only.
 - `src/components/effects.test.tsx` and `src/App.test.tsx`: cover the wrappers and homepage effect mounting points.
 - Rollback: run `git checkout -- src/App.test.tsx src/pages/HomePage.tsx src/styles/index.css src/styles/effects.css src/styles/motion.css docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md && git rm -r src/components/effects src/components/effects.test.tsx`.
+
+## 2026-07-08 - Task: Polish home and article layout
+### What was done
+- Added final home-page layout overrides in `src/styles/pages/home.css` so the hero, visual area, filter panel, and article cards have clearer proportions.
+- Added final article-detail layout overrides in `src/styles/pages/article.css` so the rail, header card, body width, and comment spacing read as a calmer detail page.
+- Moved the empty `home.css` and `article.css` imports after `App.css` so their intentional page-level polish rules apply without changing migrated tool-page CSS order.
+- Kept post filtering, tag filtering, article navigation, comment loading, and auth logic unchanged.
+- Marked Task 4 of the UI motion structure plan as completed.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "redesigned home shell|article detail shell|loads persisted comments|returns from article detail"`: passed. The covered homepage shell, article detail shell, persisted comments, and browser-back behavior still work.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/styles/pages/home.css`: owns the final homepage hero, home post shell, filter panel, and post-card layout overrides.
+- `src/styles/pages/article.css`: owns the final article detail, article header/body, rail, and comment panel layout overrides.
+- `src/styles/index.css`: imports home/article polish after the legacy compatibility stylesheet.
+- `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: marks Task 4 steps complete.
+- Rollback: run `git checkout -- src/styles/index.css src/styles/pages/home.css src/styles/pages/article.css docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md`.

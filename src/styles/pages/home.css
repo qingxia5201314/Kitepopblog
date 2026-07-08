@@ -1,1 +1,121 @@
-/* Home page styles will be moved here during the structured UI rollout. */
+.hero-band {
+  align-items: end;
+  gap: clamp(22px, 4vw, 46px);
+  grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.72fr);
+  margin-inline: auto;
+  max-width: 1180px;
+  min-height: clamp(430px, 58vh, 620px);
+  padding: clamp(24px, 4vw, 46px);
+}
+
+.hero-copy {
+  align-self: center;
+  max-width: 620px;
+}
+
+.hero-copy h1 {
+  max-width: 10ch;
+}
+
+.hero-copy p {
+  max-width: 58ch;
+}
+
+.hero-visual {
+  justify-self: end;
+  min-height: clamp(320px, 45vw, 520px);
+  width: min(100%, 430px);
+}
+
+.home-post-section {
+  margin-inline: auto;
+  max-width: 1180px;
+}
+
+.home-post-shell {
+  align-items: start;
+  gap: clamp(16px, 3vw, 28px);
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+}
+
+.home-filter-panel {
+  position: sticky;
+  top: 92px;
+}
+
+.home-filter-header,
+.home-post-header {
+  align-items: start;
+  gap: 12px;
+}
+
+.home-post-panel .post-list {
+  gap: 14px;
+}
+
+.home-post-panel .post-item {
+  align-items: center;
+  border-radius: 14px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  min-height: 112px;
+  padding: 14px;
+  text-align: left;
+}
+
+.home-post-panel .cover-dot,
+.home-post-panel .cover-thumb {
+  border-radius: 12px;
+  height: 88px;
+  width: 88px;
+}
+
+.post-item-copy {
+  gap: 7px;
+}
+
+.post-item-copy strong {
+  line-height: 1.25;
+}
+
+.post-item-copy small {
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+@media (max-width: 860px) {
+  .hero-band {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .hero-visual {
+    justify-self: center;
+    min-height: 300px;
+    order: -1;
+    width: min(100%, 360px);
+  }
+
+  .home-post-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .home-filter-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .home-post-panel .post-item {
+    grid-template-columns: 70px minmax(0, 1fr);
+    min-height: 96px;
+    padding: 12px;
+  }
+
+  .home-post-panel .cover-dot,
+  .home-post-panel .cover-thumb {
+    height: 70px;
+    width: 70px;
+  }
+}

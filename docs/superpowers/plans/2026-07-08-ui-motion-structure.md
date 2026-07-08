@@ -249,7 +249,7 @@ git commit -m "add shared ui presentation components"
 - Modify: `src/styles/pages/article.css`
 - Test: `src/App.test.tsx`
 
-- [ ] **Step 1: Add layout regression tests**
+- [x] **Step 1: Add layout regression tests**
 
 Add tests asserting:
 
@@ -260,15 +260,15 @@ expect(host.querySelector('.article-page')).toBeTruthy();
 expect(host.querySelector('.comment-panel')).toBeTruthy();
 ```
 
-- [ ] **Step 2: Tune home visual hierarchy**
+- [x] **Step 2: Tune home visual hierarchy**
 
 Use the existing `hero-band`, `hero-art`, `post-item`, and filter classes. Adjust CSS only. Do not change post filtering, tag filtering, article opening, comments, or auth logic.
 
-- [ ] **Step 3: Tune article/comment hierarchy**
+- [x] **Step 3: Tune article/comment hierarchy**
 
 Adjust article and comment spacing, borders, and metadata layout through CSS only.
 
-- [ ] **Step 4: Run app tests and build**
+- [x] **Step 4: Run app tests and build**
 
 Run:
 
@@ -279,7 +279,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 Run:
 

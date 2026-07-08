@@ -1,1 +1,88 @@
-/* Article page styles will be moved here during the structured UI rollout. */
+.article-page {
+  margin-inline: auto;
+  max-width: 1220px;
+  padding: clamp(16px, 3vw, 32px);
+}
+
+.article-page-shell {
+  align-items: start;
+  gap: clamp(18px, 3vw, 30px);
+  grid-template-columns: minmax(190px, 250px) minmax(0, 1fr);
+}
+
+.article-page-rail {
+  position: sticky;
+  top: 92px;
+}
+
+.article-page-main {
+  gap: 18px;
+}
+
+.article-header-card {
+  align-items: center;
+  gap: clamp(18px, 3vw, 34px);
+  grid-template-columns: minmax(250px, 360px) minmax(0, 1fr);
+  padding: clamp(18px, 3vw, 30px);
+}
+
+.article-header-media {
+  align-self: stretch;
+}
+
+.article-header-copy {
+  min-width: 0;
+}
+
+.article-header-copy h1 {
+  line-height: 1.12;
+  margin-bottom: 12px;
+}
+
+.article-body-card {
+  padding: clamp(20px, 4vw, 40px);
+}
+
+.article-body-card .article-body {
+  margin-inline: auto;
+  max-width: 780px;
+}
+
+.comment-panel {
+  padding: clamp(16px, 3vw, 26px);
+}
+
+.comment-list {
+  gap: 12px;
+}
+
+.comment-item {
+  border-radius: 12px;
+  padding: 14px;
+}
+
+@media (max-width: 900px) {
+  .article-page-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .article-page-rail {
+    position: static;
+  }
+
+  .article-header-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .article-page {
+    padding: 12px;
+  }
+
+  .article-header-card,
+  .article-body-card,
+  .comment-panel {
+    padding: 14px;
+  }
+}
