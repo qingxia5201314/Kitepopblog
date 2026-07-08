@@ -769,3 +769,27 @@
 - `src/styles/index.css`: imports home/article polish after the legacy compatibility stylesheet.
 - `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: marks Task 4 steps complete.
 - Rollback: run `git checkout -- src/styles/index.css src/styles/pages/home.css src/styles/pages/article.css docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md`.
+
+## 2026-07-08 - Task: Verify UI motion rollout locally
+### What was done
+- Ran the full frontend/server-adjacent test suite after the style split, shared UI components, motion wrappers, and home/article layout polish.
+- Ran the production build after the final layout changes.
+- Started the local Vite dev server at `http://127.0.0.1:49200/`.
+- Smoke-checked `/`, `/admin`, `/accounting`, `/files`, `/images`, and `/files/preview` through Playwright browser evaluation for non-empty content and horizontal overflow.
+- Marked Task 6 verification steps complete, leaving push/deployment pending explicit approval.
+
+### Testing
+- `npm test -- --run`: passed. 34 test files and 130 tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+- Browser smoke checks:
+  - `/`: main home shell rendered, `horizontalOverflow` was `0`; live local data had no real post item, while the mocked app test covers post-card `tilt-card` mounting.
+  - `/admin`: content rendered, `horizontalOverflow` was `0`, admin unlock/layout shell existed.
+  - `/accounting`: content rendered, `horizontalOverflow` was `0`, accounting page and unlock shell existed.
+  - `/files`: content rendered, `horizontalOverflow` was `0`, file page and unlock shell existed.
+  - `/images`: content rendered, `horizontalOverflow` was `0`, image host page and unlock shell existed.
+  - `/files/preview`: without preview navigation state it redirected to `/files`, rendered content, and kept `horizontalOverflow` at `0`.
+
+### Notes
+- `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: records completed local verification steps; deployment remains unchecked.
+- `progress.md`: records the final local verification evidence.
+- Rollback: run `git checkout -- docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md`.

@@ -382,7 +382,7 @@ git commit -m "add controlled motion and depth effects"
 **Files:**
 - Modify: `progress.md`
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run:
 
@@ -392,7 +392,7 @@ npm test -- --run
 
 Expected: PASS.
 
-- [ ] **Step 2: Run production build**
+- [x] **Step 2: Run production build**
 
 Run:
 
@@ -402,7 +402,7 @@ npm run build
 
 Expected: PASS. Existing Vite large chunk warning is acceptable unless a new error appears.
 
-- [ ] **Step 3: Manual route smoke check**
+- [x] **Step 3: Manual route smoke check**
 
 Open the local production/dev site and check:
 
@@ -417,7 +417,7 @@ Open the local production/dev site and check:
 
 Expected: no blank page, no horizontal overflow, auth controls clickable, article comments visible, file/image lists visible after saved admin session.
 
-- [ ] **Step 4: Commit final notes**
+- [x] **Step 4: Commit final notes**
 
 Run:
 
