@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
 import { useBlog } from '../hooks/useBlog';
@@ -53,7 +54,8 @@ interface CommentFormState {
 const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,24}$/;
 
 export function HomePage() {
-  const { userSession, notify, loginUser, logoutUser } = useApp();
+  const navigate = useNavigate();
+  const { userSession, notify, loginUser, logoutUser, adminUnlocked } = useApp();
   const { posts } = useBlogData();
   const {
     activeCategory,
@@ -91,6 +93,12 @@ export function HomePage() {
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
   const detailPostSlug = detailPost?.slug;
+  const canEditDetailPost = Boolean(adminUnlocked || userSession?.user.permission === 'admin');
+
+  useEffect(() => {
+    if (!detailPostSlug) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [detailPostSlug]);
 
   useEffect(() => {
     if (!detailPostSlug) {
@@ -250,6 +258,11 @@ export function HomePage() {
     [authMode, authSubmitting, loginUser, notify, userForm]
   );
 
+  const handleEditDetailPost = useCallback(() => {
+    if (!detailPost) return;
+    navigate(`/admin?edit=${encodeURIComponent(detailPost.id)}`);
+  }, [detailPost, navigate]);
+
   // Detail view
   if (detailPost) {
     return (
@@ -259,6 +272,12 @@ export function HomePage() {
             <button className="back-link" onClick={closePostDetail} type="button">
               返回文章列表
             </button>
+            {canEditDetailPost ? (
+              <button className="article-edit-link article-admin-edit" onClick={handleEditDetailPost} type="button">
+                <Icon name="edit" />
+                修改文章
+              </button>
+            ) : null}
             <div className="article-rail-card">
               <p className="eyebrow">Reading Focus</p>
               <strong>{getCategory(detailPost.category).name}</strong>

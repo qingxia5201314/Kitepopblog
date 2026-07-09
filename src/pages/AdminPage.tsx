@@ -1,4 +1,5 @@
 import React, { ClipboardEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ArticleManager } from '../components/admin/ArticleManager';
 import { EditorPanel } from '../components/admin/EditorPanel';
 import { UserManager } from '../components/admin/UserManager';
@@ -34,6 +35,7 @@ const EMPTY_ADMIN_USER_FORM = {
 };
 
 export function AdminPage() {
+  const [searchParams] = useSearchParams();
   const { notify, adminToken } = useApp();
   const { posts, loadPosts } = useBlogData();
   const { password, setPassword, unlockAdmin } = useAdminAccess('已进入后台', '无法连接后台登录接口');
@@ -56,8 +58,10 @@ export function AdminPage() {
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const loadedAdminUsersTokenRef = useRef('');
+  const handledEditQueryRef = useRef('');
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
+  const editPostQuery = searchParams.get('edit');
 
   useEffect(() => {
     if (!adminToken || adminToken === localAdminToken) return;
@@ -135,6 +139,25 @@ export function AdminPage() {
     setEditorTab('edit');
     if (showNotice) notify('info', `正在编辑：${post.title}`);
   };
+
+  useEffect(() => {
+    if (!adminUnlocked || !editPostQuery) return;
+    const post = posts.find((item) => item.id === editPostQuery || item.slug === editPostQuery);
+    if (!post) return;
+
+    const queryKey = `${editPostQuery}:${post.updatedAt}`;
+    if (handledEditQueryRef.current === queryKey && editingId === post.id) return;
+    handledEditQueryRef.current = queryKey;
+
+    setAdminPanelOpen((current) => ({ ...current, content: true }));
+    setAdminStatusFilter('all');
+    setExpandedAdminPostId(post.id);
+    startEdit(post);
+    window.setTimeout(() => {
+      const editorPanel = document.querySelector('.editor-panel') as HTMLElement | null;
+      editorPanel?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  }, [adminUnlocked, editPostQuery, editingId, posts]);
 
   const savePost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

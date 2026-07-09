@@ -793,3 +793,25 @@
 - `docs/superpowers/plans/2026-07-08-ui-motion-structure.md`: records completed local verification steps; deployment remains unchecked.
 - `progress.md`: records the final local verification evidence.
 - Rollback: run `git checkout -- docs/superpowers/plans/2026-07-08-ui-motion-structure.md progress.md`.
+
+## 2026-07-09 - Task: Add article-detail admin edit flow
+### What was done
+- Fixed article detail navigation so opening an article scrolls the page back to the top instead of preserving the previous list scroll position.
+- Added a detail-page “修改文章” action for admin users or existing backend admin sessions.
+- Wired the action to `/admin?edit=<postId>` so the backend editor can locate the same article.
+- Updated the admin page to read the `edit` query, expand content management, expand the matching article row, load that article into the editor, and scroll the editor into view.
+- Reused the existing `.article-edit-link` capsule style and added the stable `.article-admin-edit` hook for behavior tests.
+- Added an explicit `aria-label="文章标题"` to the editor title input for accessibility and reliable testing.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "scrolls to the top|edit article action|requested article"`: failed before the implementation for all three requested behaviors, then passed after the fix.
+- `npm test -- --run`: passed. 34 test files and 133 tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed successfully; Vite still reports the existing large chunk warning.
+
+### Notes
+- `src/pages/HomePage.tsx`: scrolls on article detail entry and renders the admin-only edit action.
+- `src/pages/AdminPage.tsx`: handles the `edit` query and opens the matching post in the editor.
+- `src/components/admin/EditorPanel.tsx`: adds the title input aria label.
+- `src/App.test.tsx`: covers scroll reset, admin detail edit entry, and admin query-driven editing.
+- `progress.md`: records this task.
+- Rollback: run `git checkout -- src/pages/HomePage.tsx src/pages/AdminPage.tsx src/components/admin/EditorPanel.tsx src/App.test.tsx progress.md`.

@@ -65,7 +65,12 @@ export function EditorPanel({
 
       <label>
         标题
-        <input onChange={(event) => onUpdateForm({ title: event.target.value })} placeholder="例如：一次越权风险复盘" value={form.title} />
+        <input
+          aria-label="文章标题"
+          onChange={(event) => onUpdateForm({ title: event.target.value })}
+          placeholder="例如：一次越权风险复盘"
+          value={form.title}
+        />
       </label>
       <label>
         摘要

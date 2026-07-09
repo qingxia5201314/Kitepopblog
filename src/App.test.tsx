@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 vi.mock('./assets/accounting-hero.webp', () => ({ default: '/accounting-hero.webp' }));
@@ -92,6 +92,10 @@ describe('App layout shells', () => {
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  beforeEach(() => {
+    Object.defineProperty(window, 'scrollTo', { configurable: true, value: vi.fn() });
+  });
+
   afterEach(() => {
     roots.splice(0).forEach((root) => root.unmount());
     document.body.innerHTML = '';
@@ -99,6 +103,7 @@ describe('App layout shells', () => {
     window.history.pushState({}, '', '/');
     window.location.hash = '';
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     FakeXMLHttpRequest.latest = null;
   });
 
@@ -262,6 +267,101 @@ describe('App layout shells', () => {
     expect(host.querySelector('.article-header-card')).toBeTruthy();
     expect(host.querySelector('.article-body-card')).toBeTruthy();
     expect(host.querySelector('.comment-panel')).toBeTruthy();
+  });
+
+  it('scrolls to the top when opening an article detail page', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(window, 'scrollTo', { configurable: true, value: scrollToSpy });
+    window.location.hash = '#/posts/post-1';
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    await waitFor(() => host.querySelector('.article-page'));
+    await waitFor(() => (scrollToSpy.mock.calls.length ? host : null));
+
+    expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, left: 0, behavior: 'auto' });
+  });
+
+  it('shows an edit article action for admin users on article detail pages', async () => {
+    window.localStorage.setItem(
+      'kitepop-user-session',
+      JSON.stringify({
+        token: 'user-admin-token',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+        user: {
+          id: 'user-admin',
+          username: 'admin',
+          nickname: 'Admin',
+          permission: 'admin',
+          createdAt: '2026-07-09T00:00:00.000Z',
+          updatedAt: '2026-07-09T00:00:00.000Z'
+        }
+      })
+    );
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/users/me')) {
+        return Response.json({
+          user: {
+            id: 'user-admin',
+            username: 'admin',
+            nickname: 'Admin',
+            permission: 'admin',
+            createdAt: '2026-07-09T00:00:00.000Z',
+            updatedAt: '2026-07-09T00:00:00.000Z'
+          }
+        });
+      }
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+    window.location.hash = '#/posts/post-1';
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const editButton = (await waitFor(() => host.querySelector('.article-admin-edit'))) as HTMLButtonElement | null;
+    expect(editButton).toBeTruthy();
+    expect(editButton?.textContent).toContain('修改文章');
+    editButton?.click();
+
+    expect(await waitFor(() => (window.location.pathname === '/admin' ? host : null))).toBeTruthy();
+    expect(window.location.search).toBe('?edit=post-1');
+  });
+
+  it('opens the requested article in the admin editor from the edit query', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/admin?edit=post-1');
+    const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', adminFetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const titleInput = (await waitFor(() => {
+      const input = host.querySelector('.editor-panel input[aria-label="文章标题"]') as HTMLInputElement | null;
+      return input?.value === 'Test post' ? input : null;
+    })) as HTMLInputElement | null;
+
+    expect(titleInput?.value).toBe('Test post');
+    expect(host.querySelector('.admin-content-group.open')).toBeTruthy();
+    expect(host.querySelector('.admin-post.is-expanded')).toBeTruthy();
   });
 
   it('loads persisted comments when opening an article detail page', async () => {
