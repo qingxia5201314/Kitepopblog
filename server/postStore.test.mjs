@@ -99,4 +99,32 @@ describe('post store', () => {
     expect(store.removeComment(comment.id, other)).toBe(false);
     expect(store.removeComment(comment.id, admin)).toBe(true);
   });
+
+  it('persists the admin article editor autosave draft in sqlite', async () => {
+    const dbPath = join(tempDir, 'blog.sqlite');
+    const store = await createPostStore({ dbPath });
+
+    const saved = store.saveArticleDraft({
+      editingId: 'post-1',
+      draft: {
+        title: '自动保存草稿',
+        summary: '每十秒保存一次',
+        category: 'notes',
+        tags: ['autosave'],
+        content: '还没有正式发布的正文',
+        status: 'draft',
+        cover: 'notes',
+        coverImage: ''
+      }
+    });
+
+    expect(saved.editingId).toBe('post-1');
+    expect(saved.draft.title).toBe('自动保存草稿');
+    expect(saved.updatedAt).toContain('T');
+
+    const reloadedStore = await createPostStore({ dbPath });
+    expect(reloadedStore.getArticleDraft()?.draft.content).toBe('还没有正式发布的正文');
+    expect(reloadedStore.clearArticleDraft()).toBe(true);
+    expect(reloadedStore.getArticleDraft()).toBeUndefined();
+  });
 });

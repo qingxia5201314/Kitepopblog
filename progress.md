@@ -815,3 +815,29 @@
 - `src/App.test.tsx`: covers scroll reset, admin detail edit entry, and admin query-driven editing.
 - `progress.md`: records this task.
 - Rollback: run `git checkout -- src/pages/HomePage.tsx src/pages/AdminPage.tsx src/components/admin/EditorPanel.tsx src/App.test.tsx progress.md`.
+
+## 2026-07-10 - Task: Add database-backed admin article autosave
+### What was done
+- Added a SQLite-backed `article_editor_drafts` table for the backend article editor autosave snapshot.
+- Added authenticated admin endpoints to read, save, and clear the current article editor draft.
+- Added front-end API wrappers for the new draft endpoints.
+- Updated the admin editor to show a `10s后自动保存文章` countdown in the editor info area.
+- Changed autosave to run every 10 seconds, silently save the current editor form to the database, and avoid toast popups.
+- Kept the existing browser local draft as a fallback cache while making the database draft the primary autosave path.
+- Cleared the saved autosave draft after a normal article save succeeds.
+
+### Testing
+- `npm test -- --run server/postStore.test.mjs src/lib/blogApi.test.ts src/App.test.tsx -t "autosave|article editor autosave|article autosave draft"`: passed. Store persistence, API calls, and 10-second editor autosave behavior are covered.
+- `npm test -- --run src/App.test.tsx src/lib/blogApi.test.ts server/postStore.test.mjs`: passed. Admin/editor, API client, and post store regressions passed.
+- `npm test -- --run`: passed. 34 test files and 136 tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed; Vite still reports the existing non-blocking large chunk warning.
+
+### Notes
+- `server/postStore.mjs`: creates and persists `article_editor_drafts`, plus get/save/clear draft methods.
+- `server/services/postService.mjs`: exposes the draft store methods through the post service.
+- `server/routes/admin.mjs`: adds authenticated `/api/admin/article-draft` GET/PUT/DELETE routes.
+- `src/lib/blog.ts`: adds the `ArticleAutosaveDraft` type.
+- `src/lib/blogApi.ts`: adds draft read/save/clear API helpers.
+- `src/pages/AdminPage.tsx`: adds the 10-second silent autosave loop and countdown text.
+- `server/postStore.test.mjs`, `src/lib/blogApi.test.ts`, `src/App.test.tsx`: add regression coverage for database persistence, API wiring, and UI autosave behavior.
+- Rollback: run `git checkout -- server/postStore.mjs server/postStore.test.mjs server/routes/admin.mjs server/services/postService.mjs src/App.test.tsx src/lib/blog.ts src/lib/blogApi.test.ts src/lib/blogApi.ts src/pages/AdminPage.tsx progress.md`.

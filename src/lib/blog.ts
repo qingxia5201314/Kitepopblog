@@ -37,6 +37,12 @@ export interface BlogPost {
 
 export type BlogPostDraft = Omit<BlogPost, 'id' | 'slug' | 'createdAt' | 'updatedAt'>;
 
+export interface ArticleAutosaveDraft {
+  editingId: string | null;
+  draft: BlogPostDraft;
+  updatedAt?: string;
+}
+
 export interface PostComment {
   id: string;
   postId: string;

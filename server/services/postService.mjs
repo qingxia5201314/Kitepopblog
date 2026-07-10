@@ -12,6 +12,15 @@ export function createPostService({ store }) {
     removePost(id) {
       return store.remove(id);
     },
+    getArticleDraft() {
+      return store.getArticleDraft();
+    },
+    saveArticleDraft(payload) {
+      return store.saveArticleDraft(payload);
+    },
+    clearArticleDraft() {
+      return store.clearArticleDraft();
+    },
     listComments(idOrSlug) {
       return store.listComments(idOrSlug);
     },

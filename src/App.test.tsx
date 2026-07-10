@@ -1,6 +1,10 @@
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { AppProvider, useApp } from './context/AppContext';
+import { BlogDataProvider } from './context/BlogDataContext';
+import { AdminPage } from './pages/AdminPage';
 
 vi.mock('./assets/accounting-hero.webp', () => ({ default: '/accounting-hero.webp' }));
 vi.mock('./assets/haruhi-favicon.png', () => ({ default: '/haruhi-favicon.png' }));
@@ -73,6 +77,24 @@ class FakeXMLHttpRequest {
   send() {}
 }
 
+function AdminAutosaveTestShell() {
+  const { notification, clearNotification } = useApp();
+
+  return (
+    <>
+      {notification ? (
+        <div className={`toast toast-${notification.type}`}>
+          <span>{notification.message}</span>
+          <button aria-label="关闭提示" onClick={clearNotification} type="button">
+            ×
+          </button>
+        </div>
+      ) : null}
+      <AdminPage />
+    </>
+  );
+}
+
 describe('App layout shells', () => {
   const roots: Array<ReturnType<typeof createRoot>> = [];
 
@@ -81,6 +103,16 @@ describe('App layout shells', () => {
       const result = check();
       if (result) return result;
       await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return null;
+  }
+
+  async function waitForWithTimers(check: () => Element | null, attempts = 80) {
+    for (let index = 0; index < attempts; index += 1) {
+      const result = check();
+      if (result) return result;
+      await vi.advanceTimersByTimeAsync(10);
+      await Promise.resolve();
     }
     return null;
   }
@@ -104,6 +136,7 @@ describe('App layout shells', () => {
     window.location.hash = '';
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    vi.useRealTimers();
     FakeXMLHttpRequest.latest = null;
   });
 
@@ -164,6 +197,61 @@ describe('App layout shells', () => {
       await waitFor(() => host.querySelector('button[aria-label="一级标题"], button[aria-label="行内公式"]'))
     ).toBeTruthy();
     expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
+  });
+
+  it('autosaves the admin article editor draft to the database every ten seconds without a toast', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/admin');
+    const adminFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts')) return fetchMock(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      if (url === '/api/admin/article-draft' && init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body));
+        return Response.json({ draft: { ...body, updatedAt: '2026-07-10T00:00:00.000Z' } });
+      }
+      if (url === '/api/admin/article-draft') return Response.json({ draft: null });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', adminFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(
+      <BrowserRouter>
+        <AppProvider>
+          <BlogDataProvider>
+            <AdminAutosaveTestShell />
+          </BlogDataProvider>
+        </AppProvider>
+      </BrowserRouter>
+    );
+
+    const titleInput = (await waitForWithTimers(() => host.querySelector('input[aria-label="文章标题"]'))) as HTMLInputElement | null;
+    expect(titleInput).toBeTruthy();
+    fillInput(titleInput!, '数据库自动保存测试');
+
+    expect(await waitForWithTimers(() => (host.textContent?.includes('10s后自动保存文章') ? host : null))).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await Promise.resolve();
+
+    const saveCall = adminFetchMock.mock.calls.find(
+      ([input, init]) => String(input) === '/api/admin/article-draft' && init?.method === 'PUT'
+    );
+    expect(saveCall).toBeTruthy();
+    expect(saveCall?.[1]?.headers).toEqual({ 'content-type': 'application/json', Authorization: 'Bearer admin-token' });
+    expect(JSON.parse(String(saveCall?.[1]?.body))).toMatchObject({
+      editingId: null,
+      draft: { title: '数据库自动保存测试' }
+    });
+    expect(host.querySelector('.toast')).toBeFalsy();
   });
 
   it('renders readable Chinese labels in the admin content managers', async () => {

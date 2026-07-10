@@ -32,6 +32,14 @@ function rowToComment(row) {
   };
 }
 
+function rowToArticleDraft(row) {
+  return {
+    editingId: row.editing_id || null,
+    draft: JSON.parse(row.draft_json),
+    updatedAt: row.updated_at
+  };
+}
+
 function postToParams(post) {
   return [
     post.id,
@@ -87,6 +95,13 @@ function initSchema(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL DEFAULT ''
     );
+
+    CREATE TABLE IF NOT EXISTS article_editor_drafts (
+      key TEXT PRIMARY KEY,
+      editing_id TEXT NOT NULL DEFAULT '',
+      draft_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   const commentColumns = db.exec('PRAGMA table_info(post_comments)')?.[0]?.values?.map((row) => row[1]) ?? [];
@@ -107,6 +122,13 @@ function selectComment(db, commentId) {
   if (rows.length === 0) return undefined;
   const { columns, values } = rows[0];
   return rowToComment(Object.fromEntries(columns.map((column, index) => [column, values[0][index]])));
+}
+
+function selectArticleDraft(db, key = 'article-editor') {
+  const rows = db.exec('SELECT * FROM article_editor_drafts WHERE key = ?', [key]);
+  if (rows.length === 0) return undefined;
+  const { columns, values } = rows[0];
+  return rowToArticleDraft(Object.fromEntries(columns.map((column, index) => [column, values[0][index]])));
 }
 
 function canManageComment(comment, user) {
@@ -197,6 +219,49 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       const existing = this.get(id);
       if (!existing) return false;
       db.run('DELETE FROM posts WHERE id = ?', [id]);
+      sqlite.persist();
+      return true;
+    },
+
+    getArticleDraft() {
+      return selectArticleDraft(db);
+    },
+
+    saveArticleDraft(payload) {
+      const now = nowIso();
+      const draft = {
+        title: String(payload?.draft?.title ?? ''),
+        summary: String(payload?.draft?.summary ?? ''),
+        category: payload?.draft?.category || 'life',
+        tags: Array.isArray(payload?.draft?.tags) ? payload.draft.tags.map((tag) => String(tag)) : [],
+        content: String(payload?.draft?.content ?? ''),
+        status: payload?.draft?.status === 'published' ? 'published' : 'draft',
+        cover: payload?.draft?.cover || payload?.draft?.category || 'life',
+        coverImage: String(payload?.draft?.coverImage ?? '')
+      };
+      const saved = {
+        editingId: payload?.editingId ? String(payload.editingId) : null,
+        draft,
+        updatedAt: now
+      };
+
+      db.run(
+        `INSERT INTO article_editor_drafts (key, editing_id, draft_json, updated_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(key) DO UPDATE SET
+           editing_id = excluded.editing_id,
+           draft_json = excluded.draft_json,
+           updated_at = excluded.updated_at`,
+        ['article-editor', saved.editingId || '', JSON.stringify(saved.draft), saved.updatedAt]
+      );
+      sqlite.persist();
+      return saved;
+    },
+
+    clearArticleDraft() {
+      const existing = selectArticleDraft(db);
+      if (!existing) return false;
+      db.run('DELETE FROM article_editor_drafts WHERE key = ?', ['article-editor']);
       sqlite.persist();
       return true;
     },

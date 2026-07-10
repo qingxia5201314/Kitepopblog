@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearArticleAutosaveDraft,
   createPostComment,
   createUser,
   deletePostComment,
   deleteUser,
+  getArticleAutosaveDraft,
   listPostComments,
   listPosts,
   loginUser,
   registerUser,
+  saveArticleAutosaveDraft,
   updatePostComment
 } from './blogApi';
 
@@ -107,6 +110,44 @@ describe('blog api client', () => {
       body: JSON.stringify({ username: 'made_user', password: 'secret123', nickname: 'Made', permission: 'reader' })
     });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/users/u1', {
+      method: 'DELETE',
+      headers: { Authorization: 'Bearer admin-token' }
+    });
+  });
+
+  it('manages the admin article autosave draft with bearer auth', async () => {
+    const draft = {
+      editingId: 'post-1',
+      draft: {
+        title: 'autosave',
+        summary: 'summary',
+        category: 'notes' as const,
+        tags: ['draft'],
+        content: 'content',
+        status: 'draft' as const,
+        cover: 'notes' as const,
+        coverImage: ''
+      }
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ draft: { ...draft, updatedAt: '2026-07-10T00:00:00.000Z' }, ok: true })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getArticleAutosaveDraft('admin-token');
+    await saveArticleAutosaveDraft(draft, 'admin-token');
+    await clearArticleAutosaveDraft('admin-token');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/article-draft', {
+      headers: { Authorization: 'Bearer admin-token' }
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/article-draft', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', Authorization: 'Bearer admin-token' },
+      body: JSON.stringify(draft)
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/admin/article-draft', {
       method: 'DELETE',
       headers: { Authorization: 'Bearer admin-token' }
     });

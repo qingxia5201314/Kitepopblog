@@ -6,8 +6,19 @@ import { UserManager } from '../components/admin/UserManager';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
 import { useAdminAccess } from '../hooks/useAdminAccess';
-import { BlogCategoryId, BlogPost, BlogUser, PostStatus } from '../lib/blog';
-import { createPost, createUser, deletePost, deleteUser, listUsers, updatePost, updateUser } from '../lib/blogApi';
+import { ArticleAutosaveDraft, BlogCategoryId, BlogPost, BlogUser, PostStatus } from '../lib/blog';
+import {
+  clearArticleAutosaveDraft,
+  createPost,
+  createUser,
+  deletePost,
+  deleteUser,
+  getArticleAutosaveDraft,
+  listUsers,
+  saveArticleAutosaveDraft,
+  updatePost,
+  updateUser
+} from '../lib/blogApi';
 import { createDraftAutosaveRepository } from '../lib/draftAutosave';
 import { normalizeImageUrl } from '../lib/imageUrl';
 import { uploadHostedImage } from '../lib/imageApi';
@@ -34,6 +45,16 @@ const EMPTY_ADMIN_USER_FORM = {
   permission: 'reader' as BlogUser['permission']
 };
 
+function hasDraftContent(draft: typeof EMPTY_FORM) {
+  return Boolean(
+    draft.title.trim() ||
+      draft.summary.trim() ||
+      draft.content.trim() ||
+      draft.tags.length > 0 ||
+      draft.coverImage.trim()
+  );
+}
+
 export function AdminPage() {
   const [searchParams] = useSearchParams();
   const { notify, adminToken } = useApp();
@@ -53,12 +74,17 @@ export function AdminPage() {
   const [adminUsers, setAdminUsers] = useState<BlogUser[]>([]);
   const [adminUserForm, setAdminUserForm] = useState(EMPTY_ADMIN_USER_FORM);
   const [autosaveNote, setAutosaveNote] = useState('');
+  const [serverDraft, setServerDraft] = useState<ArticleAutosaveDraft | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const loadedAdminUsersTokenRef = useRef('');
   const handledEditQueryRef = useRef('');
+  const formRef = useRef(form);
+  const tagInputRef = useRef(tagInput);
+  const editingIdRef = useRef(editingId);
+  const localAdminTokenRef = useRef(localAdminToken);
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const editPostQuery = searchParams.get('edit');
@@ -76,13 +102,83 @@ export function AdminPage() {
   }, [adminUnlocked, localAdminToken]);
 
   useEffect(() => {
-    if (!localAdminToken || editingId) return;
-    const hasDraftContent =
-      form.title.trim() || form.summary.trim() || form.content.trim() || form.tags.length > 0 || form.coverImage;
-    if (!hasDraftContent) return;
-    draftRepository.save(form);
-    setAutosaveNote('草稿已自动保存到本地浏览器');
-  }, [editingId, form, localAdminToken]);
+    formRef.current = form;
+  }, [form]);
+
+  useEffect(() => {
+    tagInputRef.current = tagInput;
+  }, [tagInput]);
+
+  useEffect(() => {
+    editingIdRef.current = editingId;
+  }, [editingId]);
+
+  useEffect(() => {
+    localAdminTokenRef.current = localAdminToken;
+  }, [localAdminToken]);
+
+  useEffect(() => {
+    if (!adminUnlocked || !localAdminToken) return;
+    let cancelled = false;
+    void getArticleAutosaveDraft(localAdminToken)
+      .then((draft) => {
+        if (!cancelled) setServerDraft(draft);
+      })
+      .catch(() => {
+        if (!cancelled) setServerDraft(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminUnlocked, localAdminToken]);
+
+  useEffect(() => {
+    if (!adminUnlocked || !localAdminToken) {
+      setAutosaveNote('');
+      return;
+    }
+
+    let remainingSeconds = 10;
+    let disposed = false;
+
+    const saveCurrentDraft = async () => {
+      const token = localAdminTokenRef.current;
+      const currentDraft = {
+        ...formRef.current,
+        tags: parseTagInput(tagInputRef.current)
+      };
+      if (!token || !hasDraftContent(currentDraft)) return;
+
+      try {
+        const saved = await saveArticleAutosaveDraft(
+          {
+            editingId: editingIdRef.current,
+            draft: currentDraft
+          },
+          token
+        );
+        draftRepository.save(currentDraft);
+        if (!disposed) setServerDraft(saved);
+      } catch (error) {
+        console.warn('Article autosave failed', error);
+      }
+    };
+
+    setAutosaveNote(`${remainingSeconds}s后自动保存文章`);
+    const timer = window.setInterval(() => {
+      remainingSeconds -= 1;
+      if (remainingSeconds <= 0) {
+        void saveCurrentDraft();
+        remainingSeconds = 10;
+      }
+      setAutosaveNote(`${remainingSeconds}s后自动保存文章`);
+    }, 1000);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [adminUnlocked, localAdminToken]);
 
   const handleUnlockAdmin = async (event: FormEvent<HTMLFormElement>) => {
     const session = await unlockAdmin(event);
@@ -115,7 +211,7 @@ export function AdminPage() {
   };
 
   const startCreate = () => {
-    const draft = draftRepository.load() ?? EMPTY_FORM;
+    const draft = serverDraft?.editingId ? draftRepository.load() ?? EMPTY_FORM : serverDraft?.draft ?? draftRepository.load() ?? EMPTY_FORM;
     setEditingId(null);
     setForm({ ...draft, coverImage: draft.coverImage || '' });
     setTagInput(formatTagInput(draft.tags));
@@ -124,18 +220,19 @@ export function AdminPage() {
   };
 
   const startEdit = (post: BlogPost, showNotice = true) => {
+    const savedDraft = serverDraft?.editingId === post.id ? serverDraft.draft : null;
     setEditingId(post.id);
     setForm({
-      title: post.title,
-      summary: post.summary,
-      category: post.category,
-      tags: post.tags,
-      content: post.content,
-      status: post.status,
-      cover: post.cover,
-      coverImage: post.coverImage || ''
+      title: savedDraft?.title ?? post.title,
+      summary: savedDraft?.summary ?? post.summary,
+      category: savedDraft?.category ?? post.category,
+      tags: savedDraft?.tags ?? post.tags,
+      content: savedDraft?.content ?? post.content,
+      status: savedDraft?.status ?? post.status,
+      cover: savedDraft?.cover ?? post.cover,
+      coverImage: savedDraft?.coverImage ?? post.coverImage ?? ''
     });
-    setTagInput(formatTagInput(post.tags));
+    setTagInput(formatTagInput(savedDraft?.tags ?? post.tags));
     setEditorTab('edit');
     if (showNotice) notify('info', `正在编辑：${post.title}`);
   };
@@ -188,6 +285,8 @@ export function AdminPage() {
       await loadPosts(true, localAdminToken);
       notify('success', saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
       draftRepository.clear();
+      await clearArticleAutosaveDraft(localAdminToken).catch(() => undefined);
+      setServerDraft(null);
       setAutosaveNote('');
       startEdit(saved, false);
     } catch (error) {

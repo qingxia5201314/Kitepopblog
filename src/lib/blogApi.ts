@@ -1,4 +1,13 @@
-import { BlogPost, BlogPostDraft, BlogUser, PostComment, PostCommentDraft, PostStatus, UserSession } from './blog';
+import {
+  ArticleAutosaveDraft,
+  BlogPost,
+  BlogPostDraft,
+  BlogUser,
+  PostComment,
+  PostCommentDraft,
+  PostStatus,
+  UserSession
+} from './blog';
 
 interface ListPostOptions {
   includeDrafts?: boolean;
@@ -65,6 +74,43 @@ export async function updatePost(
 export async function deletePost(id: string, token: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
     await fetch(`/api/posts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders(token)
+    })
+  );
+}
+
+export async function getArticleAutosaveDraft(token: string): Promise<ArticleAutosaveDraft | null> {
+  const payload = await parseResponse<{ draft: ArticleAutosaveDraft | null }>(
+    await fetch('/api/admin/article-draft', {
+      headers: authHeaders(token)
+    })
+  );
+
+  return payload.draft;
+}
+
+export async function saveArticleAutosaveDraft(
+  draft: Omit<ArticleAutosaveDraft, 'updatedAt'>,
+  token: string
+): Promise<ArticleAutosaveDraft> {
+  const payload = await parseResponse<{ draft: ArticleAutosaveDraft }>(
+    await fetch('/api/admin/article-draft', {
+      method: 'PUT',
+      headers: {
+        'content-type': 'application/json',
+        ...authHeaders(token)
+      },
+      body: JSON.stringify(draft)
+    })
+  );
+
+  return payload.draft;
+}
+
+export async function clearArticleAutosaveDraft(token: string): Promise<void> {
+  await parseResponse<{ ok: boolean }>(
+    await fetch('/api/admin/article-draft', {
       method: 'DELETE',
       headers: authHeaders(token)
     })

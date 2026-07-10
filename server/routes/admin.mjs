@@ -32,6 +32,27 @@ app.get('/session', (c) => {
   return c.json({ ok }, ok ? 200 : 401);
 });
 
+app.get('/article-draft', requireAdmin, (c) => {
+  const postService = c.get('postService');
+  return c.json({ draft: postService.getArticleDraft() ?? null });
+});
+
+app.put('/article-draft', requireAdmin, async (c) => {
+  const postService = c.get('postService');
+  try {
+    const body = await c.req.json();
+    return c.json({ draft: postService.saveArticleDraft(body) });
+  } catch (error) {
+    return c.json({ ok: false, message: error?.message || 'Draft save failed' }, 400);
+  }
+});
+
+app.delete('/article-draft', requireAdmin, (c) => {
+  const postService = c.get('postService');
+  postService.clearArticleDraft();
+  return c.json({ ok: true });
+});
+
 // User CRUD (admin only)
 app.get('/users', requireAdmin, (c) => {
   const userStore = c.get('userStore');
