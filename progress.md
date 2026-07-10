@@ -841,3 +841,22 @@
 - `src/pages/AdminPage.tsx`: adds the 10-second silent autosave loop and countdown text.
 - `server/postStore.test.mjs`, `src/lib/blogApi.test.ts`, `src/App.test.tsx`: add regression coverage for database persistence, API wiring, and UI autosave behavior.
 - Rollback: run `git checkout -- server/postStore.mjs server/postStore.test.mjs server/routes/admin.mjs server/services/postService.mjs src/App.test.tsx src/lib/blog.ts src/lib/blogApi.test.ts src/lib/blogApi.ts src/pages/AdminPage.tsx progress.md`.
+
+## 2026-07-10 - Task: Auto-create draft posts from admin editor content
+### What was done
+- Changed the admin editor autosave flow so a new article form with any content automatically creates a real `draft` post in the database.
+- Treats title, summary, body, tags, or cover URL as meaningful draft content.
+- Uses fallback values (`未命名草稿`, `自动保存草稿`) when the user has only filled non-required fields, so the database row stays valid.
+- Keeps subsequent 10-second autosaves updating the created draft post instead of creating duplicate drafts.
+- Keeps published posts protected from silent overwrite: editing an already published article still uses the separate autosave backup until the user explicitly saves.
+- Keeps the previous database-backed autosave snapshot in sync with the created draft post ID.
+
+### Testing
+- `npm test -- --run src/App.test.tsx -t "creates a draft post"`: passed. New admin editor content now creates a `draft` post and stores the autosave snapshot with that draft ID.
+- `npm test -- --run`: passed. 34 test files and 136 tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed; Vite still reports the existing non-blocking large chunk warning.
+
+### Notes
+- `src/pages/AdminPage.tsx`: creates or updates real draft posts during silent autosave for new/draft articles while preserving published-article safety.
+- `src/App.test.tsx`: updates the autosave regression to verify the automatic `draft` post creation and draft ID binding.
+- Rollback: run `git checkout -- src/pages/AdminPage.tsx src/App.test.tsx progress.md`.

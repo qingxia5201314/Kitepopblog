@@ -199,7 +199,7 @@ describe('App layout shells', () => {
     expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
   });
 
-  it('autosaves the admin article editor draft to the database every ten seconds without a toast', async () => {
+  it('creates a draft post and autosaves the admin article editor every ten seconds without a toast', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
       'kitepop-admin-session',
@@ -208,6 +208,21 @@ describe('App layout shells', () => {
     window.history.pushState({}, '', '/admin');
     const adminFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url === '/api/posts' && init?.method === 'POST') {
+        const draft = JSON.parse(String(init.body));
+        return Response.json(
+          {
+            post: {
+              ...draft,
+              id: 'auto-draft-1',
+              slug: 'auto-draft-1',
+              createdAt: '2026-07-10T00:00:00.000Z',
+              updatedAt: '2026-07-10T00:00:00.000Z'
+            }
+          },
+          { status: 201 }
+        );
+      }
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
@@ -242,13 +257,20 @@ describe('App layout shells', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await Promise.resolve();
 
+    const createCall = adminFetchMock.mock.calls.find(([input, init]) => String(input) === '/api/posts' && init?.method === 'POST');
+    expect(createCall).toBeTruthy();
+    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+      title: '数据库自动保存测试',
+      status: 'draft'
+    });
+
     const saveCall = adminFetchMock.mock.calls.find(
       ([input, init]) => String(input) === '/api/admin/article-draft' && init?.method === 'PUT'
     );
     expect(saveCall).toBeTruthy();
     expect(saveCall?.[1]?.headers).toEqual({ 'content-type': 'application/json', Authorization: 'Bearer admin-token' });
     expect(JSON.parse(String(saveCall?.[1]?.body))).toMatchObject({
-      editingId: null,
+      editingId: 'auto-draft-1',
       draft: { title: '数据库自动保存测试' }
     });
     expect(host.querySelector('.toast')).toBeFalsy();

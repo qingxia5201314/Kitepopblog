@@ -55,6 +55,19 @@ function hasDraftContent(draft: typeof EMPTY_FORM) {
   );
 }
 
+function toAutosavePostDraft(draft: typeof EMPTY_FORM) {
+  return {
+    title: draft.title.trim() || '未命名草稿',
+    summary: draft.summary.trim() || '自动保存草稿',
+    category: draft.category,
+    tags: draft.tags,
+    content: draft.content,
+    status: 'draft' as PostStatus,
+    cover: draft.cover || draft.category,
+    coverImage: draft.coverImage
+  };
+}
+
 export function AdminPage() {
   const [searchParams] = useSearchParams();
   const { notify, adminToken } = useApp();
@@ -85,6 +98,9 @@ export function AdminPage() {
   const tagInputRef = useRef(tagInput);
   const editingIdRef = useRef(editingId);
   const localAdminTokenRef = useRef(localAdminToken);
+  const postsRef = useRef(posts);
+  const autosaveCreatedPostIdRef = useRef<string | null>(null);
+  const autosaveInFlightRef = useRef(false);
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const editPostQuery = searchParams.get('edit');
@@ -118,6 +134,10 @@ export function AdminPage() {
   }, [localAdminToken]);
 
   useEffect(() => {
+    postsRef.current = posts;
+  }, [posts]);
+
+  useEffect(() => {
     if (!adminUnlocked || !localAdminToken) return;
     let cancelled = false;
     void getArticleAutosaveDraft(localAdminToken)
@@ -142,6 +162,7 @@ export function AdminPage() {
     let disposed = false;
 
     const saveCurrentDraft = async () => {
+      if (autosaveInFlightRef.current) return;
       const token = localAdminTokenRef.current;
       const currentDraft = {
         ...formRef.current,
@@ -149,10 +170,30 @@ export function AdminPage() {
       };
       if (!token || !hasDraftContent(currentDraft)) return;
 
+      autosaveInFlightRef.current = true;
       try {
+        let activeEditingId = editingIdRef.current;
+        const currentPost = activeEditingId ? postsRef.current.find((post) => post.id === activeEditingId) : null;
+        const shouldWritePost = !activeEditingId || currentPost?.status === 'draft';
+
+        if (shouldWritePost) {
+          const payload = toAutosavePostDraft(currentDraft);
+          if (!activeEditingId) {
+            const created = await createPost(payload, token);
+            activeEditingId = created.id;
+            autosaveCreatedPostIdRef.current = created.id;
+            editingIdRef.current = created.id;
+            setEditingId(created.id);
+            setExpandedAdminPostId(created.id);
+          } else {
+            await updatePost(activeEditingId, payload, token);
+          }
+          await loadPosts(true, token);
+        }
+
         const saved = await saveArticleAutosaveDraft(
           {
-            editingId: editingIdRef.current,
+            editingId: activeEditingId,
             draft: currentDraft
           },
           token
@@ -161,6 +202,8 @@ export function AdminPage() {
         if (!disposed) setServerDraft(saved);
       } catch (error) {
         console.warn('Article autosave failed', error);
+      } finally {
+        autosaveInFlightRef.current = false;
       }
     };
 
@@ -211,6 +254,7 @@ export function AdminPage() {
   };
 
   const startCreate = () => {
+    autosaveCreatedPostIdRef.current = null;
     const draft = serverDraft?.editingId ? draftRepository.load() ?? EMPTY_FORM : serverDraft?.draft ?? draftRepository.load() ?? EMPTY_FORM;
     setEditingId(null);
     setForm({ ...draft, coverImage: draft.coverImage || '' });
@@ -220,6 +264,7 @@ export function AdminPage() {
   };
 
   const startEdit = (post: BlogPost, showNotice = true) => {
+    autosaveCreatedPostIdRef.current = null;
     const savedDraft = serverDraft?.editingId === post.id ? serverDraft.draft : null;
     setEditingId(post.id);
     setForm({
@@ -287,6 +332,7 @@ export function AdminPage() {
       draftRepository.clear();
       await clearArticleAutosaveDraft(localAdminToken).catch(() => undefined);
       setServerDraft(null);
+      autosaveCreatedPostIdRef.current = null;
       setAutosaveNote('');
       startEdit(saved, false);
     } catch (error) {
