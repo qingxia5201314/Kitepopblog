@@ -8,13 +8,16 @@ import { createAdminSessionStore, createAdminSessions } from './adminSession.mjs
 import { createAccountingSessions } from './accountingSession.mjs';
 import { createAccountingStore } from './accountingStore.mjs';
 import { createPostStore } from './postStore.mjs';
+import { createRevisionStore } from './revisionStore.mjs';
 import { createUserStore } from './userStore.mjs';
 import { createFileStore } from './fileStore.mjs';
 import { createImageStore } from './imageStore.mjs';
 import { createPostService } from './services/postService.mjs';
+import { createPostRevisionService } from './services/postRevisionService.mjs';
 import { createFileService } from './services/fileService.mjs';
 import { createImageService } from './services/imageService.mjs';
 import { postsRoutes } from './routes/posts.mjs';
+import { revisionsRoutes } from './routes/revisions.mjs';
 import { usersRoutes } from './routes/users.mjs';
 import { adminRoutes } from './routes/admin.mjs';
 import { accountingRoutes } from './routes/accounting.mjs';
@@ -50,12 +53,14 @@ const database = await createSqliteDatabase({ dbPath: postDbPath });
 const adminSessionStore = createAdminSessionStore({ database });
 const sessions = createAdminSessions({ store: adminSessionStore });
 const store = await createPostStore({ database });
+const revisionStore = createRevisionStore({ database });
+const postRevisionService = createPostRevisionService({ database, postStore: store, revisionStore });
 const userStore = createUserStore({ database });
 const accountingStore = createAccountingStore({ database });
 const accountingSessions = createAccountingSessions({ store: accountingStore });
 const fileStore = createFileStore({ database, uploadDir });
 const imageStore = createImageStore({ database, imageDir });
-const postService = createPostService({ store });
+const postService = createPostService({ store, revisionService: postRevisionService });
 const fileService = createFileService({ fileStore });
 const imageService = createImageService({ imageStore });
 
@@ -82,6 +87,7 @@ app.use('*', async (c, next) => {
   c.set('sessions', sessions);
   c.set('store', store);
   c.set('postService', postService);
+  c.set('postRevisionService', postRevisionService);
   c.set('userStore', userStore);
   c.set('accountingStore', accountingStore);
   c.set('accountingSessions', accountingSessions);
@@ -95,6 +101,7 @@ app.use('*', async (c, next) => {
 
 // API routes
 app.route('/api/admin', adminRoutes);
+app.route('/api/admin/posts', revisionsRoutes);
 app.route('/api/posts', postsRoutes);
 app.route('/api/users', usersRoutes);
 app.route('/api/accounting', accountingRoutes);

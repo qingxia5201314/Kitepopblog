@@ -1,7 +1,12 @@
 import { createPostQueryService, toCompactPublicPost } from './postQueryService.mjs';
 
-export function createPostService({ store }) {
+export function createPostService({ store, revisionService }) {
   const queryService = createPostQueryService({ store });
+
+  function recordRevision(post, metadata) {
+    revisionService?.snapshot(post, metadata);
+    return post;
+  }
 
   return {
     listPosts(options) {
@@ -16,11 +21,24 @@ export function createPostService({ store }) {
     getPost(idOrSlug) {
       return store.get(idOrSlug);
     },
-    createPost(draft) {
-      return store.create(draft);
+    createPost(draft, { editorUserId = 'admin' } = {}) {
+      return recordRevision(store.create(draft), { source: 'create', editorUserId });
     },
-    updatePost(id, patch) {
-      return store.update(id, patch);
+    updatePost(id, patch, { editorUserId = 'admin' } = {}) {
+      const current = store.get(id);
+      const updated = store.update(id, patch);
+      if (!updated) return undefined;
+      const nextStatus = updated.status;
+      const source = current?.status !== 'published' && nextStatus === 'published'
+        ? 'publish'
+        : current?.status === 'published' && nextStatus !== 'published'
+          ? 'withdraw'
+          : 'manual-save';
+      return recordRevision(updated, {
+        source,
+        editorUserId,
+        isProtected: source === 'publish' || source === 'withdraw'
+      });
     },
     removePost(id) {
       return store.remove(id);

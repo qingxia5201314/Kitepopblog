@@ -44,7 +44,7 @@ app.post('/', async (c) => {
 
   try {
     const body = await c.req.json();
-    return c.json({ post: postService.createPost(body) }, 201);
+    return c.json({ post: postService.createPost(body, { editorUserId: 'admin' }) }, 201);
   } catch {
     return c.json({ ok: false, message: 'Invalid request body' }, 400);
   }
@@ -70,7 +70,7 @@ app.put('/:id', async (c) => {
   const id = c.req.param('id');
   try {
     const body = await c.req.json();
-    const post = postService.updatePost(id, body);
+    const post = postService.updatePost(id, body, { editorUserId: 'admin' });
     return c.json(post ? { post } : { ok: false, message: 'Post not found' }, post ? 200 : 404);
   } catch {
     return c.json({ ok: false, message: 'Invalid request body' }, 400);
