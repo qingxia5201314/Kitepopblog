@@ -53,6 +53,34 @@ app.delete('/article-draft', requireAdmin, (c) => {
   return c.json({ ok: true });
 });
 
+app.put('/posts/:id/schedule', requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const post = c.get('scheduledPublishService').schedule(c.req.param('id'), body.scheduledAt, {
+      editorUserId: 'admin'
+    });
+    return c.json({ post });
+  } catch (error) {
+    return c.json({ ok: false, message: error?.message || 'Schedule failed' }, 400);
+  }
+});
+
+app.delete('/posts/:id/schedule', requireAdmin, (c) => {
+  try {
+    return c.json({ post: c.get('scheduledPublishService').cancel(c.req.param('id'), { editorUserId: 'admin' }) });
+  } catch (error) {
+    return c.json({ ok: false, message: error?.message || 'Schedule cancellation failed' }, 400);
+  }
+});
+
+app.post('/posts/:id/schedule/retry', requireAdmin, (c) => {
+  try {
+    return c.json({ post: c.get('scheduledPublishService').retry(c.req.param('id')) });
+  } catch (error) {
+    return c.json({ ok: false, message: error?.message || 'Scheduled publish retry failed' }, 400);
+  }
+});
+
 // User CRUD (admin only)
 app.get('/users', requireAdmin, (c) => {
   const userStore = c.get('userStore');

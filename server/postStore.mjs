@@ -15,6 +15,8 @@ function rowToPost(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at || '',
+    scheduledAt: row.scheduled_at || '',
+    scheduleError: row.schedule_error || '',
     cover: row.cover,
     coverImage: row.cover_image || ''
   };
@@ -55,7 +57,9 @@ function postToParams(post) {
     post.updatedAt,
     post.cover,
     post.coverImage ?? '',
-    post.publishedAt ?? (post.status === 'published' ? post.createdAt : '')
+    post.publishedAt ?? (post.status === 'published' ? post.createdAt : ''),
+    post.scheduledAt ?? '',
+    post.scheduleError ?? ''
   ];
 }
 
@@ -90,7 +94,9 @@ function initSchema(db) {
       updated_at TEXT NOT NULL,
       cover TEXT NOT NULL,
       cover_image TEXT NOT NULL DEFAULT '',
-      published_at TEXT NOT NULL DEFAULT ''
+      published_at TEXT NOT NULL DEFAULT '',
+      scheduled_at TEXT NOT NULL DEFAULT '',
+      schedule_error TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS post_comments (
@@ -132,12 +138,26 @@ function initSchema(db) {
     db.run("ALTER TABLE posts ADD COLUMN published_at TEXT NOT NULL DEFAULT ''");
     changed = true;
   }
+  if (!postColumns.includes('scheduled_at')) {
+    db.run("ALTER TABLE posts ADD COLUMN scheduled_at TEXT NOT NULL DEFAULT ''");
+    changed = true;
+  }
+  if (!postColumns.includes('schedule_error')) {
+    db.run("ALTER TABLE posts ADD COLUMN schedule_error TEXT NOT NULL DEFAULT ''");
+    changed = true;
+  }
   const postsToBackfill =
     db.exec("SELECT COUNT(*) FROM posts WHERE status = 'published' AND published_at = ''")[0]?.values[0][0] ?? 0;
   if (postsToBackfill > 0) {
     db.run("UPDATE posts SET published_at = created_at WHERE status = 'published' AND published_at = ''");
     changed = true;
   }
+
+  const scheduleIndexExists = db.exec(
+    "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_posts_scheduled_due'"
+  ).length > 0;
+  db.run("CREATE INDEX IF NOT EXISTS idx_posts_scheduled_due ON posts(status, scheduled_at)");
+  if (!scheduleIndexExists) changed = true;
 
   return changed;
 }
@@ -176,8 +196,8 @@ function insertPost(db, post) {
   db.run(
     `INSERT INTO posts (
       id, slug, title, summary, category, tags_json, content, status, created_at, updated_at, cover, cover_image,
-      published_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      published_at, scheduled_at, schedule_error
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     postToParams(post)
   );
 }
@@ -337,7 +357,9 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         slug: uniqueSlug(draft.title, posts),
         createdAt: now,
         updatedAt: now,
-        publishedAt: draft.status === 'published' ? now : ''
+        publishedAt: draft.status === 'published' ? now : '',
+        scheduledAt: draft.status === 'scheduled' ? String(draft.scheduledAt || '') : '',
+        scheduleError: ''
       };
 
       insertPost(db, post);
@@ -361,11 +383,13 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         updatedAt
       };
       const publishedAt = previousPublishedAt || (nextStatus === 'published' ? updatedAt : '');
+      const scheduledAt = nextStatus === 'scheduled' ? String(updated.scheduledAt || '') : '';
+      const scheduleError = nextStatus === 'scheduled' ? String(updated.scheduleError || '') : '';
 
       db.run(
         `UPDATE posts SET
           slug = ?, title = ?, summary = ?, category = ?, tags_json = ?, content = ?,
-          status = ?, updated_at = ?, cover = ?, cover_image = ?, published_at = ?
+          status = ?, updated_at = ?, cover = ?, cover_image = ?, published_at = ?, scheduled_at = ?, schedule_error = ?
         WHERE id = ?`,
         [
           updated.slug,
@@ -379,11 +403,44 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
           updated.cover,
           updated.coverImage ?? '',
           publishedAt,
+          scheduledAt,
+          scheduleError,
           id
         ]
       );
       sqlite.persist();
-      return { ...updated, publishedAt };
+      return { ...updated, publishedAt, scheduledAt, scheduleError };
+    },
+
+    listDueScheduled(dueAt) {
+      return rowsFromResult(db.exec(
+        `SELECT * FROM posts
+         WHERE status = 'scheduled' AND scheduled_at != '' AND scheduled_at <= ?
+         ORDER BY scheduled_at ASC, id ASC`,
+        [dueAt]
+      )).map(rowToPost);
+    },
+
+    publishScheduled(id, publishedAt) {
+      db.run(
+        `UPDATE posts SET
+          status = 'published', published_at = ?, updated_at = ?, scheduled_at = '', schedule_error = ''
+         WHERE id = ? AND status = 'scheduled' AND scheduled_at != '' AND scheduled_at <= ?`,
+        [publishedAt, publishedAt, id, publishedAt]
+      );
+      if (db.getRowsModified() === 0) return undefined;
+      sqlite.persist();
+      return this.get(id);
+    },
+
+    setScheduleError(id, message) {
+      db.run(
+        "UPDATE posts SET schedule_error = ? WHERE id = ? AND status = 'scheduled'",
+        [String(message || ''), id]
+      );
+      if (db.getRowsModified() === 0) return undefined;
+      sqlite.persist();
+      return this.get(id);
     },
 
     remove(id) {

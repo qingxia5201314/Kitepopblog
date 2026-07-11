@@ -14,6 +14,8 @@ import { createFileStore } from './fileStore.mjs';
 import { createImageStore } from './imageStore.mjs';
 import { createPostService } from './services/postService.mjs';
 import { createPostRevisionService } from './services/postRevisionService.mjs';
+import { createScheduledPublishService } from './services/scheduledPublishService.mjs';
+import { startScheduledPublishing } from './jobs/scheduledPublishing.mjs';
 import { createFileService } from './services/fileService.mjs';
 import { createImageService } from './services/imageService.mjs';
 import { postsRoutes } from './routes/posts.mjs';
@@ -55,6 +57,11 @@ const sessions = createAdminSessions({ store: adminSessionStore });
 const store = await createPostStore({ database });
 const revisionStore = createRevisionStore({ database });
 const postRevisionService = createPostRevisionService({ database, postStore: store, revisionStore });
+const scheduledPublishService = createScheduledPublishService({
+  database,
+  postStore: store,
+  revisionService: postRevisionService
+});
 const userStore = createUserStore({ database });
 const accountingStore = createAccountingStore({ database });
 const accountingSessions = createAccountingSessions({ store: accountingStore });
@@ -88,6 +95,7 @@ app.use('*', async (c, next) => {
   c.set('store', store);
   c.set('postService', postService);
   c.set('postRevisionService', postRevisionService);
+  c.set('scheduledPublishService', scheduledPublishService);
   c.set('userStore', userStore);
   c.set('accountingStore', accountingStore);
   c.set('accountingSessions', accountingSessions);
@@ -144,6 +152,8 @@ app.get('/', async (c) => {
   );
 });
 app.get('*', serveStatic({ root: './dist', rewriteRequestPath: () => '/index.html' }));
+
+startScheduledPublishing({ service: scheduledPublishService });
 
 serve({ fetch: app.fetch, port, hostname: host }, async () => {
   const packageJson = JSON.parse(await readFile('package.json', 'utf8'));

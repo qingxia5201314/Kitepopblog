@@ -55,11 +55,14 @@ describe('post store', () => {
 
     const persistedDb = new SQL.Database(await readFile(dbPath));
     const columns = persistedDb.exec('PRAGMA table_info(posts)')[0].values.map((row) => row[1]);
+    const indexes = persistedDb.exec("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'posts'")[0].values.flat();
     const persistedValues = persistedDb.exec('SELECT id, published_at FROM posts ORDER BY id')[0].values;
     persistedDb.close();
     const restartedStore = await createPostStore({ dbPath });
 
     expect(columns).toContain('published_at');
+    expect(columns).toEqual(expect.arrayContaining(['scheduled_at', 'schedule_error']));
+    expect(indexes).toContain('idx_posts_scheduled_due');
     expect(persistedValues).toEqual([
       ['draft', ''],
       ['published', '2026-01-01T00:00:00.000Z']
