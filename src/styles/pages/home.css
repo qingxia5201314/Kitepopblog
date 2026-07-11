@@ -559,3 +559,85 @@
     width: 128px;
   }
 }
+
+.home-page .post-panel,
+.home-page .home-filter-panel,
+.home-page .home-post-panel {
+  border: 1px solid rgba(42, 19, 15, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 18px 42px rgba(42, 19, 15, 0.07);
+}
+
+.home-page .home-post-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 253, 249, 0.96), rgba(255, 250, 245, 0.92)),
+    #fffdf9;
+}
+
+.home-page .home-post-panel .post-list {
+  gap: 16px;
+}
+
+.home-page .home-post-panel .post-item {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(42, 19, 15, 0.08);
+  box-shadow: 0 10px 24px rgba(42, 19, 15, 0.06);
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-page .home-post-panel .post-item:hover,
+.home-page .home-post-panel .post-item:focus-visible {
+  background: rgba(255, 253, 249, 0.98);
+  border-color: rgba(197, 59, 57, 0.24);
+  box-shadow: 0 18px 34px rgba(42, 19, 15, 0.1);
+  outline: none;
+}
+
+.home-page .home-post-panel .post-item-copy,
+.home-page .home-post-panel .post-item-copy *,
+.home-page .home-post-panel .post-item-topline,
+.home-page .home-post-panel .post-item-footer {
+  text-decoration: none;
+}
+
+.home-page .post-item-copy strong {
+  text-decoration: none;
+  text-underline-offset: 0;
+}
+
+.home-page .post-item:hover .post-item-copy strong,
+.home-page .post-item:focus-visible .post-item-copy strong {
+  color: #842624;
+  text-decoration: none;
+}
+
+.home-page .post-item-topline span,
+.home-page .post-item-footer span {
+  text-decoration: none;
+}
+
+.home-page .home-post-panel .cover-dot,
+.home-page .home-post-panel .cover-thumb {
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px rgba(197, 59, 57, 0.18);
+}
+
+.home-page .home-post-panel .post-item::after {
+  background: transparent;
+  border: 0;
+  color: rgba(132, 38, 36, 0.58);
+}
+
+.home-page .filter-menu summary {
+  border: 1px solid rgba(42, 19, 15, 0.1);
+  box-shadow: none;
+}
+
+.home-page .filter-menu summary:hover,
+.home-page .filter-menu summary:focus-visible,
+.home-page .filter-menu[open] summary {
+  border-color: rgba(197, 59, 57, 0.24);
+  box-shadow: 0 10px 22px rgba(42, 19, 15, 0.07);
+}
