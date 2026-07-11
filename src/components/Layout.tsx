@@ -1,12 +1,12 @@
 import React, { useRef } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 export function Layout() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { notification, clearNotification } = useApp();
+  const { notification, clearNotification, adminUnlocked, userSession } = useApp();
   const trailRef = useRef(0);
+  const toolsUnlocked = Boolean(adminUnlocked || userSession);
   const isNavActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
@@ -38,60 +38,68 @@ export function Layout() {
 
   return (
     <main className="app-shell" onPointerDown={handlePointerDown} onPointerMove={handlePointerMove}>
+      <a className="skip-link" href="#main-content">
+        跳到正文
+      </a>
       <header className="topbar">
-        <button className="brand-button" onClick={() => navigate('/')} type="button">
+        <Link className="brand-button" to="/">
           <span className="brand-mark" aria-hidden="true" />
           <span>
             <strong>Kitepop SOS</strong>
             <small>Haruhi style / life / src / study / notes</small>
           </span>
-          <span className="brand-status" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
-        </button>
+        </Link>
         <nav>
-          <button
-            aria-current={isNavActive('/') ? 'page' : undefined}
-            className={isNavActive('/') ? 'active' : ''}
-            onClick={() => navigate('/')}
-            type="button"
-          >
-            阅读
-          </button>
-          <button
-            aria-current={isNavActive('/accounting') ? 'page' : undefined}
-            className={isNavActive('/accounting') ? 'active' : ''}
-            onClick={() => navigate('/accounting')}
-            type="button"
-          >
-            记账
-          </button>
-          <button
-            aria-current={isNavActive('/files') ? 'page' : undefined}
-            className={isNavActive('/files') ? 'active' : ''}
-            onClick={() => navigate('/files')}
-            type="button"
-          >
-            文件
-          </button>
-          <button
-            aria-current={isNavActive('/images') ? 'page' : undefined}
-            className={isNavActive('/images') ? 'active' : ''}
-            onClick={() => navigate('/images')}
-            type="button"
-          >
-            图床
-          </button>
-          <button
-            aria-current={isNavActive('/admin') ? 'page' : undefined}
-            className={isNavActive('/admin') ? 'active' : ''}
-            onClick={() => navigate('/admin')}
-            type="button"
-          >
-            后台
-          </button>
+          <Link aria-current={isNavActive('/') ? 'page' : undefined} className={isNavActive('/') ? 'active' : ''} to="/">
+            首页
+          </Link>
+          <Link to="/#articles">文章</Link>
+          <Link to="/?category=all">分类</Link>
+          <Link to="/?tags=SRC">专题</Link>
+          <Link to="/#about">关于</Link>
+          {toolsUnlocked ? (
+            <details className="tool-menu">
+              <summary>工具</summary>
+              <div>
+                <Link
+                  aria-current={isNavActive('/accounting') ? 'page' : undefined}
+                  className={isNavActive('/accounting') ? 'active' : ''}
+                  to="/accounting"
+                >
+                  记账
+                </Link>
+                <Link
+                  aria-current={isNavActive('/files') ? 'page' : undefined}
+                  className={isNavActive('/files') ? 'active' : ''}
+                  to="/files"
+                >
+                  文件
+                </Link>
+                <Link
+                  aria-current={isNavActive('/images') ? 'page' : undefined}
+                  className={isNavActive('/images') ? 'active' : ''}
+                  to="/images"
+                >
+                  图床
+                </Link>
+                <Link
+                  aria-current={isNavActive('/admin') ? 'page' : undefined}
+                  className={isNavActive('/admin') ? 'active' : ''}
+                  to="/admin"
+                >
+                  后台
+                </Link>
+              </div>
+            </details>
+          ) : (
+            <Link
+              aria-current={isNavActive('/admin') ? 'page' : undefined}
+              className={isNavActive('/admin') ? 'active' : ''}
+              to="/admin"
+            >
+              登录
+            </Link>
+          )}
         </nav>
       </header>
 
@@ -103,11 +111,15 @@ export function Layout() {
           style={{ '--toast-duration': `${notification.durationMs}ms` } as React.CSSProperties}
         >
           <span>{notification.message}</span>
-          <button aria-label="关闭提示" onClick={clearNotification} type="button">×</button>
+          <button aria-label="关闭提示" onClick={clearNotification} type="button">
+            ×
+          </button>
         </div>
       ) : null}
 
-      <Outlet />
+      <div id="main-content" tabIndex={-1}>
+        <Outlet />
+      </div>
     </main>
   );
 }

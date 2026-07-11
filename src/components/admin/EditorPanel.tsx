@@ -1,7 +1,8 @@
 import { ClipboardEvent, FormEvent, RefObject } from 'react';
 import { BLOG_CATEGORIES, BlogCategoryId, PostStatus } from '../../lib/blog';
 import { normalizeImageUrl } from '../../lib/imageUrl';
-import { renderMarkdown, safeImageAttributes } from '../shared';
+import { safeImageAttributes } from '../shared';
+import { renderMarkdown } from '../MarkdownContent';
 
 interface EditorForm {
   title: string;

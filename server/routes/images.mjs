@@ -26,7 +26,15 @@ async function serveRawImage(c) {
     return c.json({ ok: false, message: 'Image not found' }, 404);
   }
 
-  const headers = createRawFileHeaders(image);
+  const etag = `"${image.id}-${image.sizeBytes}"`;
+  const headers = {
+    ...createRawFileHeaders(image),
+    'cache-control': 'public, max-age=86400, stale-while-revalidate=604800',
+    etag
+  };
+  if (c.req.header('if-none-match') === etag) {
+    return new Response(null, { status: 304, headers: new Headers(headers) });
+  }
   if (c.req.method === 'HEAD') {
     return new Response(null, {
       headers: new Headers(headers)

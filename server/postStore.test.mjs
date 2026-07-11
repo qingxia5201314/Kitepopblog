@@ -44,8 +44,36 @@ describe('post store', () => {
 
     expect(updated?.status).toBe('published');
     expect(updated?.slug).toBe('fu-wu-duan-fa-bu-ce-shi-geng-xin');
+
+    const renamed = store.update(created.id, { title: '发布后再次改标题' });
+    expect(renamed?.slug).toBe('fu-wu-duan-fa-bu-ce-shi-geng-xin');
+
+    store.update(created.id, { status: 'draft' });
+    store.update(created.id, { title: '撤稿后修改标题' });
+    const republished = store.update(created.id, { status: 'published' });
+    expect(republished?.slug).toBe('fu-wu-duan-fa-bu-ce-shi-geng-xin');
     expect(store.remove(created.id)).toBe(true);
     expect(store.get(created.id)).toBeUndefined();
+  });
+
+  it('keeps an unpublished draft eligible for a new slug after restart', async () => {
+    const dbPath = join(tempDir, 'blog.sqlite');
+    const store = await createPostStore({ dbPath });
+    const created = store.create({
+      title: '未命名草稿',
+      summary: 'summary',
+      category: 'notes',
+      tags: [],
+      content: 'content',
+      status: 'draft',
+      cover: 'notes',
+      coverImage: ''
+    });
+
+    const reloadedStore = await createPostStore({ dbPath });
+    const renamed = reloadedStore.update(created.id, { title: 'final article title' });
+
+    expect(renamed?.slug).toBe('final-article-title');
   });
 
   it('stores precise timestamps for posts and comments', async () => {

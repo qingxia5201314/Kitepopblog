@@ -1,9 +1,8 @@
-import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
+import { ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { UserSession } from '../lib/blog';
 import { AppNotification, NotificationType, createNotification } from '../lib/notification';
 import { getCurrentUser } from '../lib/blogApi';
 import { clearAdminSession, loadSavedAdminSession, saveAdminSession } from '../lib/adminSession';
-import faviconImage from '../assets/haruhi-favicon.png';
 
 const USER_SESSION_KEY = 'kitepop-user-session';
 
@@ -103,14 +102,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       head.appendChild(link);
     }
     link.type = 'image/png';
-    link.href = faviconImage;
+    link.href = '/favicon.png';
   }, []);
 
-  const notify = (type: NotificationType, message: string, durationMs?: number) => {
+  const notify = useCallback((type: NotificationType, message: string, durationMs?: number) => {
     setNotification(createNotification(type, message, durationMs));
-  };
+  }, []);
 
-  const clearNotification = () => setNotification(null);
+  const clearNotification = useCallback(() => setNotification(null), []);
 
   const loginAdmin = (token: string, expiresAt?: string) => {
     setAdminUnlocked(true);

@@ -19,6 +19,67 @@
   gap: 18px;
 }
 
+.article-reading-card {
+  gap: 10px;
+}
+
+.reading-progress-label {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.reading-progress-label span {
+  color: #842624;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.article-reading-card progress {
+  accent-color: #c53b39;
+  height: 7px;
+  width: 100%;
+}
+
+.article-toc {
+  border-top: 1px solid rgba(24, 33, 31, 0.12);
+  display: grid;
+  gap: 3px;
+  margin-top: 4px;
+  max-height: 38vh;
+  overflow: auto;
+  padding-top: 8px;
+}
+
+.article-toc a {
+  border-left: 2px solid transparent;
+  color: #46504d;
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 5px 6px;
+  text-decoration: none;
+}
+
+.article-toc a:hover,
+.article-toc a:focus-visible {
+  border-left-color: #c53b39;
+  color: #842624;
+}
+
+.article-toc .level-3 {
+  padding-left: 14px;
+}
+
+.article-toc .level-4 {
+  padding-left: 22px;
+}
+
+.article-body h2,
+.article-body h3,
+.article-body h4 {
+  scroll-margin-top: 96px;
+}
+
 .article-header-card {
   align-items: center;
   gap: clamp(18px, 3vw, 34px);
@@ -70,8 +131,30 @@
     position: static;
   }
 
+  .article-focus-card,
+  .article-tags-card {
+    display: none;
+  }
+
+  .article-page-rail {
+    gap: 10px;
+  }
+
   .article-header-card {
     grid-template-columns: 1fr;
+  }
+
+  .article-toc {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    max-height: none;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .article-toc .level-3,
+  .article-toc .level-4 {
+    padding-left: 6px;
   }
 }
 

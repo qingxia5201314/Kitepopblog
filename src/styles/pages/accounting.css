@@ -41,7 +41,7 @@
 }
 
 .custom-category-panel summary::after {
-  border: solid #d84b49;
+  border: solid #c53b39;
   border-width: 0 2px 2px 0;
   content: '';
   height: 8px;

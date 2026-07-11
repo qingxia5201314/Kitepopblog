@@ -1,7 +1,8 @@
 import { createRoot } from 'react-dom/client';
 import { act } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ImageWithFallback, permissionLabel, renderInlineMarkdown, renderMarkdown } from './shared';
+import { ImageWithFallback, permissionLabel } from './shared';
+import { renderMarkdown } from './MarkdownContent';
 import { Badge } from './ui/Badge';
 import { Button } from './ui/Button';
 import { EmptyState } from './ui/EmptyState';
@@ -61,16 +62,14 @@ describe('ImageWithFallback', () => {
 
     await act(async () => {
       root.render(
-        <p>
-          {renderInlineMarkdown('公式 $E = mc^2$，价格 \\$100，代码 `$notMath$`。')}
-        </p>
+        <div>{renderMarkdown('公式 $E = mc^2$，价格 \\$100，代码 `$notMath$`。')}</div>
       );
     });
 
-    expect(host.querySelector('.math-inline .katex')).toBeTruthy();
+    expect(host.querySelector('.katex')).toBeTruthy();
     expect(host.querySelector('code')?.textContent).toBe('$notMath$');
     expect(host.textContent).toContain('价格 $100');
-    expect(host.querySelectorAll('.math-inline')).toHaveLength(1);
+    expect(host.querySelectorAll('.katex')).toHaveLength(1);
   });
 
   it('renders parenthesized LaTeX inline formulas', async () => {
@@ -80,10 +79,10 @@ describe('ImageWithFallback', () => {
     roots.push(root);
 
     await act(async () => {
-      root.render(<p>{renderInlineMarkdown('如果整数 \\(a\\) 可以写成，所以 \\(3\\mid12\\)。')}</p>);
+      root.render(<div>{renderMarkdown('如果整数 \\(a\\) 可以写成，所以 \\(3\\mid12\\)。')}</div>);
     });
 
-    expect(host.querySelectorAll('.math-inline .katex')).toHaveLength(2);
+    expect(host.querySelectorAll('.katex')).toHaveLength(2);
     expect(host.textContent).not.toContain('\\(a\\)');
     expect(host.textContent).not.toContain('\\(3\\mid12\\)');
   });

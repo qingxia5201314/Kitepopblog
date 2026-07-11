@@ -23,6 +23,7 @@ function App() {
             <Routes>
               <Route element={<Layout />}>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/posts/:slug" element={<HomePage />} />
                 <Route path="/accounting" element={<LazyAccountingPage />} />
                 <Route path="/files" element={<LazyFilesPage />} />
                 <Route path="/files/preview" element={<LazyMediaPreviewPage />} />

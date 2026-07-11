@@ -11,6 +11,7 @@ import {
 
 interface ListPostOptions {
   includeDrafts?: boolean;
+  summary?: boolean;
   token?: string;
 }
 
@@ -27,7 +28,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export async function listPosts(options: ListPostOptions = {}): Promise<BlogPost[]> {
-  const query = options.includeDrafts ? '?includeDrafts=1' : '';
+  const params = new URLSearchParams();
+  if (options.includeDrafts) params.set('includeDrafts', '1');
+  if (options.summary && !options.includeDrafts) params.set('summary', '1');
+  const query = params.toString() ? `?${params}` : '';
   const payload = await parseResponse<{ posts: BlogPost[] }>(
     await fetch(`/api/posts${query}`, {
       headers: authHeaders(options.token)
@@ -35,6 +39,16 @@ export async function listPosts(options: ListPostOptions = {}): Promise<BlogPost
   );
 
   return payload.posts;
+}
+
+export async function getPost(idOrSlug: string, token?: string): Promise<BlogPost> {
+  const payload = await parseResponse<{ post: BlogPost }>(
+    await fetch(`/api/posts/${encodeURIComponent(idOrSlug)}`, {
+      headers: authHeaders(token)
+    })
+  );
+
+  return payload.post;
 }
 
 export async function createPost(draft: BlogPostDraft, token: string): Promise<BlogPost> {

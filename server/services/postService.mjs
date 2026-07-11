@@ -3,6 +3,9 @@ export function createPostService({ store }) {
     listPosts(options) {
       return store.list(options);
     },
+    getPost(idOrSlug) {
+      return store.get(idOrSlug);
+    },
     createPost(draft) {
       return store.create(draft);
     },

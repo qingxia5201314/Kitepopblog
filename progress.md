@@ -860,3 +860,57 @@
 - `src/pages/AdminPage.tsx`: creates or updates real draft posts during silent autosave for new/draft articles while preserving published-article safety.
 - `src/App.test.tsx`: updates the autosave regression to verify the automatic `draft` post creation and draft ID binding.
 - Rollback: run `git checkout -- src/pages/AdminPage.tsx src/App.test.tsx progress.md`.
+
+## 2026-07-11 - Task: Add clean article routes, SEO output, and public performance improvements
+### What was done
+- Replaced hash-based article navigation with refresh-safe `/posts/:slug` React Router routes and real links for article cards, branding, and navigation.
+- Changed the public navigation to 首页/文章/分类/专题/关于 and moved accounting, files, images, and admin into an authenticated tools menu.
+- Added query-string synchronization for category, date, search, and multi-tag filters; search uses history replacement while discrete filters remain back/forward navigable.
+- Added server-rendered metadata and no-JavaScript fallback content for the homepage and article pages, including unique title, description, canonical, Open Graph, Twitter Card, and JSON-LD.
+- Added generated `/robots.txt`, `/sitemap.xml`, and `/rss.xml` responses.
+- Added a compact public article-list API mode and a separate single-article API so homepage requests no longer include every full article body.
+- Added short public cache headers, plus ETag and revalidation caching for public hosted images.
+- Split ReactMarkdown, GFM, KaTeX, and KaTeX CSS into a lazy article chunk while keeping admin preview behavior.
+- Added a stable 8,422-byte public favicon, replacing the previous 392,748-byte runtime favicon.
+- Compressed the homepage hero and filter layout so recent articles appear substantially earlier on mobile, tablet, and desktop while preserving the Haruhi/KITEPOP SOS identity.
+- Added article reading progress, generated table-of-contents anchors, skip navigation, visible focus behavior, form autocomplete attributes, descriptive cover alt text, and corrected heading hierarchy.
+- Darkened the primary red to `#c53b39`; white text contrast is 5.17:1.
+- Added Hono security headers and a deployable HTTPS/gzip/immutable-cache Nginx configuration.
+- Documented editorial follow-ups for generic alt text, blocked external covers, public example passwords, suspected `post`/`port` typo, duplicate summaries, and empty SRC content.
+
+### Testing
+- `npm test -- --run`: passed. 36 test files and 140 tests passed.
+- `npm run build`: passed. Main JS changed from about 925.9 kB to 494.9 kB; main CSS changed from about 116.7 kB to 91.9 kB. Markdown/KaTeX now load as a separate chunk.
+- Direct runtime checks: `/`, `/posts/zhou-mo-sheng-huo-ji-lu`, `/robots.txt`, `/sitemap.xml`, `/rss.xml`, `/api/posts?summary=1`, and the single-post API all returned expected content and cache headers.
+- No-JavaScript article HTML contained the article title/body, canonical URL, Open Graph metadata, and BlogPosting JSON-LD.
+- CDP device emulation at 320, 390, 768, and 1440 px reported zero horizontal overflow.
+- First article positions were approximately y=1045, y=990, y=767, and y=877 respectively, down from the supplied mobile baseline near y=2105.
+- Article detail checks at 390 and 1440 px reported zero horizontal overflow and rendered the table of contents.
+- The repository has no `lint` script. An automated axe package is also not installed; primary red contrast was verified mathematically at 5.17:1, but a deployment-side axe rerun remains required.
+
+### Notes
+- `server/seo.mjs`, `server/index.mjs`: generate SEO HTML, crawler/feed documents, and security headers.
+- `server/routes/posts.mjs`, `src/lib/blogApi.ts`, `src/context/BlogDataContext.tsx`: split list summaries from full article content.
+- `src/pages/HomePage.tsx`, `src/hooks/useBlog.ts`, `src/components/Layout.tsx`: own clean routes, navigation, query filters, and responsive content priority.
+- `src/components/MarkdownContent.tsx`, `src/lib/headings.ts`: own lazy Markdown rendering and article heading anchors.
+- `deploy/nginx-kitepop.conf`, `docs/seo-performance-notes.md`: document TLS, compression, proxy, and cache deployment requirements.
+- `docs/content-audit.md`: lists content that needs manual editorial review.
+- Rollback: revert the implementation commit for this task; the change spans frontend routing, server rendering, API shape, styles, tests, public assets, and deployment documentation.
+
+## 2026-07-11 - Task: Harden clean-route SEO rollout after code review
+### What was done
+- Stabilized notification callbacks and made article-detail fetching depend on the route slug only, preventing missing articles from triggering repeated detail and summary requests.
+- Added a dedicated article-not-found state for failed client-side detail navigation.
+- Reused the server-injected JSON-LD node during client navigation so SSR and CSR metadata cannot describe different pages at the same time.
+- Added a persisted `published_at` marker so unpublished drafts may update their slug, while any article that has ever been published keeps its permanent URL through rename, withdrawal, restart, and republish flows.
+- Replaced public article `stale-while-revalidate` caching with `must-revalidate` and added a JSON 404 guard before the SPA fallback for unknown API routes.
+- Removed the unused legacy Markdown/math renderer from the public bundle and preserved `$...$`, `$$...$$`, escaped-dollar, code, and `\\(...\\)` formula support in the lazy Markdown renderer.
+- Ignored local Codex/Playwright browser artifacts so they cannot be staged accidentally.
+
+### Testing
+- `npm test -- --run`: passed. 38 test files and 145 tests passed.
+- `npm run build`: passed. The referenced main JS is 267,911 bytes and does not contain KaTeX; Markdown/KaTeX load from the separate 435,300-byte on-demand chunk.
+- `git diff --check`: passed.
+
+### Notes
+- `dreamhunter2333.com` currently resolves to GitHub Pages, not the VPS. The application can be deployed to `104.244.91.222`, but the checked-in TLS configuration must not be enabled for that hostname until DNS points to the VPS and a certificate has been issued.

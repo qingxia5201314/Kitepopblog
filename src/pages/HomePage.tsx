@@ -1,14 +1,15 @@
-import React, { useState, useCallback, useMemo, useEffect, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { lazy, Suspense, useMemo, useState, useCallback, useEffect, FormEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
 import { useBlog } from '../hooks/useBlog';
+import { usePageMetadata } from '../hooks/usePageMetadata';
+import { extractArticleHeadings } from '../lib/headings';
 import {
   BLOG_CATEGORIES,
   BlogCategoryId,
   BlogPost,
   calculateReadingMinutes,
-  filterPosts,
   getCategory,
   getCategoryIcon
 } from '../lib/blog';
@@ -17,6 +18,7 @@ import {
   createPostComment,
   updatePostComment,
   deletePostComment,
+  getPost,
   loginUser as loginUserRequest,
   registerUser as registerUserRequest
 } from '../lib/blogApi';
@@ -26,26 +28,16 @@ import {
   ImageWithFallback,
   formatDateTime,
   getSafeImageUrl,
-  renderMarkdown,
-  renderInlineMarkdown,
   permissionLabel
 } from '../components/shared';
 import { TiltCard } from '../components/effects/TiltCard';
 import haruhiCutoutImage from '../assets/haruhi-cutout.webp';
 
-type PostDateFilter = 'all' | '7d' | '30d' | 'year';
+const LazyMarkdownContent = lazy(() =>
+  import('../components/MarkdownContent').then((module) => ({ default: module.MarkdownContent }))
+);
 
-function filterPostsByDate(posts: BlogPost[], filter: PostDateFilter): BlogPost[] {
-  if (filter === 'all') return posts;
-  const now = Date.now();
-  const ranges: Record<Exclude<PostDateFilter, 'all'>, number> = {
-    '7d': 7,
-    '30d': 30,
-    year: 365
-  };
-  const minTime = now - ranges[filter] * 86400000;
-  return posts.filter((post) => Date.parse(post.updatedAt) >= minTime);
-}
+type PostDateFilter = 'all' | '7d' | '30d' | 'year';
 
 interface CommentFormState {
   content: string;
@@ -55,20 +47,25 @@ const USERNAME_PATTERN = /^[A-Za-z0-9_]{3,24}$/;
 
 export function HomePage() {
   const navigate = useNavigate();
+  const { slug } = useParams<{ slug?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userSession, notify, loginUser, logoutUser, adminUnlocked } = useApp();
   const { posts } = useBlogData();
   const {
     activeCategory,
     setActiveCategory,
     activeTags,
-    toggleActiveTag,
+    setActiveTags,
     clearTags,
     query,
     setQuery,
+    dateFilter,
+    setDateFilter,
+    indexedPosts,
     detailPost,
     openPostDetail,
     closePostDetail
-  } = useBlog(posts);
+  } = useBlog(posts, slug ?? null);
 
   const [postComments, setPostComments] = useState<any[]>([]);
   const [commentLoading, setCommentLoading] = useState(false);
@@ -79,26 +76,177 @@ export function HomePage() {
   const [userForm, setUserForm] = useState({ username: '', password: '', nickname: '' });
   const [authSubmitting, setAuthSubmitting] = useState(false);
   const [authFeedback, setAuthFeedback] = useState<{ type: 'error'; message: string } | null>(null);
-
-  const visiblePosts = useMemo(
-    () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
-    [activeCategory, activeTags, query, posts]
-  );
-
-  const indexedPosts = useMemo(
-    () => filterPostsByDate(visiblePosts, 'all'),
-    [visiblePosts]
-  );
+  const [fullDetailPost, setFullDetailPost] = useState<BlogPost | null>(null);
+  const [detailLoadFailed, setDetailLoadFailed] = useState(false);
+  const [readingProgress, setReadingProgress] = useState(0);
 
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
-  const detailPostSlug = detailPost?.slug;
+  const detailPostView =
+    fullDetailPost && (!slug || fullDetailPost.slug === slug || fullDetailPost.id === slug) ? fullDetailPost : detailPost;
+  const detailPostSlug = detailPostView?.slug;
   const canEditDetailPost = Boolean(adminUnlocked || userSession?.user.permission === 'admin');
+  const srcPostCount = posts.filter((post) => post.status === 'published' && post.category === 'src').length;
+  const articleHeadings = useMemo(
+    () => extractArticleHeadings(detailPostView?.content || ''),
+    [detailPostView?.content]
+  );
+
+  usePageMetadata(detailPostView);
+
+  const writeFiltersToUrl = useCallback(
+    (
+      patch: { category?: BlogCategoryId | 'all'; query?: string; tags?: string[]; date?: PostDateFilter },
+      replace = false
+    ) => {
+      const nextCategory = patch.category ?? activeCategory;
+      const nextQuery = patch.query ?? query;
+      const nextTags = patch.tags ?? activeTags;
+      const nextDate = patch.date ?? dateFilter;
+      const next = new URLSearchParams();
+      if (nextCategory !== 'all') next.set('category', nextCategory);
+      if (nextQuery.trim()) next.set('q', nextQuery.trim());
+      if (nextTags.length > 0) next.set('tags', nextTags.join(','));
+      if (nextDate !== 'all') next.set('date', nextDate);
+      setSearchParams(next, { replace });
+    },
+    [activeCategory, activeTags, dateFilter, query, setSearchParams]
+  );
+
+  const buildFilterSearch = useCallback(
+    (patch: { category?: BlogCategoryId | 'all'; query?: string; tags?: string[]; date?: PostDateFilter }) => {
+      const nextCategory = patch.category ?? activeCategory;
+      const nextQuery = patch.query ?? query;
+      const nextTags = patch.tags ?? activeTags;
+      const nextDate = patch.date ?? dateFilter;
+      const next = new URLSearchParams();
+      if (nextCategory !== 'all') next.set('category', nextCategory);
+      if (nextQuery.trim()) next.set('q', nextQuery.trim());
+      if (nextTags.length > 0) next.set('tags', nextTags.join(','));
+      if (nextDate !== 'all') next.set('date', nextDate);
+      const value = next.toString();
+      return value ? `?${value}` : '';
+    },
+    [activeCategory, activeTags, dateFilter, query]
+  );
+
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      setQuery(value);
+      writeFiltersToUrl({ query: value }, true);
+    },
+    [setQuery, writeFiltersToUrl]
+  );
+
+  const handleCategoryChange = useCallback(
+    (value: string) => {
+      const category = value as BlogCategoryId | 'all';
+      setActiveCategory(category);
+      writeFiltersToUrl({ category });
+    },
+    [setActiveCategory, writeFiltersToUrl]
+  );
+
+  const handleDateChange = useCallback(
+    (value: string) => {
+      const date = value as PostDateFilter;
+      setDateFilter(date);
+      writeFiltersToUrl({ date });
+    },
+    [setDateFilter, writeFiltersToUrl]
+  );
+
+  const handleTagFilter = useCallback(
+    (tag: string) => {
+      const nextTags = activeTags.some((selectedTag) => selectedTag.toLowerCase() === tag.toLowerCase())
+        ? activeTags.filter((selectedTag) => selectedTag.toLowerCase() !== tag.toLowerCase())
+        : [...activeTags, tag];
+      setActiveTags(nextTags);
+      navigate(`/${buildFilterSearch({ tags: nextTags })}`);
+    },
+    [activeTags, buildFilterSearch, navigate, setActiveTags]
+  );
+
+  const handleClearTags = useCallback(() => {
+    clearTags();
+    writeFiltersToUrl({ tags: [] });
+  }, [clearTags, writeFiltersToUrl]);
 
   useEffect(() => {
-    if (!detailPostSlug) return;
+    const categoryParam = searchParams.get('category') as BlogCategoryId | 'all' | null;
+    const nextCategory = BLOG_CATEGORIES.some((category) => category.id === categoryParam) ? categoryParam! : 'all';
+    const nextQuery = searchParams.get('q') ?? '';
+    const nextTags = (searchParams.get('tags') ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    const dateParam = searchParams.get('date') as PostDateFilter | null;
+    const nextDate: PostDateFilter = dateParam && ['all', '7d', '30d', 'year'].includes(dateParam) ? dateParam : 'all';
+
+    setActiveCategory(nextCategory);
+    setQuery(nextQuery);
+    setActiveTags(nextTags);
+    setDateFilter(nextDate);
+  }, [searchParams, setActiveCategory, setActiveTags, setDateFilter, setQuery]);
+
+  useEffect(() => {
+    if (!detailPostView?.slug) return;
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }, [detailPostSlug]);
+  }, [detailPostView?.slug]);
+
+  useEffect(() => {
+    if (!detailPostView) {
+      setReadingProgress(0);
+      return;
+    }
+
+    const updateProgress = () => {
+      const article = document.querySelector('.article-body-card') as HTMLElement | null;
+      if (!article) return;
+      const start = article.offsetTop;
+      const distance = Math.max(1, article.offsetHeight - window.innerHeight * 0.55);
+      const progress = ((window.scrollY - start + window.innerHeight * 0.25) / distance) * 100;
+      setReadingProgress(Math.max(0, Math.min(100, Math.round(progress))));
+    };
+
+    updateProgress();
+    window.addEventListener('scroll', updateProgress, { passive: true });
+    window.addEventListener('resize', updateProgress);
+    return () => {
+      window.removeEventListener('scroll', updateProgress);
+      window.removeEventListener('resize', updateProgress);
+    };
+  }, [detailPostView]);
+
+  useEffect(() => {
+    if (!slug) {
+      setFullDetailPost(null);
+      setDetailLoadFailed(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFullDetailPost(null);
+    setDetailLoadFailed(false);
+    getPost(slug)
+      .then((post) => {
+        if (!cancelled) {
+          setFullDetailPost(post);
+          setDetailLoadFailed(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFullDetailPost(null);
+          setDetailLoadFailed(true);
+          notify('error', '文章加载失败，请稍后重试');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [notify, slug]);
 
   useEffect(() => {
     if (!detailPostSlug) {
@@ -132,7 +280,7 @@ export function HomePage() {
   const handleCommentSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (!detailPost || commentLoading) return;
+      if (!detailPostView || commentLoading) return;
       if (!userSession) {
         notify('error', '请先登录后再评论');
         return;
@@ -143,7 +291,7 @@ export function HomePage() {
       }
 
       try {
-        const comment = await createPostComment(detailPost.slug, commentForm, userSession.token);
+        const comment = await createPostComment(detailPostView.slug, commentForm, userSession.token);
         setPostComments((current) => [comment, ...current]);
         setCommentForm({ content: '' });
         notify('success', '评论已发布');
@@ -151,7 +299,7 @@ export function HomePage() {
         notify('error', error instanceof Error ? error.message : '评论发布失败');
       }
     },
-    [detailPost, commentLoading, userSession, commentForm, notify]
+    [detailPostView, commentLoading, userSession, commentForm, notify]
   );
 
   const handleEditComment = useCallback(
@@ -164,7 +312,7 @@ export function HomePage() {
 
   const handleSaveEdit = useCallback(
     async (commentId: string) => {
-      if (!detailPost || !userSession) return;
+      if (!detailPostView || !userSession) return;
       const content = (commentEditDrafts[commentId] ?? '').trim();
       if (!content) {
         notify('error', '评论内容不能为空');
@@ -173,7 +321,7 @@ export function HomePage() {
 
       try {
         const updated = await updatePostComment(
-          detailPost.slug,
+          detailPostView.slug,
           commentId,
           { content },
           userSession.token
@@ -185,16 +333,16 @@ export function HomePage() {
         notify('error', error instanceof Error ? error.message : '评论更新失败');
       }
     },
-    [detailPost, userSession, commentEditDrafts, postComments, notify]
+    [detailPostView, userSession, commentEditDrafts, postComments, notify]
   );
 
   const handleDeleteComment = useCallback(
     async (commentId: string) => {
-      if (!detailPost || !userSession) return;
+      if (!detailPostView || !userSession) return;
       if (!window.confirm('确定删除这条评论吗？')) return;
 
       try {
-        await deletePostComment(detailPost.slug, commentId, userSession.token);
+        await deletePostComment(detailPostView.slug, commentId, userSession.token);
         setPostComments(postComments.filter((item) => item.id !== commentId));
         if (editingCommentId === commentId) setEditingCommentId(null);
         notify('success', '评论已删除');
@@ -202,7 +350,7 @@ export function HomePage() {
         notify('error', error instanceof Error ? error.message : '评论删除失败');
       }
     },
-    [detailPost, userSession, postComments, editingCommentId, notify]
+    [detailPostView, userSession, postComments, editingCommentId, notify]
   );
 
   const handleUserAuthSubmit = useCallback(
@@ -259,40 +407,61 @@ export function HomePage() {
   );
 
   const handleEditDetailPost = useCallback(() => {
-    if (!detailPost) return;
-    navigate(`/admin?edit=${encodeURIComponent(detailPost.id)}`);
-  }, [detailPost, navigate]);
+    if (!detailPostView) return;
+    navigate(`/admin?edit=${encodeURIComponent(detailPostView.id)}`);
+  }, [detailPostView, navigate]);
+
+  if (slug && detailLoadFailed) {
+    return (
+      <section className="article-page article-not-found">
+        <div className="article-page-shell">
+          <div className="article-page-main">
+            <section className="article-header-card">
+              <div className="article-header-copy">
+                <p className="eyebrow">404 / Article</p>
+                <h1>文章不存在或已撤下</h1>
+                <p className="summary">这个链接暂时无法访问，请返回文章列表查看现有内容。</p>
+                <Link className="back-link" to="/">
+                  返回文章列表
+                </Link>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   // Detail view
-  if (detailPost) {
+  if (detailPostView) {
     return (
       <section className="article-page">
         <div className="article-page-shell">
           <aside className="article-page-rail">
-            <button className="back-link" onClick={closePostDetail} type="button">
+            <Link className="back-link" onClick={closePostDetail} to={`/${buildFilterSearch({})}`}>
               返回文章列表
-            </button>
+            </Link>
             {canEditDetailPost ? (
               <button className="article-edit-link article-admin-edit" onClick={handleEditDetailPost} type="button">
                 <Icon name="edit" />
                 修改文章
               </button>
             ) : null}
-            <div className="article-rail-card">
+            <div className="article-rail-card article-focus-card">
               <p className="eyebrow">Reading Focus</p>
-              <strong>{getCategory(detailPost.category).name}</strong>
-              <span>{formatDateTime(detailPost.updatedAt)}</span>
-              <span>{calculateReadingMinutes(detailPost.content)} 分钟阅读</span>
+              <strong>{getCategory(detailPostView.category).name}</strong>
+              <span>{formatDateTime(detailPostView.updatedAt)}</span>
+              <span>{calculateReadingMinutes(detailPostView.content)} 分钟阅读</span>
             </div>
-            <div className="article-rail-card">
+            <div className="article-rail-card article-tags-card">
               <p className="eyebrow">Active Tags</p>
               <div className="tag-row article-rail-tags">
-                {detailPost.tags.map((tag) => (
+                {detailPostView.tags.map((tag) => (
                   <button
                     key={tag}
                     type="button"
                     className={activeTags.includes(tag) ? 'active' : ''}
-                    onClick={() => { toggleActiveTag(tag); closePostDetail(); }}
+                    onClick={() => handleTagFilter(tag)}
                   >
                     <Icon name="tag" />
                     {tag}
@@ -300,19 +469,35 @@ export function HomePage() {
                 ))}
               </div>
             </div>
+            <div className="article-rail-card article-reading-card">
+              <div className="reading-progress-label">
+                <strong>阅读进度</strong>
+                <span>{readingProgress}%</span>
+              </div>
+              <progress max="100" value={readingProgress} />
+              {articleHeadings.length > 0 ? (
+                <nav aria-label="文章目录" className="article-toc">
+                  {articleHeadings.map((heading) => (
+                    <a className={`level-${heading.level}`} href={`#${heading.id}`} key={heading.id}>
+                      {heading.title}
+                    </a>
+                  ))}
+                </nav>
+              ) : null}
+            </div>
           </aside>
           <div className="article-page-main">
             <section className="article-header-card">
               <div className="article-header-media">
                 <ImageWithFallback
-                  alt={detailPost.title}
+                  alt={detailPostView.title}
                   className="article-cover-image"
-                  src={getSafeImageUrl(detailPost.coverImage)}
+                  src={getSafeImageUrl(detailPostView.coverImage)}
                   fallback={
-                    <div className={`article-cover cover-${detailPost.cover}`}>
+                    <div className={`article-cover cover-${detailPostView.cover}`}>
                     <span>
-                      <Icon name={getCategoryIcon(detailPost.category)} />
-                      {getCategory(detailPost.category).name}
+                      <Icon name={getCategoryIcon(detailPostView.category)} />
+                      {getCategory(detailPostView.category).name}
                     </span>
                     </div>
                   }
@@ -322,26 +507,26 @@ export function HomePage() {
                 <p className="article-meta">
                   <span>
                     <Icon name="calendar" />
-                    {formatDateTime(detailPost.updatedAt)}
+                    {formatDateTime(detailPostView.updatedAt)}
                   </span>
                   <span>
                     <Icon name="clock" />
-                    {calculateReadingMinutes(detailPost.content)} 分钟阅读
+                    {calculateReadingMinutes(detailPostView.content)} 分钟阅读
                   </span>
                   <span>
-                    <Icon name={getCategoryIcon(detailPost.category)} />
-                    {getCategory(detailPost.category).name}
+                    <Icon name={getCategoryIcon(detailPostView.category)} />
+                    {getCategory(detailPostView.category).name}
                   </span>
                 </p>
-                <h1>{detailPost.title}</h1>
-                <p className="summary">{detailPost.summary}</p>
+                <h1>{detailPostView.title}</h1>
+                <p className="summary">{detailPostView.summary}</p>
                 <div className="tag-row">
-                  {detailPost.tags.map((tag) => (
+                  {detailPostView.tags.map((tag) => (
                     <button
                       key={tag}
                       type="button"
                       className={activeTags.includes(tag) ? 'active' : ''}
-                      onClick={() => { toggleActiveTag(tag); closePostDetail(); }}
+                      onClick={() => handleTagFilter(tag)}
                     >
                       <Icon name="tag" />
                       {tag}
@@ -351,7 +536,11 @@ export function HomePage() {
               </div>
             </section>
             <section className="article-body-card">
-              <div className="article-body">{renderMarkdown(detailPost.content)}</div>
+              <div className="article-body">
+                <Suspense fallback={<div className="article-render-loading">正文加载中...</div>}>
+                  <LazyMarkdownContent content={detailPostView.content} />
+                </Suspense>
+              </div>
             </section>
             <section className="comment-panel">
               <div className="panel-heading">
@@ -453,7 +642,7 @@ export function HomePage() {
 
   // Home view
   return (
-    <>
+    <div className="home-page">
       <section className="hero-band">
         <div className="hero-copy">
           <p className="eyebrow">SOS Brigade Log</p>
@@ -464,17 +653,29 @@ export function HomePage() {
             <span>Life / SRC / Study / Notes</span>
           </div>
           <div className="hero-actions">
-            <button type="button">SOS 发文</button>
-            <button className="ghost" onClick={() => setActiveCategory('src')} type="button">
-              查看 SRC 复盘
-            </button>
+            <Link className="button-link" to="/admin">
+              SOS 发文
+            </Link>
+            {srcPostCount > 0 ? (
+              <Link className="button-link ghost" to="/?category=src">
+                查看 SRC 复盘
+              </Link>
+            ) : null}
           </div>
         </div>
         <TiltCard className="hero-visual hero-art" aria-label="blog visual cover">
-          <img alt="Haruhi Suzumiya" src={haruhiCutoutImage} />
+          <img alt="凉宫春日主题人物" height="760" src={haruhiCutoutImage} width="620" />
           <span className="hero-art-ring" aria-hidden="true" />
           <span className="hero-art-corners" aria-hidden="true" />
         </TiltCard>
+        <img
+          alt=""
+          aria-hidden="true"
+          className="hero-character-compact"
+          height="760"
+          src={haruhiCutoutImage}
+          width="620"
+        />
       </section>
 
       <section className="metrics-strip">
@@ -529,6 +730,7 @@ export function HomePage() {
             </div>
             <input
               aria-label="用户名"
+              autoComplete="username"
               onChange={(event) =>
                 setUserForm((current) => ({ ...current, username: event.target.value }))
               }
@@ -537,6 +739,7 @@ export function HomePage() {
             />
             <input
               aria-label="密码"
+              autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
               onChange={(event) =>
                 setUserForm((current) => ({ ...current, password: event.target.value }))
               }
@@ -547,6 +750,7 @@ export function HomePage() {
             {authMode === 'register' ? (
               <input
                 aria-label="昵称"
+                autoComplete="nickname"
                 onChange={(event) =>
                   setUserForm((current) => ({ ...current, nickname: event.target.value }))
                 }
@@ -562,7 +766,7 @@ export function HomePage() {
         )}
       </section>
 
-      <section className="home-post-section">
+      <section className="home-post-section" id="articles">
         <div className="home-post-shell">
           <aside className="post-panel home-filter-panel">
             <div className="home-filter-header">
@@ -575,21 +779,28 @@ export function HomePage() {
             <div className="home-filter-search">
               <input
                 aria-label="搜索文章"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="搜索标题、标签、正文"
+                onChange={(event) => handleQueryChange(event.target.value)}
+                placeholder="搜索标题、摘要、标签"
                 value={query}
               />
             </div>
             <div className="index-filters" aria-label="文章索引筛选">
               <FilterMenu
-                label="全部时间"
+                label={
+                  {
+                    all: '全部时间',
+                    '7d': '最近 7 天',
+                    '30d': '最近 30 天',
+                    year: '今年'
+                  }[dateFilter]
+                }
                 options={[
                   ['all', '全部时间'],
                   ['7d', '最近 7 天'],
                   ['30d', '最近 30 天'],
                   ['year', '今年']
                 ]}
-                onSelect={() => {}}
+                onSelect={handleDateChange}
               />
               <FilterMenu
                 label={activeCategory === 'all' ? '全部分类' : getCategory(activeCategory).name}
@@ -597,9 +808,7 @@ export function HomePage() {
                   ['all', '全部分类'],
                   ...BLOG_CATEGORIES.map((category) => [category.id, category.name] as [string, string])
                 ]}
-                onSelect={(value) => {
-                  setActiveCategory(value as BlogCategoryId | 'all');
-                }}
+                onSelect={handleCategoryChange}
               />
             </div>
             <p className="home-filter-hint">
@@ -612,7 +821,7 @@ export function HomePage() {
                     key={tag}
                     className="tag-filter-chip"
                     type="button"
-                    onClick={() => toggleActiveTag(tag)}
+                    onClick={() => handleTagFilter(tag)}
                   >
                     <Icon name="tag" />
                     {tag}
@@ -622,7 +831,7 @@ export function HomePage() {
                 <button
                   className="tag-filter-clear"
                   type="button"
-                  onClick={clearTags}
+                  onClick={handleClearTags}
                 >
                   清除全部
                 </button>
@@ -642,17 +851,19 @@ export function HomePage() {
                 const category = getCategory(post.category);
                 const coverImage = getSafeImageUrl(post.coverImage);
                 return (
-                  <button
+                  <Link
                     className="post-item tilt-card"
                     key={post.id}
                     onClick={() => openPostDetail(post)}
-                    type="button"
+                    to={`/posts/${post.slug}`}
                   >
                     <span className="post-item-cover">
                       <ImageWithFallback
-                        alt=""
+                        alt={`${post.title} 封面`}
                         className="cover-thumb"
+                        height={88}
                         src={coverImage}
+                        width={88}
                         fallback={
                           <span className={`cover-dot cover-${post.cover}`}>
                           <Icon name={getCategoryIcon(post.category)} />
@@ -670,7 +881,7 @@ export function HomePage() {
                       <span className="post-item-footer">
                         <span>
                           <Icon name="clock" />
-                          {calculateReadingMinutes(post.content)} 分钟
+                          {calculateReadingMinutes(post.content || post.summary)} 分钟
                         </span>
                         <span>
                           <Icon name="tag" />
@@ -678,13 +889,18 @@ export function HomePage() {
                         </span>
                       </span>
                     </span>
-                  </button>
+                  </Link>
                 );
               })}
             </div>
           </section>
         </div>
       </section>
-    </>
+      <section className="home-about" id="about">
+        <p className="eyebrow">About / Kitepop</p>
+        <h2>持续记录，保持可检索</h2>
+        <p>生活随笔、专业学习、知识整理与经过脱敏的安全研究复盘，都在这里按时间和标签归档。</p>
+      </section>
+    </div>
   );
 }

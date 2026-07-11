@@ -16,7 +16,7 @@ export function BlogDataProvider({ children }: { children: ReactNode }) {
 
   const loadPosts = useCallback(async (includeDrafts = adminUnlocked, token = adminToken) => {
     try {
-      const nextPosts = await listPosts({ includeDrafts, token });
+      const nextPosts = await listPosts({ includeDrafts, summary: !includeDrafts, token });
       setPosts(nextPosts);
     } catch {
       notify('error', '文章加载失败，请稍后重试');

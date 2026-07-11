@@ -6,6 +6,7 @@ import {
   deletePostComment,
   deleteUser,
   getArticleAutosaveDraft,
+  getPost,
   listPostComments,
   listPosts,
   loginUser,
@@ -31,6 +32,20 @@ describe('blog api client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/posts?includeDrafts=1', {
       headers: { Authorization: 'Bearer admin-token' }
     });
+  });
+
+  it('requests compact public lists and loads full article content separately', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ posts: [], post: { id: 'p1', slug: 'hello-post', content: 'full content' } })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listPosts({ summary: true });
+    await getPost('hello-post');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/posts?summary=1', { headers: {} });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/posts/hello-post', { headers: {} });
   });
 
   it('reads and creates public post comments', async () => {

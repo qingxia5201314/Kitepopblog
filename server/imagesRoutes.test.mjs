@@ -43,7 +43,14 @@ describe('image raw route', () => {
     expect(getResponse.status).toBe(200);
     expect(getResponse.headers.get('content-type')).toBe('image/jpeg');
     expect(getResponse.headers.get('content-length')).toBe('10');
+    expect(getResponse.headers.get('cache-control')).toContain('max-age=86400');
+    expect(getResponse.headers.get('etag')).toBe(`"${image.id}-10"`);
     expect(await getResponse.text()).toBe('jpeg-bytes');
+
+    const cachedResponse = await app.request(`/api/images/raw/${image.id}`, {
+      headers: { 'if-none-match': `"${image.id}-10"` }
+    });
+    expect(cachedResponse.status).toBe(304);
 
     const headResponse = await app.request(`/api/images/raw/${image.id}`, { method: 'HEAD' });
     expect(headResponse.status).toBe(200);

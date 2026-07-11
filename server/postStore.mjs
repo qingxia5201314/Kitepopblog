@@ -53,7 +53,8 @@ function postToParams(post) {
     post.createdAt,
     post.updatedAt,
     post.cover,
-    post.coverImage ?? ''
+    post.coverImage ?? '',
+    post.publishedAt ?? (post.status === 'published' ? post.createdAt : '')
   ];
 }
 
@@ -82,7 +83,8 @@ function initSchema(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       cover TEXT NOT NULL,
-      cover_image TEXT NOT NULL DEFAULT ''
+      cover_image TEXT NOT NULL DEFAULT '',
+      published_at TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS post_comments (
@@ -108,6 +110,17 @@ function initSchema(db) {
   if (!commentColumns.includes('user_id')) db.run("ALTER TABLE post_comments ADD COLUMN user_id TEXT NOT NULL DEFAULT ''");
   if (!commentColumns.includes('updated_at')) db.run("ALTER TABLE post_comments ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
   db.run("UPDATE post_comments SET updated_at = created_at WHERE updated_at = ''");
+
+  const postColumns = db.exec('PRAGMA table_info(posts)')?.[0]?.values?.map((row) => row[1]) ?? [];
+  if (!postColumns.includes('published_at')) {
+    db.run("ALTER TABLE posts ADD COLUMN published_at TEXT NOT NULL DEFAULT ''");
+    db.run("UPDATE posts SET published_at = created_at WHERE published_at = ''");
+  }
+}
+
+function selectPublishedAt(db, postId) {
+  const rows = db.exec('SELECT published_at FROM posts WHERE id = ?', [postId]);
+  return rows[0]?.values?.[0]?.[0] || '';
 }
 
 function selectComments(db, postId) {
@@ -138,8 +151,9 @@ function canManageComment(comment, user) {
 function insertPost(db, post) {
   db.run(
     `INSERT INTO posts (
-      id, slug, title, summary, category, tags_json, content, status, created_at, updated_at, cover, cover_image
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, slug, title, summary, category, tags_json, content, status, created_at, updated_at, cover, cover_image,
+      published_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     postToParams(post)
   );
 }
@@ -185,17 +199,22 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       const current = posts.find((post) => post.id === id);
       if (!current) return undefined;
 
+      const previousPublishedAt = selectPublishedAt(db, id);
+      const nextStatus = patch.status ?? current.status;
+      const updatedAt = nowIso();
+
       const updated = {
         ...current,
         ...patch,
-        slug: patch.title ? uniqueSlug(patch.title, posts, id) : current.slug,
-        updatedAt: nowIso()
+        slug: !previousPublishedAt && patch.title ? uniqueSlug(patch.title, posts, id) : current.slug,
+        updatedAt
       };
+      const publishedAt = previousPublishedAt || (nextStatus === 'published' ? updatedAt : '');
 
       db.run(
         `UPDATE posts SET
           slug = ?, title = ?, summary = ?, category = ?, tags_json = ?, content = ?,
-          status = ?, updated_at = ?, cover = ?, cover_image = ?
+          status = ?, updated_at = ?, cover = ?, cover_image = ?, published_at = ?
         WHERE id = ?`,
         [
           updated.slug,
@@ -208,6 +227,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
           updated.updatedAt,
           updated.cover,
           updated.coverImage ?? '',
+          publishedAt,
           id
         ]
       );

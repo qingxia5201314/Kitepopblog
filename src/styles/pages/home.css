@@ -4,8 +4,33 @@
   grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.72fr);
   margin-inline: auto;
   max-width: 1180px;
-  min-height: clamp(430px, 58vh, 620px);
+  min-height: clamp(340px, 46vh, 500px);
   padding: clamp(24px, 4vw, 46px);
+}
+
+.home-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-page .hero-band {
+  order: 1;
+}
+
+.home-page .metrics-strip {
+  order: 2;
+}
+
+.home-page .home-post-section {
+  order: 3;
+}
+
+.home-page .home-about {
+  order: 4;
+}
+
+.home-page .user-auth-card {
+  order: 5;
 }
 
 .hero-copy {
@@ -27,9 +52,60 @@
   width: min(100%, 430px);
 }
 
+.home-page .hero-visual.hero-art {
+  height: 420px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.home-page .hero-art img {
+  height: 420px;
+  max-height: 420px;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  width: auto;
+}
+
+.hero-character-compact {
+  display: none;
+}
+
 .home-post-section {
   margin-inline: auto;
   max-width: 1180px;
+}
+
+.button-link {
+  align-items: center;
+  background: #c53b39;
+  border: 1px solid #c53b39;
+  color: #fff;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 42px;
+  padding: 10px 16px;
+}
+
+.button-link.ghost {
+  background: rgba(255, 255, 255, 0.74);
+  color: #842624;
+}
+
+.home-about {
+  border-top: 1px solid rgba(24, 33, 31, 0.14);
+  margin: 34px auto 0;
+  max-width: 1180px;
+  padding: 28px clamp(16px, 3vw, 32px);
+  width: 100%;
+}
+
+.home-about h2 {
+  margin: 4px 0 8px;
+}
+
+.home-about p:last-child {
+  max-width: 720px;
 }
 
 .home-post-shell {
@@ -86,15 +162,26 @@
 
 @media (max-width: 860px) {
   .hero-band {
-    grid-template-columns: 1fr;
-    min-height: 0;
+    align-items: center;
+    grid-template-columns: minmax(0, 1fr) 180px;
+    min-height: 330px;
+    overflow: hidden;
+    padding-block: 24px;
   }
 
   .hero-visual {
-    justify-self: center;
-    min-height: 300px;
-    order: -1;
-    width: min(100%, 360px);
+    justify-self: end;
+    min-height: 260px;
+    width: 210px;
+  }
+
+  .home-page .hero-visual.hero-art {
+    height: 300px;
+  }
+
+  .home-page .hero-art img {
+    height: 300px;
+    max-height: 300px;
   }
 
   .home-post-shell {
@@ -106,7 +193,131 @@
   }
 }
 
+@media (min-width: 640px) and (max-width: 860px) {
+  .home-post-shell {
+    grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+  }
+
+  .home-filter-panel {
+    position: sticky;
+    top: 88px;
+  }
+}
+
 @media (max-width: 560px) {
+  .hero-band {
+    display: block;
+    min-height: 300px;
+    padding: 18px 14px 14px;
+    position: relative;
+  }
+
+  .home-page .hero-copy {
+    max-width: none;
+    padding-right: 112px;
+    position: relative;
+    z-index: 8;
+  }
+
+  .hero-copy h1 {
+    font-size: 36px;
+  }
+
+  .hero-copy > p:not(.eyebrow) {
+    font-size: 14px;
+    max-width: 27ch;
+  }
+
+  .hero-notes {
+    display: none;
+  }
+
+  .hero-actions {
+    align-items: stretch;
+    flex-direction: column;
+    max-width: 156px;
+  }
+
+  .button-link {
+    min-height: 38px;
+    padding: 8px 10px;
+  }
+
+  .home-page .hero-visual.hero-art {
+    display: none;
+  }
+
+  .home-page .hero-character-compact {
+    bottom: 0;
+    display: block;
+    filter: drop-shadow(0 14px 18px rgba(42, 19, 15, 0.16));
+    height: 214px;
+    object-fit: contain;
+    object-position: right bottom;
+    opacity: 0.78;
+    position: absolute;
+    right: -26px;
+    width: 176px;
+    z-index: 4;
+  }
+
+  .home-page .metrics-strip {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .home-page .metrics-strip > span {
+    align-items: center;
+    border-radius: 8px;
+    flex-direction: column;
+    font-size: 11px;
+    justify-content: center;
+    min-height: 58px;
+    min-width: 0;
+    padding: 7px 3px;
+    width: auto;
+  }
+
+  .home-page .metrics-strip strong {
+    font-size: 20px;
+    margin: 0 0 2px;
+  }
+
+  .home-page .metrics-strip .ui-icon {
+    display: none;
+  }
+
+  .home-post-section {
+    margin-top: 12px;
+  }
+
+  .home-filter-panel,
+  .home-post-panel {
+    padding: 14px;
+  }
+
+  .home-filter-search {
+    margin-block: 12px 10px;
+  }
+
+  .index-filters {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .index-filters .filter-menu,
+  .index-filters summary {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .home-filter-hint {
+    display: none;
+  }
+
   .home-post-panel .post-item {
     grid-template-columns: 70px minmax(0, 1fr);
     min-height: 96px;

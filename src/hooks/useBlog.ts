@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   BlogCategoryId,
   BlogPost,
@@ -20,18 +20,12 @@ function filterPostsByDate(posts: BlogPost[], filter: PostDateFilter): BlogPost[
   return posts.filter((post) => Date.parse(post.updatedAt) >= minTime);
 }
 
-function getDetailPostIdFromHash() {
-  const match = window.location.hash.match(/^#\/posts\/(.+)$/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-export function useBlog(posts: BlogPost[]) {
+export function useBlog(posts: BlogPost[], routePostId: string | null = null) {
   const [activeCategory, setActiveCategory] = useState<BlogCategoryId | 'all'>('all');
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<PostDateFilter>('all');
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
-  const [detailPostId, setDetailPostId] = useState<string | null>(() => getDetailPostIdFromHash());
 
   const visiblePosts = useMemo(
     () => filterPosts(posts, { category: activeCategory, query, tags: activeTags }),
@@ -41,17 +35,10 @@ export function useBlog(posts: BlogPost[]) {
   const indexedPosts = useMemo(() => filterPostsByDate(visiblePosts, dateFilter), [dateFilter, visiblePosts]);
 
   const selectedPost = indexedPosts.find((post) => post.id === selectedPostId) ?? indexedPosts[0];
+  const detailPostId = routePostId;
   const detailPost = posts.find((post) => post.id === detailPostId || post.slug === detailPostId) ?? null;
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
-
-  useEffect(() => {
-    const syncDetailPostFromHash = () => {
-      setDetailPostId(getDetailPostIdFromHash());
-    };
-    window.addEventListener('hashchange', syncDetailPostFromHash);
-    return () => window.removeEventListener('hashchange', syncDetailPostFromHash);
-  }, []);
 
   const toggleActiveTag = (tag: string) => {
     setActiveTags((current) =>
@@ -60,27 +47,22 @@ export function useBlog(posts: BlogPost[]) {
         : [...current, tag]
     );
     setSelectedPostId(null);
-    setDetailPostId(null);
   };
 
   const clearTags = () => setActiveTags([]);
 
   const openPostDetail = (post: BlogPost) => {
     setSelectedPostId(post.id);
-    setDetailPostId(post.slug);
-    window.location.hash = `/posts/${post.slug}`;
   };
 
-  const closePostDetail = () => {
-    setDetailPostId(null);
-    window.location.hash = '';
-  };
+  const closePostDetail = () => undefined;
 
   return {
     posts,
     activeCategory,
     setActiveCategory,
     activeTags,
+    setActiveTags,
     toggleActiveTag,
     clearTags,
     query,
@@ -93,7 +75,6 @@ export function useBlog(posts: BlogPost[]) {
     selectedPostId,
     setSelectedPostId,
     detailPostId,
-    setDetailPostId,
     openPostDetail,
     closePostDetail,
     detailPost,

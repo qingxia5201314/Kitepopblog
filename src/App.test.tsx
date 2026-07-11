@@ -157,8 +157,48 @@ describe('App layout shells', () => {
     expect(host.querySelector('.post-item.tilt-card')).toBeTruthy();
   });
 
+  it('requests a missing article once without reloading the public post list', async () => {
+    window.history.pushState({}, '', '/posts/missing-post');
+    const requestCounts = { detail: 0, list: 0 };
+    const missingPostFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/posts?summary=1') {
+        requestCounts.list += 1;
+        return Response.json({ posts: [] });
+      }
+      if (url === '/api/posts/missing-post') {
+        requestCounts.detail += 1;
+        return Response.json({ message: 'Post not found' }, { status: 404 });
+      }
+      if (url.startsWith('/api/users/me') || url.startsWith('/api/admin/session')) {
+        return Response.json({ message: 'Unauthorized' }, { status: 401 });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', missingPostFetch);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    expect(requestCounts.detail).toBe(1);
+    expect(requestCounts.list).toBe(1);
+  });
+
   it('marks the current top navigation item as active', async () => {
-    vi.stubGlobal('fetch', fetchMock);
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).startsWith('/api/admin/session')) return Response.json({ ok: true });
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
     window.history.pushState({}, '', '/images');
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -167,7 +207,7 @@ describe('App layout shells', () => {
     root.render(<App />);
     await waitFor(() => host.querySelector('.topbar nav'));
 
-    const activeNav = host.querySelector('.topbar nav button.active');
+    const activeNav = host.querySelector('.topbar nav a.active');
     expect(activeNav?.getAttribute('aria-current')).toBe('page');
     expect(activeNav?.textContent).toContain('图床');
   });
@@ -362,9 +402,9 @@ describe('App layout shells', () => {
     });
   });
 
-  it('renders article detail shell when hash points to a post', async () => {
+  it('renders article detail shell when the clean URL points to a post', async () => {
     vi.stubGlobal('fetch', fetchMock);
-    window.location.hash = '#/posts/post-1';
+    window.history.pushState({}, '', '/posts/post-1');
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -377,13 +417,40 @@ describe('App layout shells', () => {
     expect(host.querySelector('.article-header-card')).toBeTruthy();
     expect(host.querySelector('.article-body-card')).toBeTruthy();
     expect(host.querySelector('.comment-panel')).toBeTruthy();
+    expect(await waitFor(() => (document.title.includes('Test post') ? host : null))).toBeTruthy();
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toContain('/posts/post-1');
+  });
+
+  it('preserves the server canonical origin during client metadata updates', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    window.history.pushState({}, '', '/posts/post-1');
+    let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = 'https://canonical.example/posts/server-route';
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    expect(
+      await waitFor(() => (canonical.href === 'https://canonical.example/posts/post-1' ? canonical : null))
+    ).toBeTruthy();
+    expect(document.head.querySelector('meta[property="og:url"]')?.getAttribute('content')).toBe(
+      'https://canonical.example/posts/post-1'
+    );
   });
 
   it('scrolls to the top when opening an article detail page', async () => {
     vi.stubGlobal('fetch', fetchMock);
     const scrollToSpy = vi.fn();
     Object.defineProperty(window, 'scrollTo', { configurable: true, value: scrollToSpy });
-    window.location.hash = '#/posts/post-1';
+    window.history.pushState({}, '', '/posts/post-1');
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -429,7 +496,7 @@ describe('App layout shells', () => {
       return fetchMock(input);
     });
     vi.stubGlobal('fetch', pageFetchMock);
-    window.location.hash = '#/posts/post-1';
+    window.history.pushState({}, '', '/posts/post-1');
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -496,7 +563,7 @@ describe('App layout shells', () => {
       return fetchMock(input);
     });
     vi.stubGlobal('fetch', pageFetchMock);
-    window.location.hash = '#/posts/post-1';
+    window.history.pushState({}, '', '/posts/post-1');
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
@@ -647,15 +714,15 @@ describe('App layout shells', () => {
     roots.push(root);
     root.render(<App />);
 
-    const postButton = (await waitFor(() => host.querySelector('.post-item'))) as HTMLButtonElement | null;
-    expect(postButton).toBeTruthy();
-    postButton!.click();
+    const postLink = (await waitFor(() => host.querySelector('.post-item'))) as HTMLAnchorElement | null;
+    expect(postLink).toBeTruthy();
+    postLink!.click();
 
     expect(await waitFor(() => host.querySelector('.article-page'))).toBeTruthy();
-    expect(window.location.hash).toBe('#/posts/post-1');
+    expect(window.location.pathname).toBe('/posts/post-1');
 
-    window.history.back();
-    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await waitFor(() => (host.querySelector('.article-page') ? null : host))).toBeTruthy();
     expect(host.querySelector('.post-list')).toBeTruthy();

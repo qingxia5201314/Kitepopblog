@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { PUBLIC_DYNAMIC_CACHE } from '../httpCache.mjs';
 import { isAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
@@ -7,7 +8,20 @@ app.get('/', (c) => {
   const postService = c.get('postService');
   const admin = isAdmin(c);
   const includeDrafts = c.req.query('includeDrafts') === '1' && admin;
-  return c.json({ posts: postService.listPosts({ includeDrafts }) });
+  const summaryOnly = c.req.query('summary') === '1' && !includeDrafts;
+  const posts = postService.listPosts({ includeDrafts });
+  c.header(
+    'Cache-Control',
+    includeDrafts ? 'private, no-store' : PUBLIC_DYNAMIC_CACHE
+  );
+  return c.json({
+    posts: summaryOnly
+      ? posts.map((post) => ({
+          ...post,
+          content: ''
+        }))
+      : posts
+  });
 });
 
 app.post('/', async (c) => {
@@ -25,11 +39,14 @@ app.post('/', async (c) => {
 });
 
 app.get('/:id', (c) => {
-  const store = c.get('store');
+  const postService = c.get('postService');
   const id = c.req.param('id');
-  // GET on individual post - this is handled via /:id/comments endpoint
-  // If direct access is needed, add it here
-  return c.json({ ok: false, message: 'Not found' }, 404);
+  const post = postService.getPost(id);
+  if (!post || (post.status !== 'published' && !isAdmin(c))) {
+    return c.json({ ok: false, message: 'Post not found' }, 404);
+  }
+  c.header('Cache-Control', post.status === 'published' ? PUBLIC_DYNAMIC_CACHE : 'private, no-store');
+  return c.json({ post });
 });
 
 app.put('/:id', async (c) => {

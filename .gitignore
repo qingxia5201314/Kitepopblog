@@ -16,3 +16,5 @@ uploads/
 vite.config.js
 vite.config.d.ts
 .superpowers/
+.codex/
+.playwright-mcp/

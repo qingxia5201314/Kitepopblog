@@ -357,7 +357,7 @@ button.danger:hover,
   background:
     linear-gradient(135deg, rgba(255, 253, 249, 0.98), rgba(255, 247, 238, 0.96)),
     #fffdf9;
-  border: 2px solid #d84b49;
+  border: 2px solid #c53b39;
   border-radius: 8px;
   box-shadow: 0 22px 42px rgba(42, 19, 15, 0.18);
   color: #2f2520;
@@ -406,7 +406,7 @@ button.danger:hover,
 }
 
 .upload-progress-kicker {
-  color: #d84b49;
+  color: #c53b39;
   font-size: 0.82rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -420,7 +420,7 @@ button.danger:hover,
 }
 
 .upload-progress-bar span {
-  background: linear-gradient(90deg, #d84b49, #2f7d67);
+  background: linear-gradient(90deg, #c53b39, #2f7d67);
   border-radius: inherit;
   display: block;
   height: 100%;
@@ -446,7 +446,7 @@ button.danger:hover,
 
 .page-loading span {
   animation: page-loading-bounce 0.9s ease-in-out infinite;
-  background: #d84b49;
+  background: #c53b39;
   border-radius: 999px;
   display: block;
   height: 8px;
@@ -2593,7 +2593,7 @@ textarea {
 :root {
   color: #24130f;
   background: #fffdf9;
-  --sos-red: #d84b49;
+  --sos-red: #c53b39;
   --sos-red-dark: #9e2f28;
   --sos-black: #2a130f;
   --sos-yellow: #d7b879;
