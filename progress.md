@@ -935,3 +935,46 @@
 - `src/pages/HomePage.tsx`: uses the clean portrait asset and no longer renders the unused about section.
 - `src/styles/pages/home.css`: owns final portrait dimensions and narrow-mobile collision prevention.
 - `src/App.test.tsx`: protects the navigation and portrait asset behavior from regression.
+## 2026-07-12 - Task: Article discovery and editorial workflows
+
+### What was done
+- Added compact cursor pagination for public articles with `posts`, `nextCursor`, `hasMore`, and `total`.
+- Added parameterized server-side weighted search across title, tags, category, summary, and Markdown content; category, date, and multiple tags can be combined.
+- Added safe React text-node highlighting, debounced search, URL-backed filters, load-more retry, and duplicate-request protection.
+- Added a collapsed mobile article table of contents with active heading, reading progress, hash navigation, focus return, Escape handling, and reduced-motion support.
+- Added persistent `post_revisions` history with complete snapshots, protected key versions, field comparison, restore backup, and restore-to-draft behavior.
+- Added persistent scheduled publishing with `scheduled_at`, `schedule_error`, startup polling, one-minute polling, idempotent publication, cancellation, and manual retry.
+- Reworked 10-second autosave around a database draft service. First autosave atomically creates/binds a draft post, autosave creates no revision, concurrent saves cannot overwrite newer content, and offline/pagehide copies are retained locally.
+- Added explicit recovery/view/discard UI for newer database drafts.
+- Added authenticated full-page draft preview using the shared Markdown/KaTeX renderer and a lazy `/admin/preview/:id` route.
+- Added focused backend/frontend modules for revision history, scheduling, preview, and autosave instead of extending the page monoliths.
+
+### Database migrations
+- `posts`: adds `published_at`, `scheduled_at`, and `schedule_error` with safe empty-string defaults plus `idx_posts_scheduled_due`.
+- `post_revisions`: adds complete article snapshot columns plus `idx_post_revisions_post_created` and `idx_post_revisions_created`.
+- Migrations use `CREATE ... IF NOT EXISTS` and column checks, preserve existing records, and persist immediately.
+- Restore and scheduled publication use the shared SQLite transaction wrapper so partial mutations are rolled back before persistence.
+
+### Protocols and behavior
+- Public list: `GET /api/posts?limit=8&q=&category=&date=&tags=&cursor=`. Search cursors contain score/date/id; normal cursors contain date/id.
+- Multi-tag filtering is AND-based. Search weights are title 5, tag/category 4, summary 2, body 1.
+- Revision APIs live under `/api/admin/posts/:postId/revisions` and require an administrator session.
+- Scheduling APIs live under `/api/admin/posts/:postId/schedule` and require an administrator session.
+- Preview uses `GET /api/admin/article-preview/:id`, returns `private, no-store`, and never mutates article or revision state.
+
+### Verification
+- `npm test -- --run`: passed, 54 files and 214 tests.
+- `npm run build`: passed with route-level chunks for admin and article preview.
+- `git diff --check`: passed.
+- Direct local API check returned JSON for cursor pagination; 320, 390, 768, and 1440 width checks showed no document-level horizontal overflow.
+- Browser MCP's proxy cache returned a stale HTML response for one loopback API request even though direct HTTP returned JSON; this was treated as a browser-tool limitation, not deployment evidence.
+
+### Deployment and rollback
+- Back up the SQLite database, static root, Nginx configuration, and environment file before deployment.
+- Build before restarting the Node service; restarting before the new hashed assets exist can briefly serve stale asset references.
+- Roll back this feature set by reverting commits from `f1ed854` through `449fdeb` in reverse order, then restore the pre-deployment database backup if migrations must also be removed.
+
+### Remaining limitations
+- SQLite LIKE search is appropriate for the current data size; migrate `postQueryService` to SQLite FTS when the article corpus grows substantially.
+- The browser preview route requires the existing administrator bearer session stored by the current application. Secure HttpOnly cookie migration remains a separate authentication project.
+- Content cleanup still needs manual review for duplicate-title summaries, generic `image.png` alt text, public password examples, `host:post` typos, and empty SRC-category calls to action.
