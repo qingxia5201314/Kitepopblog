@@ -31,7 +31,7 @@ import {
   permissionLabel
 } from '../components/shared';
 import { TiltCard } from '../components/effects/TiltCard';
-import haruhiCutoutImage from '../assets/haruhi-cutout.webp';
+import haruhiCutoutImage from '../assets/haruhi-cutout.png';
 
 const LazyMarkdownContent = lazy(() =>
   import('../components/MarkdownContent').then((module) => ({ default: module.MarkdownContent }))
@@ -895,11 +895,6 @@ export function HomePage() {
             </div>
           </section>
         </div>
-      </section>
-      <section className="home-about" id="about">
-        <p className="eyebrow">About / Kitepop</p>
-        <h2>持续记录，保持可检索</h2>
-        <p>生活随笔、专业学习、知识整理与经过脱敏的安全研究复盘，都在这里按时间和标签归档。</p>
       </section>
     </div>
   );

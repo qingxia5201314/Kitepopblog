@@ -53,10 +53,6 @@ export function Layout() {
           <Link aria-current={isNavActive('/') ? 'page' : undefined} className={isNavActive('/') ? 'active' : ''} to="/">
             首页
           </Link>
-          <Link to="/#articles">文章</Link>
-          <Link to="/?category=all">分类</Link>
-          <Link to="/?tags=SRC">专题</Link>
-          <Link to="/#about">关于</Link>
           {toolsUnlocked ? (
             <details className="tool-menu">
               <summary>工具</summary>

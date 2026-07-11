@@ -157,6 +157,47 @@ describe('App layout shells', () => {
     expect(host.querySelector('.post-item.tilt-card')).toBeTruthy();
   });
 
+  it('keeps only useful public navigation and removes the homepage about block', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).startsWith('/api/admin/session')) return Response.json({ ok: true });
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const nav = await waitFor(() => host.querySelector('.topbar nav'));
+    expect(nav?.textContent).toContain('首页');
+    expect(nav?.textContent).toContain('工具');
+    expect(nav?.textContent).not.toContain('文章');
+    expect(nav?.textContent).not.toContain('分类');
+    expect(nav?.textContent).not.toContain('专题');
+    expect(nav?.textContent).not.toContain('关于');
+    expect(host.querySelector('.home-about')).toBeFalsy();
+  });
+
+  it('uses the clean complete hero character asset', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const heroImage = (await waitFor(() => host.querySelector('.hero-art img'))) as HTMLImageElement | null;
+    const compactImage = host.querySelector('.hero-character-compact') as HTMLImageElement | null;
+    expect(heroImage?.getAttribute('src')).toBe('/haruhi-cutout.png');
+    expect(compactImage?.getAttribute('src')).toBe('/haruhi-cutout.png');
+  });
+
   it('requests a missing article once without reloading the public post list', async () => {
     window.history.pushState({}, '', '/posts/missing-post');
     const requestCounts = { detail: 0, list: 0 };

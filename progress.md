@@ -914,3 +914,24 @@
 
 ### Notes
 - `dreamhunter2333.com` currently resolves to GitHub Pages, not the VPS. The application can be deployed to `104.244.91.222`, but the checked-in TLS configuration must not be enabled for that hostname until DNS points to the VPS and a certificate has been issued.
+
+## 2026-07-11 - Task: Simplify public navigation and restore the hero character
+### What was done
+- Removed the redundant public `文章`, `分类`, `专题`, and `关于` navigation entries. The top bar now keeps `首页` plus `登录` for guests or the authenticated `工具` menu.
+- Removed the homepage `home-about` block; article search, date, category, and tag navigation remain in the article index where they perform distinct filtering actions.
+- Replaced the damaged `haruhi-cutout.webp` hero asset with the clean transparent `haruhi-cutout.png` source.
+- Added stable desktop and tablet hero sizing with visible head clearance and disabled portrait translation so animation cannot move the head into the clipping edge.
+- Tightened the compact mobile portrait and added a dedicated 340px rule so it does not cover the headline, copy, or action buttons.
+
+### Testing
+- `npm test -- --run`: passed. 38 test files and 147 tests passed.
+- `npm run build`: passed. TypeScript and Vite production build completed.
+- `git diff --check`: passed.
+- Production-browser CDP checks at 320, 390, 768, and 1440 px reported zero horizontal overflow.
+- The 620x802 PNG loaded completely at every viewport. Desktop head clearance measured 36px, the portrait transform resolved to `none`, and the 320px portrait did not overlap the title or action area.
+
+### Notes
+- `src/components/Layout.tsx`: owns the simplified public navigation.
+- `src/pages/HomePage.tsx`: uses the clean portrait asset and no longer renders the unused about section.
+- `src/styles/pages/home.css`: owns final portrait dimensions and narrow-mobile collision prevention.
+- `src/App.test.tsx`: protects the navigation and portrait asset behavior from regression.
