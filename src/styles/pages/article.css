@@ -82,6 +82,13 @@
   transform: translateX(3px);
 }
 
+.article-toc a.active,
+.article-toc a[aria-current='location'] {
+  background: rgba(197, 59, 57, 0.08);
+  border-left-color: #c53b39;
+  color: #842624;
+}
+
 .article-toc a:active {
   background: rgba(197, 59, 57, 0.14);
   transform: translateX(1px) scale(0.99);

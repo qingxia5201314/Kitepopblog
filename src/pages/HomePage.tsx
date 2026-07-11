@@ -34,7 +34,9 @@ import { TiltCard } from '../components/effects/TiltCard';
 import { ArticleList } from '../features/articles/components/ArticleList';
 import { ArticleSearch } from '../features/articles/components/ArticleSearch';
 import { LoadMoreButton } from '../features/articles/components/LoadMoreButton';
+import { MobileArticleToc } from '../features/articles/components/MobileArticleToc';
 import { useArticlePagination } from '../features/articles/hooks/useArticlePagination';
+import { useArticleReadingState } from '../features/articles/hooks/useArticleReadingState';
 import haruhiCutoutImage from '../assets/haruhi-cutout.png';
 
 const LazyMarkdownContent = lazy(() =>
@@ -89,7 +91,6 @@ export function HomePage() {
   const [authFeedback, setAuthFeedback] = useState<{ type: 'error'; message: string } | null>(null);
   const [fullDetailPost, setFullDetailPost] = useState<BlogPost | null>(null);
   const [detailLoadFailed, setDetailLoadFailed] = useState(false);
-  const [readingProgress, setReadingProgress] = useState(0);
   const articleBodyRef = useRef<HTMLElement | null>(null);
 
   const publishedCount = articlePage.total;
@@ -104,6 +105,11 @@ export function HomePage() {
     () => extractArticleHeadings(detailPostView?.content || ''),
     [detailPostView?.content]
   );
+  const { progress: readingProgress, activeHeadingId } = useArticleReadingState({
+    articleRef: articleBodyRef,
+    headings: articleHeadings,
+    enabled: Boolean(detailPostView)
+  });
 
   usePageMetadata(detailPostView);
 
@@ -184,41 +190,6 @@ export function HomePage() {
     if (!detailPostView?.slug) return;
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [detailPostView?.slug]);
-
-  useEffect(() => {
-    if (!detailPostView) {
-      setReadingProgress(0);
-      return;
-    }
-
-    let frame = 0;
-    const updateProgress = () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        const article = articleBodyRef.current;
-        if (!article) return;
-        const rect = article.getBoundingClientRect();
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
-        const articleTop = rect.top + window.scrollY;
-        const articleHeight = article.offsetHeight || rect.height;
-        const articleBottom = articleTop + articleHeight;
-        const readableStart = articleTop - viewportHeight * 0.18;
-        const readableEnd = articleBottom - viewportHeight * 0.72;
-        const distance = Math.max(1, readableEnd - readableStart);
-        const progress = ((window.scrollY - readableStart) / distance) * 100;
-        setReadingProgress(Math.max(0, Math.min(100, Math.round(progress))));
-      });
-    };
-
-    updateProgress();
-    window.addEventListener('scroll', updateProgress, { passive: true });
-    window.addEventListener('resize', updateProgress);
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', updateProgress);
-      window.removeEventListener('resize', updateProgress);
-    };
-  }, [detailPostView?.slug, detailPostView?.content]);
 
   useEffect(() => {
     if (!slug) {
@@ -438,6 +409,11 @@ export function HomePage() {
   if (detailPostView) {
     return (
       <section className="article-page">
+        <MobileArticleToc
+          activeHeadingId={activeHeadingId}
+          headings={articleHeadings}
+          progress={readingProgress}
+        />
         <div className="article-page-shell">
           <aside className="article-page-rail">
             <Link className="back-link" to={`/${buildFilterSearch({})}`}>
@@ -480,7 +456,12 @@ export function HomePage() {
               {articleHeadings.length > 0 ? (
                 <nav aria-label="文章目录" className="article-toc">
                   {articleHeadings.map((heading) => (
-                    <a className={`level-${heading.level}`} href={`#${heading.id}`} key={heading.id}>
+                    <a
+                      aria-current={heading.id === activeHeadingId ? 'location' : undefined}
+                      className={`level-${heading.level}${heading.id === activeHeadingId ? ' active' : ''}`}
+                      href={`#${heading.id}`}
+                      key={heading.id}
+                    >
                       {heading.title}
                     </a>
                   ))}
