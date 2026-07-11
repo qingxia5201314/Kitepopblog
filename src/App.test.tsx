@@ -14,27 +14,34 @@ vi.mock('./assets/haruhi-cutout.webp', () => ({ default: '/haruhi-cutout.webp' }
 
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url = String(input);
+  const post = {
+    id: 'post-1',
+    slug: 'post-1',
+    title: 'Test post',
+    summary: 'summary',
+    category: 'life',
+    tags: ['one'],
+    content: 'content',
+    status: 'published',
+    createdAt: '2026-06-18T10:00:00.000Z',
+    updatedAt: '2026-06-18T10:00:00.000Z',
+    publishedAt: '2026-06-18T10:00:00.000Z',
+    cover: 'life',
+    coverImage: ''
+  };
+  if (/^\/api\/posts\/[^/]+$/.test(url)) {
+    return Response.json({ post });
+  }
+  if (url.includes('/comments')) {
+    return Response.json({ comments: [] });
+  }
   if (url.startsWith('/api/posts')) {
+    const paged = url.includes('limit=');
     return {
       ok: true,
       json: async () => ({
-        posts: [
-          {
-            id: 'post-1',
-            slug: 'post-1',
-            title: 'Test post',
-            summary: 'summary',
-            category: 'life',
-            tags: ['one'],
-            content: 'content',
-            status: 'published',
-            createdAt: '2026-06-18T10:00:00.000Z',
-            updatedAt: '2026-06-18T10:00:00.000Z',
-            cover: 'life',
-            coverImage: ''
-          }
-        ],
-        comments: []
+        posts: paged ? [{ ...post, content: undefined, readingMinutes: 1 }] : [post],
+        ...(paged ? { nextCursor: null, hasMore: false, total: 1 } : {})
       })
     } as Response;
   }
@@ -157,6 +164,60 @@ describe('App layout shells', () => {
     expect(host.querySelector('.post-item.tilt-card')).toBeTruthy();
   });
 
+  it('loads the public article index page by page and appends with load more', async () => {
+    const pageRequests: string[] = [];
+    const pagedFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/posts?limit=8') {
+        pageRequests.push(url);
+        return Response.json({
+          posts: [{
+            id: 'post-1', slug: 'post-1', title: 'First result', summary: 'first summary', category: 'life',
+            tags: ['one'], status: 'published', createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z', publishedAt: '2026-07-01T00:00:00.000Z',
+            cover: 'life', coverImage: '', readingMinutes: 1
+          }],
+          nextCursor: 'next-page', hasMore: true, total: 2
+        });
+      }
+      if (url === '/api/posts?limit=8&cursor=next-page') {
+        pageRequests.push(url);
+        return Response.json({
+          posts: [{
+            id: 'post-2', slug: 'post-2', title: 'Second result', summary: 'second summary', category: 'notes',
+            tags: ['two'], status: 'published', createdAt: '2026-06-01T00:00:00.000Z',
+            updatedAt: '2026-06-01T00:00:00.000Z', publishedAt: '2026-06-01T00:00:00.000Z',
+            cover: 'notes', coverImage: '', readingMinutes: 2
+          }],
+          nextCursor: null, hasMore: false, total: 2
+        });
+      }
+      if (url.startsWith('/api/users/me') || url.startsWith('/api/admin/session')) {
+        return Response.json({ message: 'Unauthorized' }, { status: 401 });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pagedFetch);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    await waitFor(() => host.querySelector('.post-item'));
+    expect(host.querySelector('.filter-total')?.textContent).toContain('2');
+    const loadMore = Array.from(host.querySelectorAll('button')).find((button) => button.textContent?.includes('加载更多'));
+    expect(loadMore).toBeTruthy();
+    loadMore?.click();
+    await waitFor(() => host.querySelectorAll('.post-item').length === 2 ? host.querySelector('.post-list') : null);
+
+    expect(Array.from(host.querySelectorAll('.post-item strong')).map((node) => node.textContent)).toEqual([
+      'First result',
+      'Second result'
+    ]);
+    expect(pageRequests).toEqual(['/api/posts?limit=8', '/api/posts?limit=8&cursor=next-page']);
+  });
+
   it('keeps only useful public navigation and removes the homepage about block', async () => {
     window.localStorage.setItem(
       'kitepop-admin-session',
@@ -203,9 +264,9 @@ describe('App layout shells', () => {
     const requestCounts = { detail: 0, list: 0 };
     const missingPostFetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url === '/api/posts?summary=1') {
+      if (url.startsWith('/api/posts?limit=')) {
         requestCounts.list += 1;
-        return Response.json({ posts: [] });
+        return Response.json({ posts: [], nextCursor: null, hasMore: false, total: 0 });
       }
       if (url === '/api/posts/missing-post') {
         requestCounts.detail += 1;
@@ -227,7 +288,7 @@ describe('App layout shells', () => {
     await new Promise((resolve) => setTimeout(resolve, 80));
 
     expect(requestCounts.detail).toBe(1);
-    expect(requestCounts.list).toBe(1);
+    expect(requestCounts.list).toBe(0);
   });
 
   it('marks the current top navigation item as active', async () => {

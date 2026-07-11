@@ -24,7 +24,11 @@ export function BlogDataProvider({ children }: { children: ReactNode }) {
   }, [adminToken, adminUnlocked, notify]);
 
   useEffect(() => {
-    void loadPosts(adminUnlocked, adminToken);
+    if (adminUnlocked && adminToken) {
+      void loadPosts(true, adminToken);
+      return;
+    }
+    setPosts([]);
   }, [adminToken, adminUnlocked, loadPosts]);
 
   return <BlogDataContext.Provider value={{ posts, loadPosts }}>{children}</BlogDataContext.Provider>;

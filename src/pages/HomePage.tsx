@@ -2,13 +2,13 @@ import React, { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRe
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
-import { useBlog } from '../hooks/useBlog';
 import { usePageMetadata } from '../hooks/usePageMetadata';
 import { extractArticleHeadings } from '../lib/headings';
 import {
   BLOG_CATEGORIES,
   BlogCategoryId,
   BlogPost,
+  PostDateFilter,
   calculateReadingMinutes,
   getCategory,
   getCategoryIcon
@@ -31,13 +31,15 @@ import {
   permissionLabel
 } from '../components/shared';
 import { TiltCard } from '../components/effects/TiltCard';
+import { ArticleList } from '../features/articles/components/ArticleList';
+import { ArticleSearch } from '../features/articles/components/ArticleSearch';
+import { LoadMoreButton } from '../features/articles/components/LoadMoreButton';
+import { useArticlePagination } from '../features/articles/hooks/useArticlePagination';
 import haruhiCutoutImage from '../assets/haruhi-cutout.png';
 
 const LazyMarkdownContent = lazy(() =>
   import('../components/MarkdownContent').then((module) => ({ default: module.MarkdownContent }))
 );
-
-type PostDateFilter = 'all' | '7d' | '30d' | 'year';
 
 interface CommentFormState {
   content: string;
@@ -50,22 +52,31 @@ export function HomePage() {
   const { slug } = useParams<{ slug?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const { userSession, notify, loginUser, logoutUser, adminUnlocked } = useApp();
-  const { posts } = useBlogData();
-  const {
-    activeCategory,
-    setActiveCategory,
-    activeTags,
-    setActiveTags,
-    clearTags,
-    query,
-    setQuery,
-    dateFilter,
-    setDateFilter,
-    indexedPosts,
-    detailPost,
-    openPostDetail,
-    closePostDetail
-  } = useBlog(posts, slug ?? null);
+  const { posts: adminPosts } = useBlogData();
+  const filterKey = searchParams.toString();
+  const filters = useMemo(() => {
+    const categoryParam = searchParams.get('category') as BlogCategoryId | null;
+    const category: BlogCategoryId | 'all' = BLOG_CATEGORIES.some((item) => item.id === categoryParam)
+      ? categoryParam!
+      : 'all';
+    const tags = (searchParams.get('tags') ?? '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 10);
+    const dateParam = searchParams.get('date') as PostDateFilter | null;
+    const date: PostDateFilter = dateParam && ['all', '7d', '30d', 'year'].includes(dateParam) ? dateParam : 'all';
+    return { category, tags, date, q: (searchParams.get('q') ?? '').slice(0, 120) };
+  }, [filterKey, searchParams]);
+  const activeCategory = filters.category;
+  const activeTags = filters.tags;
+  const query = filters.q;
+  const dateFilter = filters.date;
+  const articlePage = useArticlePagination({
+    enabled: !slug,
+    query: { category: activeCategory, date: dateFilter, q: query, tags: activeTags, limit: 8 }
+  });
+  const indexedPosts = articlePage.posts;
 
   const [postComments, setPostComments] = useState<any[]>([]);
   const [commentLoading, setCommentLoading] = useState(false);
@@ -81,13 +92,14 @@ export function HomePage() {
   const [readingProgress, setReadingProgress] = useState(0);
   const articleBodyRef = useRef<HTMLElement | null>(null);
 
-  const publishedCount = posts.filter((post) => post.status === 'published').length;
-  const draftCount = posts.filter((post) => post.status === 'draft').length;
-  const detailPostView =
-    fullDetailPost && (!slug || fullDetailPost.slug === slug || fullDetailPost.id === slug) ? fullDetailPost : detailPost;
+  const publishedCount = articlePage.total;
+  const draftCount = adminPosts.filter((post) => post.status === 'draft').length;
+  const detailPostView = fullDetailPost && (!slug || fullDetailPost.slug === slug || fullDetailPost.id === slug)
+    ? fullDetailPost
+    : null;
   const detailPostSlug = detailPostView?.slug;
   const canEditDetailPost = Boolean(adminUnlocked || userSession?.user.permission === 'admin');
-  const srcPostCount = posts.filter((post) => post.status === 'published' && post.category === 'src').length;
+  const srcPostCount = indexedPosts.filter((post) => post.category === 'src').length;
   const articleHeadings = useMemo(
     () => extractArticleHeadings(detailPostView?.content || ''),
     [detailPostView?.content]
@@ -133,28 +145,25 @@ export function HomePage() {
 
   const handleQueryChange = useCallback(
     (value: string) => {
-      setQuery(value);
       writeFiltersToUrl({ query: value }, true);
     },
-    [setQuery, writeFiltersToUrl]
+    [writeFiltersToUrl]
   );
 
   const handleCategoryChange = useCallback(
     (value: string) => {
       const category = value as BlogCategoryId | 'all';
-      setActiveCategory(category);
       writeFiltersToUrl({ category });
     },
-    [setActiveCategory, writeFiltersToUrl]
+    [writeFiltersToUrl]
   );
 
   const handleDateChange = useCallback(
     (value: string) => {
       const date = value as PostDateFilter;
-      setDateFilter(date);
       writeFiltersToUrl({ date });
     },
-    [setDateFilter, writeFiltersToUrl]
+    [writeFiltersToUrl]
   );
 
   const handleTagFilter = useCallback(
@@ -162,33 +171,14 @@ export function HomePage() {
       const nextTags = activeTags.some((selectedTag) => selectedTag.toLowerCase() === tag.toLowerCase())
         ? activeTags.filter((selectedTag) => selectedTag.toLowerCase() !== tag.toLowerCase())
         : [...activeTags, tag];
-      setActiveTags(nextTags);
       navigate(`/${buildFilterSearch({ tags: nextTags })}`);
     },
-    [activeTags, buildFilterSearch, navigate, setActiveTags]
+    [activeTags, buildFilterSearch, navigate]
   );
 
   const handleClearTags = useCallback(() => {
-    clearTags();
     writeFiltersToUrl({ tags: [] });
-  }, [clearTags, writeFiltersToUrl]);
-
-  useEffect(() => {
-    const categoryParam = searchParams.get('category') as BlogCategoryId | 'all' | null;
-    const nextCategory = BLOG_CATEGORIES.some((category) => category.id === categoryParam) ? categoryParam! : 'all';
-    const nextQuery = searchParams.get('q') ?? '';
-    const nextTags = (searchParams.get('tags') ?? '')
-      .split(',')
-      .map((tag) => tag.trim())
-      .filter(Boolean);
-    const dateParam = searchParams.get('date') as PostDateFilter | null;
-    const nextDate: PostDateFilter = dateParam && ['all', '7d', '30d', 'year'].includes(dateParam) ? dateParam : 'all';
-
-    setActiveCategory(nextCategory);
-    setQuery(nextQuery);
-    setActiveTags(nextTags);
-    setDateFilter(nextDate);
-  }, [searchParams, setActiveCategory, setActiveTags, setDateFilter, setQuery]);
+  }, [writeFiltersToUrl]);
 
   useEffect(() => {
     if (!detailPostView?.slug) return;
@@ -450,7 +440,7 @@ export function HomePage() {
       <section className="article-page">
         <div className="article-page-shell">
           <aside className="article-page-rail">
-            <Link className="back-link" onClick={closePostDetail} to={`/${buildFilterSearch({})}`}>
+            <Link className="back-link" to={`/${buildFilterSearch({})}`}>
               返回文章列表
             </Link>
             {canEditDetailPost ? (
@@ -786,15 +776,10 @@ export function HomePage() {
                 <p className="eyebrow">Index / Filter</p>
                 <h2>文章索引</h2>
               </div>
-              <span className="filter-total">{indexedPosts.length} 篇</span>
+              <span className="filter-total">{articlePage.total} 篇</span>
             </div>
             <div className="home-filter-search">
-              <input
-                aria-label="搜索文章"
-                onChange={(event) => handleQueryChange(event.target.value)}
-                placeholder="搜索标题、摘要、标签"
-                value={query}
-              />
+              <ArticleSearch onChange={handleQueryChange} value={query} />
             </div>
             <div className="index-filters" aria-label="文章索引筛选">
               <FilterMenu
@@ -858,53 +843,31 @@ export function HomePage() {
               </div>
               <p>从生活记录到漏洞复盘，按时间与标签继续展开。</p>
             </div>
-            <div className="post-list">
-              {indexedPosts.map((post: any) => {
-                const category = getCategory(post.category);
-                const coverImage = getSafeImageUrl(post.coverImage);
-                return (
-                  <Link
-                    className="post-item tilt-card"
-                    key={post.id}
-                    onClick={() => openPostDetail(post)}
-                    to={`/posts/${post.slug}`}
-                  >
-                    <span className="post-item-cover">
-                      <ImageWithFallback
-                        alt={`${post.title} 封面`}
-                        className="cover-thumb"
-                        height={88}
-                        src={coverImage}
-                        width={88}
-                        fallback={
-                          <span className={`cover-dot cover-${post.cover}`}>
-                          <Icon name={getCategoryIcon(post.category)} />
-                          </span>
-                        }
-                      />
-                    </span>
-                    <span className="post-item-copy">
-                      <span className="post-item-topline">
-                        <em>{category.name}</em>
-                        <span>{formatDateTime(post.updatedAt)}</span>
-                      </span>
-                      <strong>{post.title}</strong>
-                      <small>{post.summary}</small>
-                      <span className="post-item-footer">
-                        <span>
-                          <Icon name="clock" />
-                          {calculateReadingMinutes(post.content || post.summary)} 分钟
-                        </span>
-                        <span>
-                          <Icon name="tag" />
-                          {post.tags.slice(0, 2).join(' · ') || '未设标签'}
-                        </span>
-                      </span>
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
+            {articlePage.loading ? <p className="article-list-status" role="status">正在加载文章...</p> : null}
+            {!articlePage.loading && articlePage.error ? (
+              <div className="article-list-empty" role="status">
+                <strong>文章加载失败</strong>
+                <span>{articlePage.error}</span>
+                <button onClick={articlePage.retry} type="button">重试</button>
+              </div>
+            ) : null}
+            {!articlePage.loading && !articlePage.error && indexedPosts.length === 0 ? (
+              <div className="article-list-empty">
+                <strong>没有找到匹配文章</strong>
+                <span>可以清除搜索、标签或分类后重新查看。</span>
+                <button onClick={() => setSearchParams(new URLSearchParams())} type="button">清除筛选</button>
+              </div>
+            ) : null}
+            <ArticleList detailSearch={buildFilterSearch({})} posts={indexedPosts} query={query} />
+            {indexedPosts.length > 0 ? (
+              <LoadMoreButton
+                error={articlePage.loadMoreError}
+                hasMore={articlePage.hasMore}
+                loading={articlePage.loadingMore}
+                onLoadMore={articlePage.loadMore}
+                onRetry={articlePage.retry}
+              />
+            ) : null}
           </section>
         </div>
       </section>

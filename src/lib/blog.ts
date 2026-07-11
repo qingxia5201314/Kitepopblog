@@ -2,6 +2,8 @@ export type BlogCategoryId = 'life' | 'src' | 'study' | 'notes';
 
 export type PostStatus = 'draft' | 'published';
 
+export type PostDateFilter = 'all' | '7d' | '30d' | 'year';
+
 export type CoverTone = BlogCategoryId;
 
 export interface BlogCategory {
@@ -31,8 +33,29 @@ export interface BlogPost {
   status: PostStatus;
   createdAt: string;
   updatedAt: string;
+  publishedAt?: string;
   cover: CoverTone;
   coverImage?: string;
+}
+
+export interface BlogPostSummary extends Omit<BlogPost, 'content'> {
+  readingMinutes: number;
+}
+
+export interface PublicPostQuery {
+  category: BlogCategoryId | 'all';
+  date: PostDateFilter;
+  q: string;
+  tags: string[];
+  cursor?: string | null;
+  limit?: number;
+}
+
+export interface PublicPostPage {
+  posts: BlogPostSummary[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  total: number;
 }
 
 export type BlogPostDraft = Omit<BlogPost, 'id' | 'slug' | 'createdAt' | 'updatedAt'>;
