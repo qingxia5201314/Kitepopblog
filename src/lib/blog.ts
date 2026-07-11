@@ -1,6 +1,6 @@
 export type BlogCategoryId = 'life' | 'src' | 'study' | 'notes';
 
-export type PostStatus = 'draft' | 'published';
+export type PostStatus = 'draft' | 'published' | 'withdrawn' | 'scheduled';
 
 export type PostDateFilter = 'all' | '7d' | '30d' | 'year';
 
@@ -34,6 +34,8 @@ export interface BlogPost {
   createdAt: string;
   updatedAt: string;
   publishedAt?: string;
+  scheduledAt?: string;
+  scheduleError?: string;
   cover: CoverTone;
   coverImage?: string;
 }
@@ -64,6 +66,29 @@ export interface ArticleAutosaveDraft {
   editingId: string | null;
   draft: BlogPostDraft;
   updatedAt?: string;
+}
+
+export interface PostRevision {
+  id: string;
+  postId: string;
+  title: string;
+  summary: string;
+  content: string;
+  category: BlogCategoryId;
+  tags: string[];
+  cover: CoverTone;
+  coverImage: string;
+  status: PostStatus;
+  editorUserId: string;
+  source: string;
+  isProtected: boolean;
+  createdAt: string;
+}
+
+export interface PostRevisionComparison {
+  current: BlogPost;
+  revision: PostRevision;
+  changes: Array<{ field: string; current: unknown; revision: unknown }>;
 }
 
 export interface PostComment {

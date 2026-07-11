@@ -44,20 +44,21 @@ export function ArticleManager(props: ArticleManagerProps) {
             新建文章
           </button>
           <div className="segmented-control">
-            {(['all', 'published', 'draft'] as const).map((status) => (
+            {(['all', 'published', 'draft', 'withdrawn', 'scheduled'] as const).map((status) => (
               <button
                 className={adminStatusFilter === status ? 'active' : ''}
                 key={status}
                 onClick={() => onSetStatusFilter(status)}
                 type="button"
               >
-                {status === 'all' ? '全部' : status === 'published' ? '已发布' : '草稿'}
+                {{ all: '全部', published: '已发布', draft: '草稿', withdrawn: '已撤回', scheduled: '定时发布' }[status]}
               </button>
             ))}
           </div>
           {adminPosts.map((post) => {
             const category = getCategory(post.category);
             const isPublished = post.status === 'published';
+            const statusLabel = { published: '已发布', draft: '草稿', withdrawn: '已撤回', scheduled: '定时发布' }[post.status];
             const isExpanded = expandedAdminPostId === post.id;
             return (
               <div className={isExpanded ? 'admin-post is-expanded' : 'admin-post'} key={post.id}>
@@ -69,13 +70,14 @@ export function ArticleManager(props: ArticleManagerProps) {
                 >
                   <span className="admin-post-title-row">
                     <strong>{post.title}</strong>
-                    <em className={`status-badge ${isPublished ? 'published' : 'draft'}`}>{isPublished ? '已发布' : '草稿'}</em>
+                    <em className={`status-badge ${post.status}`}>{statusLabel}</em>
                   </span>
                   <small>
                     <Icon name={getCategoryIcon(post.category)} />
                     {category.name}
                     <span className="admin-post-meta-sep">·</span>
                     {new Date(post.updatedAt).toLocaleString('zh-CN')}
+                    {post.scheduledAt ? ` · 计划 ${new Date(post.scheduledAt).toLocaleString('zh-CN')}` : ''}
                   </small>
                 </button>
                 {isExpanded ? (
@@ -83,8 +85,8 @@ export function ArticleManager(props: ArticleManagerProps) {
                     <button onClick={() => onEdit(post)} type="button">
                       编辑
                     </button>
-                    <button onClick={() => onUpdateStatus(post.id, isPublished ? 'draft' : 'published')} type="button">
-                      {isPublished ? '设为草稿' : '发布'}
+                    <button onClick={() => onUpdateStatus(post.id, isPublished ? 'withdrawn' : 'published')} type="button">
+                      {isPublished ? '撤回' : '发布'}
                     </button>
                     <button className="danger" onClick={() => onRemove(post)} type="button">
                       删除

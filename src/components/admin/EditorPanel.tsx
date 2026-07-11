@@ -34,6 +34,7 @@ interface EditorPanelProps {
   onInsertSnippet: (before: string, after?: string, placeholder?: string) => void;
   onPasteImage: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   previewAction?: ReactNode;
+  workflowContent?: ReactNode;
 }
 
 export function EditorPanel({
@@ -54,7 +55,8 @@ export function EditorPanel({
   onInsertImage,
   onInsertSnippet,
   onPasteImage,
-  previewAction
+  previewAction,
+  workflowContent
 }: EditorPanelProps) {
   const formCoverImage = form.coverImage ? normalizeImageUrl(form.coverImage) : undefined;
 
@@ -229,6 +231,7 @@ export function EditorPanel({
           <div className="article-body">{renderMarkdown(form.content || '正文预览会显示在这里。')}</div>
         </div>
       )}
+      {workflowContent ? <div className="editor-workflows">{workflowContent}</div> : null}
     </form>
   );
 }

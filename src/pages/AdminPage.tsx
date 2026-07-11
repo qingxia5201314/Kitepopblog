@@ -5,6 +5,10 @@ import { EditorPanel } from '../components/admin/EditorPanel';
 import { UserManager } from '../components/admin/UserManager';
 import { DraftRecoveryDialog } from '../features/editor/components/DraftRecoveryDialog';
 import { ArticlePreviewAction } from '../features/editor/components/ArticlePreviewAction';
+import { RevisionPanel } from '../features/editor/components/RevisionPanel';
+import { PublishScheduleControl } from '../features/editor/components/PublishScheduleControl';
+import { useRevisionHistory } from '../features/editor/hooks/useRevisionHistory';
+import { cancelSchedule, retrySchedule, schedulePost } from '../features/editor/api/editorWorkflowApi';
 import { useDraftAutosave } from '../features/editor/hooks/useDraftAutosave';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
@@ -75,6 +79,8 @@ export function AdminPage() {
   const handledEditQueryRef = useRef('');
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
+  const editingPost = editingId ? posts.find((post) => post.id === editingId) ?? null : null;
+  const revisionHistory = useRevisionHistory(editingId, localAdminToken);
   const editPostQuery = searchParams.get('edit');
 
   useEffect(() => {
@@ -252,7 +258,7 @@ export function AdminPage() {
       const updated = await updatePost(id, { status }, localAdminToken);
       await loadPosts(true, localAdminToken);
       if (updated && editingId === id) startEdit(updated, false);
-      notify('success', status === 'published' ? '文章已发布' : '文章已转为草稿');
+      notify('success', status === 'published' ? '文章已发布' : status === 'withdrawn' ? '文章已撤回' : '文章状态已更新');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '状态更新失败');
     }
@@ -450,6 +456,43 @@ export function AdminPage() {
         }
         tagInput={tagInput}
         uploadingImage={uploadingImage}
+        workflowContent={editingId ? (
+          <>
+            <PublishScheduleControl
+              onCancel={async () => {
+                const updated = await cancelSchedule(editingId, localAdminToken);
+                await loadPosts(true, localAdminToken);
+                startEdit(updated, false);
+              }}
+              onRetry={async () => {
+                const updated = await retrySchedule(editingId, localAdminToken);
+                await loadPosts(true, localAdminToken);
+                startEdit(updated, false);
+              }}
+              onSchedule={async (scheduledAt) => {
+                const updated = await schedulePost(editingId, scheduledAt, localAdminToken);
+                await loadPosts(true, localAdminToken);
+                startEdit(updated, false);
+              }}
+              post={editingPost}
+            />
+            <RevisionPanel
+              comparison={revisionHistory.comparison}
+              error={revisionHistory.error}
+              loading={revisionHistory.loading}
+              onCloseComparison={revisionHistory.closeComparison}
+              onCompare={(revisionId) => void revisionHistory.compare(revisionId)}
+              onRemove={(revisionId) => void revisionHistory.remove(revisionId)}
+              onRestore={(revisionId) => void revisionHistory.restore(revisionId).then(async (restored) => {
+                await loadPosts(true, localAdminToken);
+                startEdit(restored, false);
+                await revisionHistory.reload();
+                notify('success', '历史版本已恢复为草稿');
+              }).catch((error) => notify('error', error instanceof Error ? error.message : '版本恢复失败'))}
+              revisions={revisionHistory.revisions}
+            />
+          </>
+        ) : null}
       />
     </section>
   );
