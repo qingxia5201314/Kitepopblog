@@ -53,6 +53,18 @@ app.delete('/article-draft', requireAdmin, (c) => {
   return c.json({ ok: true });
 });
 
+app.get('/article-preview/:id', requireAdmin, (c) => {
+  const post = c.get('postService').getPost(c.req.param('id'));
+  if (!post) return c.json({ ok: false, message: 'Post not found' }, 404);
+
+  const snapshot = c.get('draftService').get();
+  const preview = snapshot?.editingId === post.id
+    ? { ...post, ...snapshot.draft, id: post.id, slug: post.slug, updatedAt: snapshot.updatedAt, status: 'draft' }
+    : post;
+  c.header('Cache-Control', 'private, no-store');
+  return c.json({ post: preview });
+});
+
 app.put('/posts/:id/schedule', requireAdmin, async (c) => {
   try {
     const body = await c.req.json();

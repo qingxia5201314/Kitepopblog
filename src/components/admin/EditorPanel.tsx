@@ -1,4 +1,4 @@
-import { ClipboardEvent, FormEvent, RefObject } from 'react';
+import { ClipboardEvent, FormEvent, ReactNode, RefObject } from 'react';
 import { BLOG_CATEGORIES, BlogCategoryId, PostStatus } from '../../lib/blog';
 import { normalizeImageUrl } from '../../lib/imageUrl';
 import { safeImageAttributes } from '../shared';
@@ -33,6 +33,7 @@ interface EditorPanelProps {
   onInsertImage: (file?: File) => void;
   onInsertSnippet: (before: string, after?: string, placeholder?: string) => void;
   onPasteImage: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
+  previewAction?: ReactNode;
 }
 
 export function EditorPanel({
@@ -52,7 +53,8 @@ export function EditorPanel({
   onUploadCoverImage,
   onInsertImage,
   onInsertSnippet,
-  onPasteImage
+  onPasteImage,
+  previewAction
 }: EditorPanelProps) {
   const formCoverImage = form.coverImage ? normalizeImageUrl(form.coverImage) : undefined;
 
@@ -60,7 +62,10 @@ export function EditorPanel({
     <form className="editor-panel" onSubmit={onSubmit}>
       <div className="panel-heading">
         <h2>{editingId ? '编辑文章' : '新建文章'}</h2>
-        <button type="submit">{editingId ? '保存更新' : '保存文章'}</button>
+        <div className="editor-heading-actions">
+          {previewAction}
+          <button type="submit">{editingId ? '保存更新' : '保存文章'}</button>
+        </div>
       </div>
       {autosaveNote ? <p className="autosave-note">{autosaveNote}</p> : null}
 

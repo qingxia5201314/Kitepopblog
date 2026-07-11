@@ -131,6 +131,15 @@ export async function clearArticleAutosaveDraft(token: string): Promise<void> {
   );
 }
 
+export async function getArticlePreview(id: string, token: string): Promise<BlogPost> {
+  const payload = await parseResponse<{ post: BlogPost }>(
+    await fetch(`/api/admin/article-preview/${encodeURIComponent(id)}`, {
+      headers: authHeaders(token)
+    })
+  );
+  return payload.post;
+}
+
 export async function listPostComments(postIdOrSlug: string): Promise<PostComment[]> {
   const payload = await parseResponse<{ comments: PostComment[] }>(
     await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`)

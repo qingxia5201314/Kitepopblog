@@ -53,3 +53,9 @@
   .draft-recovery-dialog { padding: 18px; }
   .draft-recovery-actions > button { flex: 1 1 120px; }
 }
+
+.editor-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

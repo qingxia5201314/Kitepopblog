@@ -4,6 +4,7 @@ import { ArticleManager } from '../components/admin/ArticleManager';
 import { EditorPanel } from '../components/admin/EditorPanel';
 import { UserManager } from '../components/admin/UserManager';
 import { DraftRecoveryDialog } from '../features/editor/components/DraftRecoveryDialog';
+import { ArticlePreviewAction } from '../features/editor/components/ArticlePreviewAction';
 import { useDraftAutosave } from '../features/editor/hooks/useDraftAutosave';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
@@ -104,7 +105,7 @@ export function AdminPage() {
   }, [adminUnlocked, localAdminToken]);
 
   const autosaveDraft = useMemo(() => ({ ...form, tags: parseTagInput(tagInput) }), [form, tagInput]);
-  const { note: autosaveNote } = useDraftAutosave({
+  const { note: autosaveNote, saveNow: saveDraftNow } = useDraftAutosave({
     enabled: adminUnlocked,
     token: localAdminToken,
     editingId,
@@ -440,6 +441,13 @@ export function AdminPage() {
         onUpdateForm={updateForm}
         onUpdateTagInput={updateTagInput}
         onUploadCoverImage={(file) => void uploadCoverImageFile(file)}
+        previewAction={
+          <ArticlePreviewAction
+            disabled={!form.title.trim() && !form.summary.trim() && !form.content.trim()}
+            editingId={editingId}
+            onFlush={saveDraftNow}
+          />
+        }
         tagInput={tagInput}
         uploadingImage={uploadingImage}
       />
