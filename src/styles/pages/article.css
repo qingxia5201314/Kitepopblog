@@ -1,6 +1,7 @@
 .article-page {
   margin-inline: auto;
   max-width: 1220px;
+  overflow: visible;
   padding: clamp(16px, 3vw, 32px);
 }
 
@@ -8,10 +9,16 @@
   align-items: start;
   gap: clamp(18px, 3vw, 30px);
   grid-template-columns: minmax(190px, 250px) minmax(0, 1fr);
+  overflow: visible;
 }
 
 .article-page-rail {
+  align-self: start;
+  max-height: calc(100vh - 112px);
+  overflow: auto;
+  overscroll-behavior: contain;
   position: sticky;
+  scrollbar-width: thin;
   top: 92px;
 }
 
@@ -199,10 +206,6 @@
     grid-template-columns: 1fr;
   }
 
-  .article-page-rail {
-    position: static;
-  }
-
   .article-focus-card,
   .article-tags-card {
     display: none;
@@ -210,6 +213,9 @@
 
   .article-page-rail {
     gap: 10px;
+    max-height: calc(100vh - 20px);
+    position: sticky;
+    top: 10px;
   }
 
   .article-header-card {
