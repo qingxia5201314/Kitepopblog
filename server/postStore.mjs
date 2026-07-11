@@ -1,4 +1,4 @@
-import { createId, nowIso, sortPostsByDate, uniqueSlug } from './blogModel.mjs';
+import { calculateReadingMinutes, createId, nowIso, sortPostsByDate, uniqueSlug } from './blogModel.mjs';
 import { seedPosts } from './seedPosts.mjs';
 import { createSqliteDatabase } from './sqliteDatabase.mjs';
 
@@ -71,6 +71,11 @@ function selectAll(db) {
 }
 
 function initSchema(db) {
+  const requiredTables = ['posts', 'post_comments', 'article_editor_drafts'];
+  let changed = requiredTables.some(
+    (table) => !db.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [table]).length
+  );
+
   db.run(`
     CREATE TABLE IF NOT EXISTS posts (
       id TEXT PRIMARY KEY,
@@ -108,15 +113,33 @@ function initSchema(db) {
   `);
 
   const commentColumns = db.exec('PRAGMA table_info(post_comments)')?.[0]?.values?.map((row) => row[1]) ?? [];
-  if (!commentColumns.includes('user_id')) db.run("ALTER TABLE post_comments ADD COLUMN user_id TEXT NOT NULL DEFAULT ''");
-  if (!commentColumns.includes('updated_at')) db.run("ALTER TABLE post_comments ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
-  db.run("UPDATE post_comments SET updated_at = created_at WHERE updated_at = ''");
+  if (!commentColumns.includes('user_id')) {
+    db.run("ALTER TABLE post_comments ADD COLUMN user_id TEXT NOT NULL DEFAULT ''");
+    changed = true;
+  }
+  if (!commentColumns.includes('updated_at')) {
+    db.run("ALTER TABLE post_comments ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''");
+    changed = true;
+  }
+  const commentsToBackfill = db.exec("SELECT COUNT(*) FROM post_comments WHERE updated_at = ''")[0]?.values[0][0] ?? 0;
+  if (commentsToBackfill > 0) {
+    db.run("UPDATE post_comments SET updated_at = created_at WHERE updated_at = ''");
+    changed = true;
+  }
 
   const postColumns = db.exec('PRAGMA table_info(posts)')?.[0]?.values?.map((row) => row[1]) ?? [];
   if (!postColumns.includes('published_at')) {
     db.run("ALTER TABLE posts ADD COLUMN published_at TEXT NOT NULL DEFAULT ''");
-    db.run("UPDATE posts SET published_at = created_at WHERE published_at = ''");
+    changed = true;
   }
+  const postsToBackfill =
+    db.exec("SELECT COUNT(*) FROM posts WHERE status = 'published' AND published_at = ''")[0]?.values[0][0] ?? 0;
+  if (postsToBackfill > 0) {
+    db.run("UPDATE posts SET published_at = created_at WHERE status = 'published' AND published_at = ''");
+    changed = true;
+  }
+
+  return changed;
 }
 
 function selectPublishedAt(db, postId) {
@@ -169,12 +192,6 @@ function escapeLike(value) {
   return value.replace(/[\\%_]/g, '\\$&');
 }
 
-function calculateReadingMinutes(content) {
-  const latinWords = content.match(/[A-Za-z0-9]+/g)?.length ?? 0;
-  const cjkChars = content.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
-  return Math.max(1, Math.ceil((latinWords + cjkChars / 2) / 220));
-}
-
 function queryPublicPosts(db, options) {
   const effectivePublishedAt = "COALESCE(NULLIF(p.published_at, ''), p.updated_at)";
   const where = ["p.status = 'published'"];
@@ -220,7 +237,6 @@ function queryPublicPosts(db, options) {
   const pageWhere = [];
   const pageParams = [];
 
-  if (options.q) pageWhere.push('score > 0');
   if (options.cursor) {
     if (options.q) {
       pageWhere.push(`(
@@ -246,17 +262,18 @@ function queryPublicPosts(db, options) {
     ? 'score DESC, effective_published_at DESC, id DESC'
     : 'effective_published_at DESC, id DESC';
   const pageSql = `
-    WITH ranked AS (${rankedSql})
-    SELECT * FROM ranked
+    WITH ranked AS (${rankedSql}),
+    matched AS (
+      SELECT *, COUNT(*) OVER () AS full_total
+      FROM ranked
+      ${options.q ? 'WHERE score > 0' : ''}
+    )
+    SELECT * FROM matched
     ${pageWhere.length ? `WHERE ${pageWhere.join(' AND ')}` : ''}
     ORDER BY ${orderBy}
     LIMIT ?`;
-  const countSql = `
-    WITH ranked AS (${rankedSql})
-    SELECT COUNT(*) AS total FROM ranked
-    ${options.q ? 'WHERE score > 0' : ''}`;
-
-  const posts = rowsFromResult(db.exec(pageSql, [...rankedParams, ...pageParams, options.limit])).map((row) => ({
+  const pageRows = rowsFromResult(db.exec(pageSql, [...rankedParams, ...pageParams, options.limit]));
+  const posts = pageRows.map((row) => ({
     id: row.id,
     slug: row.slug,
     title: row.title,
@@ -272,7 +289,14 @@ function queryPublicPosts(db, options) {
     readingMinutes: calculateReadingMinutes(row.reading_content),
     _score: row.score
   }));
-  const total = rowsFromResult(db.exec(countSql, rankedParams))[0]?.total ?? 0;
+  let total = pageRows[0]?.full_total;
+  if (total === undefined) {
+    const countSql = `
+      WITH ranked AS (${rankedSql})
+      SELECT COUNT(*) AS total FROM ranked
+      ${options.q ? 'WHERE score > 0' : ''}`;
+    total = rowsFromResult(db.exec(countSql, rankedParams))[0]?.total ?? 0;
+  }
   return { posts, total };
 }
 
@@ -280,10 +304,14 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
   const sqlite = database ?? (await createSqliteDatabase({ dbPath }));
   const { db } = sqlite;
 
-  initSchema(db);
+  const schemaChanged = initSchema(db);
 
+  let seeded = false;
   if (selectAll(db).length === 0) {
     seedPosts.forEach((post) => insertPost(db, post));
+    seeded = true;
+  }
+  if (schemaChanged || seeded) {
     sqlite.persist();
   }
 

@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import initSqlJs from 'sql.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createPostStore } from './postStore.mjs';
 
@@ -15,6 +16,58 @@ afterEach(async () => {
 });
 
 describe('post store', () => {
+  it('persists an old non-empty schema migration and only backfills published posts', async () => {
+    const dbPath = join(tempDir, 'blog.sqlite');
+    const SQL = await initSqlJs();
+    const legacyDb = new SQL.Database();
+    legacyDb.run(`
+      CREATE TABLE posts (
+        id TEXT PRIMARY KEY,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        category TEXT NOT NULL,
+        tags_json TEXT NOT NULL,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        cover TEXT NOT NULL,
+        cover_image TEXT NOT NULL DEFAULT ''
+      )
+    `);
+    const insert = `INSERT INTO posts (
+      id, slug, title, summary, category, tags_json, content, status,
+      created_at, updated_at, cover, cover_image
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    legacyDb.run(insert, [
+      'published', 'published', 'Published', 'summary', 'notes', '[]', 'content', 'published',
+      '2026-01-01T00:00:00.000Z', '2026-01-02T00:00:00.000Z', 'notes', ''
+    ]);
+    legacyDb.run(insert, [
+      'draft', 'draft', 'Draft', 'summary', 'notes', '[]', 'content', 'draft',
+      '2026-02-01T00:00:00.000Z', '2026-02-02T00:00:00.000Z', 'notes', ''
+    ]);
+    await writeFile(dbPath, Buffer.from(legacyDb.export()));
+    legacyDb.close();
+
+    await createPostStore({ dbPath });
+
+    const persistedDb = new SQL.Database(await readFile(dbPath));
+    const columns = persistedDb.exec('PRAGMA table_info(posts)')[0].values.map((row) => row[1]);
+    const persistedValues = persistedDb.exec('SELECT id, published_at FROM posts ORDER BY id')[0].values;
+    persistedDb.close();
+    const restartedStore = await createPostStore({ dbPath });
+
+    expect(columns).toContain('published_at');
+    expect(persistedValues).toEqual([
+      ['draft', ''],
+      ['published', '2026-01-01T00:00:00.000Z']
+    ]);
+    expect(restartedStore.get('draft')?.publishedAt).toBe('');
+    expect(restartedStore.get('published')?.publishedAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+
   it('seeds published posts into a new sqlite database', async () => {
     const store = await createPostStore({ dbPath: join(tempDir, 'blog.sqlite') });
 

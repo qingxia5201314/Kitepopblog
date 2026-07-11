@@ -58,6 +58,24 @@ describe('parsePublicPostQuery', () => {
   ])('rejects invalid public query %s', (query) => {
     expect(() => parsePublicPostQuery(new URLSearchParams(query))).toThrowError(expect.objectContaining({ status: 400 }));
   });
+
+  it.each([
+    { query: `tags=${'x'.repeat(65)}`, label: 'a tag longer than 64 characters' },
+    {
+      query: `tags=${Array.from({ length: 6 }, (_, index) => `${index}${'x'.repeat(53)}`).join(',')}`,
+      label: 'more than 320 tag characters'
+    },
+    {
+      query: `cursor=${encodeURIComponent(`${Buffer.from(JSON.stringify({ publishedAt: '2026-01-01T00:00:00.000Z', id: 'post' })).toString('base64url')}${' '.repeat(513)}`)}`,
+      label: 'a cursor longer than 512 encoded characters'
+    },
+    {
+      query: `cursor=${Buffer.from(JSON.stringify({ publishedAt: '2026-01-01T00:00:00.000Z', id: 'x'.repeat(129) })).toString('base64url')}`,
+      label: 'a cursor id longer than 128 characters'
+    }
+  ])('rejects $label', ({ query }) => {
+    expect(() => parsePublicPostQuery(new URLSearchParams(query))).toThrowError(expect.objectContaining({ status: 400 }));
+  });
 });
 
 describe('public post query', () => {
@@ -141,5 +159,41 @@ describe('public post query', () => {
 
     expect(cursorPayload).toEqual(expect.objectContaining({ score: 5, publishedAt: expect.any(String), id: expect.any(String) }));
     expect(secondPage.posts[0].title).toBe('match beta');
+  });
+
+  it('scores a non-empty search page once while returning the full total', async () => {
+    await addPost({ title: 'match alpha', publishedAt: '2026-07-10T00:00:00.000Z' });
+    await addPost({ title: 'match beta', publishedAt: '2026-07-09T00:00:00.000Z' });
+    const originalExec = db.exec.bind(db);
+    let scoringScans = 0;
+    db.exec = (sql, params) => {
+      if (sql.includes(' AS score')) scoringScans += 1;
+      return originalExec(sql, params);
+    };
+
+    const result = service.query(new URLSearchParams('q=match&limit=1'));
+
+    expect(result).toMatchObject({ total: 2, hasMore: true });
+    expect(scoringScans).toBe(1);
+  });
+
+  it('uses a fallback count only when a search cursor produces an empty page', async () => {
+    const post = await addPost({ title: 'match alpha', publishedAt: '2026-07-10T00:00:00.000Z' });
+    const cursor = Buffer.from(JSON.stringify({
+      score: 5,
+      publishedAt: '2026-07-10T00:00:00.000Z',
+      id: post.id
+    })).toString('base64url');
+    const originalExec = db.exec.bind(db);
+    let scoringScans = 0;
+    db.exec = (sql, params) => {
+      if (sql.includes(' AS score')) scoringScans += 1;
+      return originalExec(sql, params);
+    };
+
+    const result = service.query(new URLSearchParams(`q=match&limit=1&cursor=${cursor}`));
+
+    expect(result).toMatchObject({ posts: [], total: 1, hasMore: false });
+    expect(scoringScans).toBe(2);
   });
 });

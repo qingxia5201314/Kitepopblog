@@ -76,6 +76,12 @@ export function sortPostsByDate(posts) {
   return [...posts].sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
 }
 
+export function calculateReadingMinutes(content) {
+  const latinWords = content.match(/[A-Za-z0-9]+/g)?.length ?? 0;
+  const cjkChars = content.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
+  return Math.max(1, Math.ceil((latinWords + cjkChars / 2) / 220));
+}
+
 export function uniqueSlug(title, posts, currentId) {
   const base = createSlug(title);
   let slug = base;

@@ -1,3 +1,5 @@
+import { calculateReadingMinutes } from '../blogModel.mjs';
+
 const ALLOWED_CATEGORIES = new Set(['life', 'src', 'study', 'notes', 'all']);
 const ALLOWED_DATES = new Set(['all', '7d', '30d', 'year']);
 
@@ -18,7 +20,8 @@ function decodeCursor(value, search) {
       typeof cursor.publishedAt === 'string' &&
       !Number.isNaN(Date.parse(cursor.publishedAt)) &&
       typeof cursor.id === 'string' &&
-      cursor.id.length > 0;
+      cursor.id.length > 0 &&
+      cursor.id.length <= 128;
     const validScore = !search || (typeof cursor.score === 'number' && Number.isFinite(cursor.score));
     const validShape = search
       ? Object.keys(cursor).every((key) => ['score', 'publishedAt', 'id'].includes(key))
@@ -37,17 +40,11 @@ function encodeCursor(post, search) {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
-function readingMinutes(content) {
-  const latinWords = content.match(/[A-Za-z0-9]+/g)?.length ?? 0;
-  const cjkChars = content.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
-  return Math.max(1, Math.ceil((latinWords + cjkChars / 2) / 220));
-}
-
 export function toCompactPublicPost(post) {
   const { content = '', _score, ...compact } = post;
   return {
     ...compact,
-    readingMinutes: post.readingMinutes ?? readingMinutes(content)
+    readingMinutes: post.readingMinutes ?? calculateReadingMinutes(content)
   };
 }
 
@@ -68,6 +65,10 @@ export function parsePublicPostQuery(searchParams) {
     .map((tag) => tag.trim())
     .filter(Boolean);
   if (tags.length > 10) throw new PublicPostQueryError('Too many tags');
+  if (tags.some((tag) => tag.length > 64)) throw new PublicPostQueryError('Tag is too long');
+  if (tags.reduce((total, tag) => total + tag.length, 0) > 320) {
+    throw new PublicPostQueryError('Tags are too long');
+  }
 
   const category = searchParams.get('category') || 'all';
   if (!ALLOWED_CATEGORIES.has(category)) throw new PublicPostQueryError('Invalid category');
@@ -75,6 +76,7 @@ export function parsePublicPostQuery(searchParams) {
   if (!ALLOWED_DATES.has(date)) throw new PublicPostQueryError('Invalid date');
 
   const rawCursor = searchParams.get('cursor');
+  if (rawCursor && rawCursor.length > 512) throw new PublicPostQueryError('Cursor is too long');
   return {
     limit,
     q,
