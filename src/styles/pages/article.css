@@ -53,17 +53,31 @@
 
 .article-toc a {
   border-left: 2px solid transparent;
+  border-radius: 8px;
   color: #46504d;
   font-size: 13px;
   line-height: 1.35;
   padding: 5px 6px;
   text-decoration: none;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
 }
 
 .article-toc a:hover,
 .article-toc a:focus-visible {
+  background: rgba(197, 59, 57, 0.08);
   border-left-color: #c53b39;
   color: #842624;
+  outline: none;
+  transform: translateX(3px);
+}
+
+.article-toc a:active {
+  background: rgba(197, 59, 57, 0.14);
+  transform: translateX(1px) scale(0.99);
 }
 
 .article-toc .level-3 {
@@ -120,6 +134,64 @@
 .comment-item {
   border-radius: 12px;
   padding: 14px;
+  transition:
+    border-color 160ms ease,
+    box-shadow 180ms ease,
+    transform 160ms ease;
+}
+
+.comment-item:hover {
+  border-color: rgba(197, 59, 57, 0.22);
+  box-shadow: 0 10px 24px rgba(42, 19, 15, 0.08);
+  transform: translateY(-1px);
+}
+
+.back-link,
+.article-edit-link,
+.article-admin-edit {
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 180ms ease,
+    color 160ms ease,
+    transform 150ms ease;
+}
+
+.back-link:hover,
+.back-link:focus-visible,
+.article-edit-link:hover,
+.article-edit-link:focus-visible,
+.article-admin-edit:hover,
+.article-admin-edit:focus-visible {
+  box-shadow: 0 10px 22px rgba(42, 19, 15, 0.1);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.back-link:active,
+.article-edit-link:active,
+.article-admin-edit:active {
+  box-shadow: 0 4px 12px rgba(42, 19, 15, 0.08);
+  transform: translateY(0) scale(0.975);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-toc a,
+  .article-toc a:hover,
+  .article-toc a:active,
+  .comment-item,
+  .comment-item:hover,
+  .back-link,
+  .back-link:hover,
+  .back-link:active,
+  .article-edit-link,
+  .article-edit-link:hover,
+  .article-edit-link:active,
+  .article-admin-edit,
+  .article-admin-edit:hover,
+  .article-admin-edit:active {
+    transform: none !important;
+  }
 }
 
 @media (max-width: 900px) {

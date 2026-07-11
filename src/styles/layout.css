@@ -32,15 +32,62 @@
   display: inline-flex;
   min-height: 36px;
   padding: 7px 10px;
+  position: relative;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    transform 150ms ease,
+    box-shadow 170ms ease;
+}
+
+.topbar nav a::after,
+.tool-menu summary::after {
+  background: #c53b39;
+  border-radius: 999px;
+  bottom: 3px;
+  content: "";
+  height: 2px;
+  left: 10px;
+  opacity: 0;
+  position: absolute;
+  right: 10px;
+  transform: scaleX(0.2);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
 }
 
 .topbar nav a:hover,
 .topbar nav a.active,
 .topbar nav a[aria-current='page'],
-.tool-menu summary:hover {
+.tool-menu summary:hover,
+.tool-menu[open] summary {
   background: rgba(255, 255, 255, 0.72);
   border-color: rgba(197, 59, 57, 0.34);
+  box-shadow: 0 8px 18px rgba(42, 19, 15, 0.08);
   color: #842624;
+  transform: translateY(-1px);
+}
+
+.topbar nav a:hover::after,
+.topbar nav a.active::after,
+.topbar nav a[aria-current='page']::after,
+.tool-menu summary:hover::after,
+.tool-menu[open] summary::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.topbar nav a:focus-visible,
+.tool-menu summary:focus-visible {
+  box-shadow: 0 0 0 4px rgba(197, 59, 57, 0.14);
+  outline: none;
+}
+
+.topbar nav a:active,
+.tool-menu summary:active {
+  transform: translateY(0) scale(0.97);
 }
 
 .tool-menu {
@@ -67,7 +114,24 @@
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
+  transform-origin: top right;
   z-index: 80;
+}
+
+.tool-menu[open] > div {
+  animation: tool-menu-pop 150ms ease-out;
+}
+
+@keyframes tool-menu-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .tool-menu > div a {
@@ -76,6 +140,21 @@
 
 #main-content:focus {
   outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar nav a,
+  .topbar nav a:hover,
+  .topbar nav a:active,
+  .tool-menu summary,
+  .tool-menu summary:hover,
+  .tool-menu summary:active {
+    transform: none !important;
+  }
+
+  .tool-menu[open] > div {
+    animation: none;
+  }
 }
 
 @media (max-width: 760px) {

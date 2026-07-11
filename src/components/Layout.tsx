@@ -11,6 +11,7 @@ export function Layout() {
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
   const spawnParticle = (x: number, y: number, burst = false) => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const count = burst ? 10 : 1;
     for (let index = 0; index < count; index += 1) {
       const particle = document.createElement('span');
