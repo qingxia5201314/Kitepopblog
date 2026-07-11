@@ -456,7 +456,8 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
     },
 
     saveArticleDraft(payload) {
-      const now = nowIso();
+      const requestedUpdatedAt = String(payload?.updatedAt || '');
+      const now = Number.isFinite(Date.parse(requestedUpdatedAt)) ? requestedUpdatedAt : nowIso();
       const draft = {
         title: String(payload?.draft?.title ?? ''),
         summary: String(payload?.draft?.summary ?? ''),

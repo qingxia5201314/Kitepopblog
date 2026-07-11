@@ -33,23 +33,23 @@ app.get('/session', (c) => {
 });
 
 app.get('/article-draft', requireAdmin, (c) => {
-  const postService = c.get('postService');
-  return c.json({ draft: postService.getArticleDraft() ?? null });
+  const draftService = c.get('draftService');
+  const postId = c.req.query('postId');
+  return c.json({ draft: postId ? draftService.getRecovery(postId) : draftService.get() });
 });
 
 app.put('/article-draft', requireAdmin, async (c) => {
-  const postService = c.get('postService');
+  const draftService = c.get('draftService');
   try {
     const body = await c.req.json();
-    return c.json({ draft: postService.saveArticleDraft(body) });
+    return c.json({ draft: draftService.save(body) });
   } catch (error) {
     return c.json({ ok: false, message: error?.message || 'Draft save failed' }, 400);
   }
 });
 
 app.delete('/article-draft', requireAdmin, (c) => {
-  const postService = c.get('postService');
-  postService.clearArticleDraft();
+  c.get('draftService').discard();
   return c.json({ ok: true });
 });
 

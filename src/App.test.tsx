@@ -341,7 +341,7 @@ describe('App layout shells', () => {
     expect(host.querySelector('button[aria-label="块级公式"]')).toBeTruthy();
   });
 
-  it('creates a draft post and autosaves the admin article editor every ten seconds without a toast', async () => {
+  it('autosaves the admin article editor through the atomic draft endpoint every ten seconds without a toast', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
       'kitepop-admin-session',
@@ -370,7 +370,7 @@ describe('App layout shells', () => {
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       if (url === '/api/admin/article-draft' && init?.method === 'PUT') {
         const body = JSON.parse(String(init.body));
-        return Response.json({ draft: { ...body, updatedAt: '2026-07-10T00:00:00.000Z' } });
+        return Response.json({ draft: { ...body, editingId: 'auto-draft-1', updatedAt: '2026-07-10T00:00:00.000Z' } });
       }
       if (url === '/api/admin/article-draft') return Response.json({ draft: null });
       return Response.json({ ok: true });
@@ -399,22 +399,16 @@ describe('App layout shells', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await Promise.resolve();
 
-    const createCall = adminFetchMock.mock.calls.find(([input, init]) => String(input) === '/api/posts' && init?.method === 'POST');
-    expect(createCall).toBeTruthy();
-    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
-      title: '数据库自动保存测试',
-      status: 'draft'
-    });
-
     const saveCall = adminFetchMock.mock.calls.find(
       ([input, init]) => String(input) === '/api/admin/article-draft' && init?.method === 'PUT'
     );
     expect(saveCall).toBeTruthy();
     expect(saveCall?.[1]?.headers).toEqual({ 'content-type': 'application/json', Authorization: 'Bearer admin-token' });
     expect(JSON.parse(String(saveCall?.[1]?.body))).toMatchObject({
-      editingId: 'auto-draft-1',
+      editingId: null,
       draft: { title: '数据库自动保存测试' }
     });
+    expect(adminFetchMock.mock.calls.filter(([input, init]) => String(input) === '/api/posts' && init?.method === 'POST')).toHaveLength(0);
     expect(host.querySelector('.toast')).toBeFalsy();
   });
 

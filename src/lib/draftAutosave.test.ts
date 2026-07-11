@@ -19,10 +19,28 @@ describe('draft autosave repository', () => {
       coverImage: 'https://img.example.com/cover.png'
     };
 
-    repository.save(draft);
+    repository.save(draft, { editingId: 'post-1', updatedAt: '2026-07-12T00:00:00.000Z' });
     expect(repository.load()).toEqual(draft);
+    expect(repository.loadEnvelope()).toEqual({
+      schemaVersion: 1,
+      editingId: 'post-1',
+      updatedAt: '2026-07-12T00:00:00.000Z',
+      draft
+    });
 
     repository.clear();
     expect(repository.load()).toBeUndefined();
+  });
+
+  it('reads the legacy raw draft format as a versioned envelope', () => {
+    const repository = createDraftAutosaveRepository('kitepop-legacy-draft');
+    const draft = {
+      title: '旧草稿', summary: '', category: 'life' as const, tags: [], content: 'legacy',
+      status: 'draft' as const, cover: 'life' as const, coverImage: ''
+    };
+    localStorage.setItem('kitepop-legacy-draft', JSON.stringify(draft));
+
+    expect(repository.loadEnvelope()).toMatchObject({ schemaVersion: 1, editingId: null, draft });
+    expect(repository.loadEnvelope()?.updatedAt).toBeTruthy();
   });
 });

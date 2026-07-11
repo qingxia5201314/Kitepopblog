@@ -1,8 +1,10 @@
-import React, { ClipboardEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import React, { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArticleManager } from '../components/admin/ArticleManager';
 import { EditorPanel } from '../components/admin/EditorPanel';
 import { UserManager } from '../components/admin/UserManager';
+import { DraftRecoveryDialog } from '../features/editor/components/DraftRecoveryDialog';
+import { useDraftAutosave } from '../features/editor/hooks/useDraftAutosave';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
 import { useAdminAccess } from '../hooks/useAdminAccess';
@@ -15,7 +17,6 @@ import {
   deleteUser,
   getArticleAutosaveDraft,
   listUsers,
-  saveArticleAutosaveDraft,
   updatePost,
   updateUser
 } from '../lib/blogApi';
@@ -45,29 +46,6 @@ const EMPTY_ADMIN_USER_FORM = {
   permission: 'reader' as BlogUser['permission']
 };
 
-function hasDraftContent(draft: typeof EMPTY_FORM) {
-  return Boolean(
-    draft.title.trim() ||
-      draft.summary.trim() ||
-      draft.content.trim() ||
-      draft.tags.length > 0 ||
-      draft.coverImage.trim()
-  );
-}
-
-function toAutosavePostDraft(draft: typeof EMPTY_FORM) {
-  return {
-    title: draft.title.trim() || '未命名草稿',
-    summary: draft.summary.trim() || '自动保存草稿',
-    category: draft.category,
-    tags: draft.tags,
-    content: draft.content,
-    status: 'draft' as PostStatus,
-    cover: draft.cover || draft.category,
-    coverImage: draft.coverImage
-  };
-}
-
 export function AdminPage() {
   const [searchParams] = useSearchParams();
   const { notify, adminToken } = useApp();
@@ -86,21 +64,14 @@ export function AdminPage() {
   const [adminPanelOpen, setAdminPanelOpen] = useState({ content: false, users: false });
   const [adminUsers, setAdminUsers] = useState<BlogUser[]>([]);
   const [adminUserForm, setAdminUserForm] = useState(EMPTY_ADMIN_USER_FORM);
-  const [autosaveNote, setAutosaveNote] = useState('');
   const [serverDraft, setServerDraft] = useState<ArticleAutosaveDraft | null>(null);
+  const [recoveryDraft, setRecoveryDraft] = useState<ArticleAutosaveDraft | null>(null);
 
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const loadedAdminUsersTokenRef = useRef('');
   const handledEditQueryRef = useRef('');
-  const formRef = useRef(form);
-  const tagInputRef = useRef(tagInput);
-  const editingIdRef = useRef(editingId);
-  const localAdminTokenRef = useRef(localAdminToken);
-  const postsRef = useRef(posts);
-  const autosaveCreatedPostIdRef = useRef<string | null>(null);
-  const autosaveInFlightRef = useRef(false);
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const editPostQuery = searchParams.get('edit');
@@ -118,26 +89,6 @@ export function AdminPage() {
   }, [adminUnlocked, localAdminToken]);
 
   useEffect(() => {
-    formRef.current = form;
-  }, [form]);
-
-  useEffect(() => {
-    tagInputRef.current = tagInput;
-  }, [tagInput]);
-
-  useEffect(() => {
-    editingIdRef.current = editingId;
-  }, [editingId]);
-
-  useEffect(() => {
-    localAdminTokenRef.current = localAdminToken;
-  }, [localAdminToken]);
-
-  useEffect(() => {
-    postsRef.current = posts;
-  }, [posts]);
-
-  useEffect(() => {
     if (!adminUnlocked || !localAdminToken) return;
     let cancelled = false;
     void getArticleAutosaveDraft(localAdminToken)
@@ -152,76 +103,19 @@ export function AdminPage() {
     };
   }, [adminUnlocked, localAdminToken]);
 
-  useEffect(() => {
-    if (!adminUnlocked || !localAdminToken) {
-      setAutosaveNote('');
-      return;
-    }
-
-    let remainingSeconds = 10;
-    let disposed = false;
-
-    const saveCurrentDraft = async () => {
-      if (autosaveInFlightRef.current) return;
-      const token = localAdminTokenRef.current;
-      const currentDraft = {
-        ...formRef.current,
-        tags: parseTagInput(tagInputRef.current)
-      };
-      if (!token || !hasDraftContent(currentDraft)) return;
-
-      autosaveInFlightRef.current = true;
-      try {
-        let activeEditingId = editingIdRef.current;
-        const currentPost = activeEditingId ? postsRef.current.find((post) => post.id === activeEditingId) : null;
-        const shouldWritePost = !activeEditingId || currentPost?.status === 'draft';
-
-        if (shouldWritePost) {
-          const payload = toAutosavePostDraft(currentDraft);
-          if (!activeEditingId) {
-            const created = await createPost(payload, token);
-            activeEditingId = created.id;
-            autosaveCreatedPostIdRef.current = created.id;
-            editingIdRef.current = created.id;
-            setEditingId(created.id);
-            setExpandedAdminPostId(created.id);
-          } else {
-            await updatePost(activeEditingId, payload, token);
-          }
-          await loadPosts(true, token);
-        }
-
-        const saved = await saveArticleAutosaveDraft(
-          {
-            editingId: activeEditingId,
-            draft: currentDraft
-          },
-          token
-        );
-        draftRepository.save(currentDraft);
-        if (!disposed) setServerDraft(saved);
-      } catch (error) {
-        console.warn('Article autosave failed', error);
-      } finally {
-        autosaveInFlightRef.current = false;
-      }
-    };
-
-    setAutosaveNote(`${remainingSeconds}s后自动保存文章`);
-    const timer = window.setInterval(() => {
-      remainingSeconds -= 1;
-      if (remainingSeconds <= 0) {
-        void saveCurrentDraft();
-        remainingSeconds = 10;
-      }
-      setAutosaveNote(`${remainingSeconds}s后自动保存文章`);
-    }, 1000);
-
-    return () => {
-      disposed = true;
-      window.clearInterval(timer);
-    };
-  }, [adminUnlocked, localAdminToken]);
+  const autosaveDraft = useMemo(() => ({ ...form, tags: parseTagInput(tagInput) }), [form, tagInput]);
+  const { note: autosaveNote } = useDraftAutosave({
+    enabled: adminUnlocked,
+    token: localAdminToken,
+    editingId,
+    draft: autosaveDraft,
+    onBoundEditingId: (postId) => {
+      setEditingId(postId);
+      setExpandedAdminPostId(postId);
+      void loadPosts(true, localAdminToken);
+    },
+    onSaved: setServerDraft
+  });
 
   const handleUnlockAdmin = async (event: FormEvent<HTMLFormElement>) => {
     const session = await unlockAdmin(event);
@@ -254,8 +148,7 @@ export function AdminPage() {
   };
 
   const startCreate = () => {
-    autosaveCreatedPostIdRef.current = null;
-    const draft = serverDraft?.editingId ? draftRepository.load() ?? EMPTY_FORM : serverDraft?.draft ?? draftRepository.load() ?? EMPTY_FORM;
+    const draft = draftRepository.load() ?? EMPTY_FORM;
     setEditingId(null);
     setForm({ ...draft, coverImage: draft.coverImage || '' });
     setTagInput(formatTagInput(draft.tags));
@@ -264,20 +157,22 @@ export function AdminPage() {
   };
 
   const startEdit = (post: BlogPost, showNotice = true) => {
-    autosaveCreatedPostIdRef.current = null;
-    const savedDraft = serverDraft?.editingId === post.id ? serverDraft.draft : null;
+    const savedDraft = serverDraft?.editingId === post.id && Date.parse(serverDraft.updatedAt || '') > Date.parse(post.updatedAt)
+      ? serverDraft.draft
+      : null;
+    if (savedDraft) setRecoveryDraft(serverDraft);
     setEditingId(post.id);
     setForm({
-      title: savedDraft?.title ?? post.title,
-      summary: savedDraft?.summary ?? post.summary,
-      category: savedDraft?.category ?? post.category,
-      tags: savedDraft?.tags ?? post.tags,
-      content: savedDraft?.content ?? post.content,
-      status: savedDraft?.status ?? post.status,
-      cover: savedDraft?.cover ?? post.cover,
-      coverImage: savedDraft?.coverImage ?? post.coverImage ?? ''
+      title: post.title,
+      summary: post.summary,
+      category: post.category,
+      tags: post.tags,
+      content: post.content,
+      status: post.status,
+      cover: post.cover,
+      coverImage: post.coverImage ?? ''
     });
-    setTagInput(formatTagInput(savedDraft?.tags ?? post.tags));
+    setTagInput(formatTagInput(post.tags));
     setEditorTab('edit');
     if (showNotice) notify('info', `正在编辑：${post.title}`);
   };
@@ -332,8 +227,6 @@ export function AdminPage() {
       draftRepository.clear();
       await clearArticleAutosaveDraft(localAdminToken).catch(() => undefined);
       setServerDraft(null);
-      autosaveCreatedPostIdRef.current = null;
-      setAutosaveNote('');
       startEdit(saved, false);
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文章保存失败');
@@ -488,6 +381,22 @@ export function AdminPage() {
 
   return (
     <section className="admin-layout">
+      {recoveryDraft ? (
+        <DraftRecoveryDialog
+          onDiscard={() => {
+            void clearArticleAutosaveDraft(localAdminToken);
+            draftRepository.clear();
+            setRecoveryDraft(null);
+            setServerDraft(null);
+          }}
+          onRestore={() => {
+            setForm({ ...recoveryDraft.draft, coverImage: recoveryDraft.draft.coverImage || '' });
+            setTagInput(formatTagInput(recoveryDraft.draft.tags));
+            setRecoveryDraft(null);
+          }}
+          snapshot={recoveryDraft}
+        />
+      ) : null}
       <aside className="admin-list">
         <ArticleManager
           adminPanelOpen={adminPanelOpen.content}

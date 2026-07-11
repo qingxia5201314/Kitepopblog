@@ -15,6 +15,7 @@ import { createImageStore } from './imageStore.mjs';
 import { createPostService } from './services/postService.mjs';
 import { createPostRevisionService } from './services/postRevisionService.mjs';
 import { createScheduledPublishService } from './services/scheduledPublishService.mjs';
+import { createDraftService } from './services/draftService.mjs';
 import { startScheduledPublishing } from './jobs/scheduledPublishing.mjs';
 import { createFileService } from './services/fileService.mjs';
 import { createImageService } from './services/imageService.mjs';
@@ -62,6 +63,7 @@ const scheduledPublishService = createScheduledPublishService({
   postStore: store,
   revisionService: postRevisionService
 });
+const draftService = createDraftService({ postStore: store });
 const userStore = createUserStore({ database });
 const accountingStore = createAccountingStore({ database });
 const accountingSessions = createAccountingSessions({ store: accountingStore });
@@ -96,6 +98,7 @@ app.use('*', async (c, next) => {
   c.set('postService', postService);
   c.set('postRevisionService', postRevisionService);
   c.set('scheduledPublishService', scheduledPublishService);
+  c.set('draftService', draftService);
   c.set('userStore', userStore);
   c.set('accountingStore', accountingStore);
   c.set('accountingSessions', accountingSessions);
