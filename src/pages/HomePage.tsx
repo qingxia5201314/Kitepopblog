@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useMemo, useState, useCallback, useEffect, FormEvent } from 'react';
+import React, { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRef, FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
@@ -79,6 +79,7 @@ export function HomePage() {
   const [fullDetailPost, setFullDetailPost] = useState<BlogPost | null>(null);
   const [detailLoadFailed, setDetailLoadFailed] = useState(false);
   const [readingProgress, setReadingProgress] = useState(0);
+  const articleBodyRef = useRef<HTMLElement | null>(null);
 
   const publishedCount = posts.filter((post) => post.status === 'published').length;
   const draftCount = posts.filter((post) => post.status === 'draft').length;
@@ -200,23 +201,34 @@ export function HomePage() {
       return;
     }
 
+    let frame = 0;
     const updateProgress = () => {
-      const article = document.querySelector('.article-body-card') as HTMLElement | null;
-      if (!article) return;
-      const start = article.offsetTop;
-      const distance = Math.max(1, article.offsetHeight - window.innerHeight * 0.55);
-      const progress = ((window.scrollY - start + window.innerHeight * 0.25) / distance) * 100;
-      setReadingProgress(Math.max(0, Math.min(100, Math.round(progress))));
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const article = articleBodyRef.current;
+        if (!article) return;
+        const rect = article.getBoundingClientRect();
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1;
+        const articleTop = rect.top + window.scrollY;
+        const articleHeight = article.offsetHeight || rect.height;
+        const articleBottom = articleTop + articleHeight;
+        const readableStart = articleTop - viewportHeight * 0.18;
+        const readableEnd = articleBottom - viewportHeight * 0.72;
+        const distance = Math.max(1, readableEnd - readableStart);
+        const progress = ((window.scrollY - readableStart) / distance) * 100;
+        setReadingProgress(Math.max(0, Math.min(100, Math.round(progress))));
+      });
     };
 
     updateProgress();
     window.addEventListener('scroll', updateProgress, { passive: true });
     window.addEventListener('resize', updateProgress);
     return () => {
+      if (frame) window.cancelAnimationFrame(frame);
       window.removeEventListener('scroll', updateProgress);
       window.removeEventListener('resize', updateProgress);
     };
-  }, [detailPostView]);
+  }, [detailPostView?.slug, detailPostView?.content]);
 
   useEffect(() => {
     if (!slug) {
@@ -535,7 +547,7 @@ export function HomePage() {
                 </div>
               </div>
             </section>
-            <section className="article-body-card">
+            <section className="article-body-card" ref={articleBodyRef}>
               <div className="article-body">
                 <Suspense fallback={<div className="article-render-loading">正文加载中...</div>}>
                   <LazyMarkdownContent content={detailPostView.content} />
