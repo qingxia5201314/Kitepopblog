@@ -14,6 +14,7 @@ function rowToPost(row) {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    publishedAt: row.published_at || '',
     cover: row.cover,
     coverImage: row.cover_image || ''
   };
@@ -158,6 +159,123 @@ function insertPost(db, post) {
   );
 }
 
+function rowsFromResult(result) {
+  if (!result.length) return [];
+  const { columns, values } = result[0];
+  return values.map((value) => Object.fromEntries(columns.map((column, index) => [column, value[index]])));
+}
+
+function escapeLike(value) {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function calculateReadingMinutes(content) {
+  const latinWords = content.match(/[A-Za-z0-9]+/g)?.length ?? 0;
+  const cjkChars = content.match(/[\u4e00-\u9fff]/g)?.length ?? 0;
+  return Math.max(1, Math.ceil((latinWords + cjkChars / 2) / 220));
+}
+
+function queryPublicPosts(db, options) {
+  const effectivePublishedAt = "COALESCE(NULLIF(p.published_at, ''), p.updated_at)";
+  const where = ["p.status = 'published'"];
+  const whereParams = [];
+
+  if (options.category !== 'all') {
+    where.push('p.category = ?');
+    whereParams.push(options.category);
+  }
+  if (options.dateFrom) {
+    where.push(`${effectivePublishedAt} >= ?`);
+    whereParams.push(options.dateFrom);
+  }
+  for (const tag of options.tags) {
+    where.push(
+      'EXISTS (SELECT 1 FROM json_each(p.tags_json) AS tag WHERE lower(CAST(tag.value AS TEXT)) = ?)'
+    );
+    whereParams.push(tag.toLowerCase());
+  }
+
+  const pattern = `%${escapeLike(options.q.toLowerCase())}%`;
+  const scoreSql = options.q
+    ? `(CASE WHEN lower(p.title) LIKE ? ESCAPE '\\' THEN 5 ELSE 0 END +
+        CASE WHEN EXISTS (
+          SELECT 1 FROM json_each(p.tags_json) AS search_tag
+          WHERE lower(CAST(search_tag.value AS TEXT)) LIKE ? ESCAPE '\\'
+        ) THEN 4 ELSE 0 END +
+        CASE WHEN lower(p.category) LIKE ? ESCAPE '\\' THEN 4 ELSE 0 END +
+        CASE WHEN lower(p.summary) LIKE ? ESCAPE '\\' THEN 2 ELSE 0 END +
+        CASE WHEN lower(p.content) LIKE ? ESCAPE '\\' THEN 1 ELSE 0 END)`
+    : '0';
+  const scoreParams = options.q ? [pattern, pattern, pattern, pattern, pattern] : [];
+  const rankedSql = `
+    SELECT
+      p.id, p.slug, p.title, p.summary, p.category, p.tags_json, p.status,
+      p.created_at, p.updated_at, p.cover, p.cover_image,
+      p.content AS reading_content,
+      ${effectivePublishedAt} AS effective_published_at,
+      ${scoreSql} AS score
+    FROM posts AS p
+    WHERE ${where.join(' AND ')}`;
+  const rankedParams = [...scoreParams, ...whereParams];
+  const pageWhere = [];
+  const pageParams = [];
+
+  if (options.q) pageWhere.push('score > 0');
+  if (options.cursor) {
+    if (options.q) {
+      pageWhere.push(`(
+        score < ? OR
+        (score = ? AND effective_published_at < ?) OR
+        (score = ? AND effective_published_at = ? AND id < ?)
+      )`);
+      pageParams.push(
+        options.cursor.score,
+        options.cursor.score,
+        options.cursor.publishedAt,
+        options.cursor.score,
+        options.cursor.publishedAt,
+        options.cursor.id
+      );
+    } else {
+      pageWhere.push('(effective_published_at < ? OR (effective_published_at = ? AND id < ?))');
+      pageParams.push(options.cursor.publishedAt, options.cursor.publishedAt, options.cursor.id);
+    }
+  }
+
+  const orderBy = options.q
+    ? 'score DESC, effective_published_at DESC, id DESC'
+    : 'effective_published_at DESC, id DESC';
+  const pageSql = `
+    WITH ranked AS (${rankedSql})
+    SELECT * FROM ranked
+    ${pageWhere.length ? `WHERE ${pageWhere.join(' AND ')}` : ''}
+    ORDER BY ${orderBy}
+    LIMIT ?`;
+  const countSql = `
+    WITH ranked AS (${rankedSql})
+    SELECT COUNT(*) AS total FROM ranked
+    ${options.q ? 'WHERE score > 0' : ''}`;
+
+  const posts = rowsFromResult(db.exec(pageSql, [...rankedParams, ...pageParams, options.limit])).map((row) => ({
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    category: row.category,
+    tags: JSON.parse(row.tags_json),
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    publishedAt: row.effective_published_at,
+    cover: row.cover,
+    coverImage: row.cover_image || '',
+    readingMinutes: calculateReadingMinutes(row.reading_content),
+    _score: row.score
+  }));
+  const total = rowsFromResult(db.exec(countSql, rankedParams))[0]?.total ?? 0;
+  return { posts, total };
+}
+
 export async function createPostStore({ dbPath = './data/blog.sqlite', database } = {}) {
   const sqlite = database ?? (await createSqliteDatabase({ dbPath }));
   const { db } = sqlite;
@@ -174,6 +292,10 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
       return sortPostsByDate(selectAll(db).filter((post) => includeDrafts || post.status === 'published'));
     },
 
+    queryPublic(options) {
+      return queryPublicPosts(db, options);
+    },
+
     get(idOrSlug) {
       return selectAll(db).find((post) => post.id === idOrSlug || post.slug === idOrSlug);
     },
@@ -186,7 +308,8 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         id: createId(),
         slug: uniqueSlug(draft.title, posts),
         createdAt: now,
-        updatedAt: now
+        updatedAt: now,
+        publishedAt: draft.status === 'published' ? now : ''
       };
 
       insertPost(db, post);
@@ -232,7 +355,7 @@ export async function createPostStore({ dbPath = './data/blog.sqlite', database 
         ]
       );
       sqlite.persist();
-      return updated;
+      return { ...updated, publishedAt };
     },
 
     remove(id) {

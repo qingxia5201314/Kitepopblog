@@ -1,7 +1,17 @@
+import { createPostQueryService, toCompactPublicPost } from './postQueryService.mjs';
+
 export function createPostService({ store }) {
+  const queryService = createPostQueryService({ store });
+
   return {
     listPosts(options) {
       return store.list(options);
+    },
+    listPostSummaries(options) {
+      return store.list(options).map(toCompactPublicPost);
+    },
+    queryPublicPosts(searchParams) {
+      return queryService.query(searchParams);
     },
     getPost(idOrSlug) {
       return store.get(idOrSlug);

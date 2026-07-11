@@ -92,6 +92,7 @@ describe('post store', () => {
 
     expect(created.createdAt).toContain('T');
     expect(created.updatedAt).toContain('T');
+    expect(store.get(created.id)?.publishedAt).toContain('T');
     expect(comment.createdAt).toContain('T');
   });
 

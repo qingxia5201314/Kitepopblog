@@ -9,18 +9,30 @@ app.get('/', (c) => {
   const admin = isAdmin(c);
   const includeDrafts = c.req.query('includeDrafts') === '1' && admin;
   const summaryOnly = c.req.query('summary') === '1' && !includeDrafts;
-  const posts = postService.listPosts({ includeDrafts });
+  const searchParams = new URL(c.req.url).searchParams;
+  const paginatedPublicQuery =
+    !includeDrafts && ['limit', 'cursor', 'q', 'tags', 'category', 'date'].some((key) => searchParams.has(key));
   c.header(
     'Cache-Control',
     includeDrafts ? 'private, no-store' : PUBLIC_DYNAMIC_CACHE
   );
+
+  if (paginatedPublicQuery) {
+    try {
+      return c.json(postService.queryPublicPosts(searchParams));
+    } catch (error) {
+      if (error?.status === 400) {
+        return c.json({ ok: false, message: error.message }, 400);
+      }
+      throw error;
+    }
+  }
+
+  const posts = summaryOnly
+    ? postService.listPostSummaries({ includeDrafts: false })
+    : postService.listPosts({ includeDrafts });
   return c.json({
-    posts: summaryOnly
-      ? posts.map((post) => ({
-          ...post,
-          content: ''
-        }))
-      : posts
+    posts
   });
 });
 
