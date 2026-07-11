@@ -412,6 +412,72 @@ describe('App layout shells', () => {
     expect(host.querySelector('.toast')).toBeFalsy();
   });
 
+  it('switches articles after draft recovery and always opens new articles with an empty form', async () => {
+    window.localStorage.setItem(
+      'kitepop-admin-session',
+      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/admin');
+    const posts = [
+      {
+        id: 'post-a', slug: 'post-a', title: '文章 A', summary: '摘要 A', category: 'notes', tags: ['A'],
+        content: '正文 A', status: 'published', createdAt: '2026-07-10T00:00:00.000Z',
+        updatedAt: '2026-07-10T01:00:00.000Z', cover: 'notes', coverImage: ''
+      },
+      {
+        id: 'post-b', slug: 'post-b', title: '文章 B', summary: '摘要 B', category: 'life', tags: ['B'],
+        content: '正文 B', status: 'draft', createdAt: '2026-07-10T00:00:00.000Z',
+        updatedAt: '2026-07-10T02:00:00.000Z', cover: 'life', coverImage: ''
+      }
+    ];
+    const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      if (url === '/api/admin/article-draft') return Response.json({ draft: {
+        editingId: 'post-a', updatedAt: '2026-07-10T03:00:00.000Z',
+        draft: { ...posts[0], title: '文章 A 的恢复内容', id: undefined, slug: undefined, createdAt: undefined, updatedAt: undefined }
+      } });
+      if (url.startsWith('/api/admin/posts/')) return Response.json({ revisions: [] });
+      if (url.startsWith('/api/posts')) return Response.json({ posts });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', adminFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(
+      <BrowserRouter><AppProvider><BlogDataProvider><AdminAutosaveTestShell /></BlogDataProvider></AppProvider></BrowserRouter>
+    );
+
+    const expand = await waitFor(() => host.querySelector('.admin-content-group .panel-heading button')) as HTMLButtonElement;
+    expand.click();
+    expect(await waitFor(() => (host.textContent?.includes('文章 A') ? host : null))).toBeTruthy();
+
+    const openPost = async (title: string) => {
+      const card = Array.from(host.querySelectorAll('.admin-post')).find((item) => item.textContent?.includes(title));
+      (card?.querySelector('.admin-post-main') as HTMLButtonElement).click();
+      await waitFor(() => card?.querySelector('.admin-post-actions') ?? null);
+      (Array.from(card?.querySelectorAll('.admin-post-actions button') || []).find((button) => button.textContent === '编辑') as HTMLButtonElement).click();
+    };
+
+    await openPost('文章 A');
+    expect(await waitFor(() => host.querySelector('.draft-recovery-dialog'))).toBeTruthy();
+    (Array.from(host.querySelectorAll('.draft-recovery-dialog button')).find((button) => button.textContent === '恢复草稿') as HTMLButtonElement).click();
+    expect(await waitFor(() => (host.querySelector('input[aria-label="文章标题"]') as HTMLInputElement)?.value === '文章 A 的恢复内容' ? host : null)).toBeTruthy();
+
+    await openPost('文章 B');
+    expect(host.querySelector('.draft-recovery-dialog')).toBeFalsy();
+    expect(await waitFor(() => (host.querySelector('input[aria-label="文章标题"]') as HTMLInputElement)?.value === '文章 B' ? host : null)).toBeTruthy();
+
+    (host.querySelector('.admin-create') as HTMLButtonElement).click();
+    expect(await waitFor(() => (host.querySelector('input[aria-label="文章标题"]') as HTMLInputElement)?.value === '' ? host : null)).toBeTruthy();
+    expect((host.querySelector('input[placeholder="用逗号分隔标签"]') as HTMLInputElement).value).toBe('');
+    expect((host.querySelector('.content-editor') as HTMLTextAreaElement).value).toBe('');
+  });
+
   it('renders readable Chinese labels in the admin content managers', async () => {
     window.localStorage.setItem(
       'kitepop-admin-session',

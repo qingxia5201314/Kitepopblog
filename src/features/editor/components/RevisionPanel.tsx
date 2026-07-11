@@ -6,9 +6,10 @@ interface RevisionPanelProps {
   comparison: PostRevisionComparison | null;
   loading: boolean;
   error: string;
+  deletingRevisionId: string | null;
   onCompare: (revisionId: string) => void;
   onRestore: (revisionId: string) => void;
-  onRemove: (revisionId: string) => void;
+  onRemove: (revision: PostRevision) => void;
   onCloseComparison: () => void;
 }
 
@@ -31,7 +32,15 @@ export function RevisionPanel(props: RevisionPanelProps) {
             <div className="workflow-actions">
               <button onClick={() => props.onCompare(revision.id)} type="button">查看与对比</button>
               <button onClick={() => props.onRestore(revision.id)} type="button">恢复</button>
-              <button disabled={revision.isProtected} onClick={() => props.onRemove(revision.id)} title={revision.isProtected ? '关键版本不可删除' : undefined} type="button">删除</button>
+              <button
+                aria-label={revision.isProtected ? '该版本受保护' : `删除版本 ${revision.title}`}
+                className={revision.isProtected ? 'protected-revision-action' : 'danger'}
+                onClick={() => props.onRemove(revision)}
+                title={revision.isProtected ? '发布、恢复备份等关键版本不可删除' : '删除此历史版本'}
+                type="button"
+              >
+                {revision.isProtected ? '受保护' : props.deletingRevisionId === revision.id ? '删除中...' : '删除'}
+              </button>
             </div>
           </article>
         ))}

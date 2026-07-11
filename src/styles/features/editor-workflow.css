@@ -9,6 +9,12 @@
 .revision-list time, .revision-list p { color: #686163; font-size: .82rem; }
 .workflow-actions, .schedule-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; }
 .workflow-actions button, .schedule-controls button { min-height: 34px; }
+.workflow-actions .protected-revision-action {
+  border-color: #d8c7c5;
+  background: #f5efee;
+  color: #655b5a;
+  cursor: help;
+}
 .schedule-controls label { flex: 1 1 220px; }
 .workflow-error { color: #a42d2b; font-weight: 650; }
 .revision-diff { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgb(45 48 52 / 14%); }

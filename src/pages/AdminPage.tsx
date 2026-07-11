@@ -9,6 +9,7 @@ import { RevisionPanel } from '../features/editor/components/RevisionPanel';
 import { PublishScheduleControl } from '../features/editor/components/PublishScheduleControl';
 import { useRevisionHistory } from '../features/editor/hooks/useRevisionHistory';
 import { cancelSchedule, retrySchedule, schedulePost } from '../features/editor/api/editorWorkflowApi';
+import { needsDraftRecovery } from '../features/editor/draftRecovery';
 import { useDraftAutosave } from '../features/editor/hooks/useDraftAutosave';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
@@ -62,6 +63,7 @@ export function AdminPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [tagInput, setTagInput] = useState('');
+  const [editorChangeVersion, setEditorChangeVersion] = useState(0);
   const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [adminStatusFilter, setAdminStatusFilter] = useState<'all' | PostStatus>('all');
@@ -116,6 +118,7 @@ export function AdminPage() {
     token: localAdminToken,
     editingId,
     draft: autosaveDraft,
+    changeVersion: editorChangeVersion,
     onBoundEditingId: (postId) => {
       setEditingId(postId);
       setExpandedAdminPostId(postId);
@@ -147,6 +150,7 @@ export function AdminPage() {
 
   const updateForm = (patch: Partial<typeof EMPTY_FORM>) => {
     setForm((current) => ({ ...current, ...patch }));
+    setEditorChangeVersion((current) => current + 1);
   };
 
   const updateTagInput = (value: string) => {
@@ -155,19 +159,26 @@ export function AdminPage() {
   };
 
   const startCreate = () => {
-    const draft = draftRepository.load() ?? EMPTY_FORM;
+    setRecoveryDraft(null);
     setEditingId(null);
-    setForm({ ...draft, coverImage: draft.coverImage || '' });
-    setTagInput(formatTagInput(draft.tags));
+    setForm(EMPTY_FORM);
+    setTagInput('');
+    setEditorChangeVersion(0);
     setEditorTab('edit');
     notify('info', '已进入新建文章模式');
   };
 
   const startEdit = (post: BlogPost, showNotice = true) => {
-    const savedDraft = serverDraft?.editingId === post.id && Date.parse(serverDraft.updatedAt || '') > Date.parse(post.updatedAt)
-      ? serverDraft.draft
+    const localEnvelope = draftRepository.loadEnvelope();
+    const localDraft = localEnvelope
+      ? { editingId: localEnvelope.editingId, updatedAt: localEnvelope.updatedAt, draft: localEnvelope.draft }
       : null;
-    if (savedDraft) setRecoveryDraft(serverDraft);
+    const recoveryCandidate = needsDraftRecovery(serverDraft, post)
+      ? serverDraft
+      : needsDraftRecovery(localDraft, post)
+        ? localDraft
+        : null;
+    setRecoveryDraft(recoveryCandidate);
     setEditingId(post.id);
     setForm({
       title: post.title,
@@ -180,8 +191,19 @@ export function AdminPage() {
       coverImage: post.coverImage ?? ''
     });
     setTagInput(formatTagInput(post.tags));
+    setEditorChangeVersion(0);
     setEditorTab('edit');
     if (showNotice) notify('info', `正在编辑：${post.title}`);
+  };
+
+  const selectPostForEditing = async (post: BlogPost) => {
+    await saveDraftNow();
+    startEdit(post);
+  };
+
+  const selectNewPost = async () => {
+    await saveDraftNow();
+    startCreate();
   };
 
   useEffect(() => {
@@ -399,6 +421,7 @@ export function AdminPage() {
           onRestore={() => {
             setForm({ ...recoveryDraft.draft, coverImage: recoveryDraft.draft.coverImage || '' });
             setTagInput(formatTagInput(recoveryDraft.draft.tags));
+            setEditorChangeVersion(0);
             setRecoveryDraft(null);
           }}
           snapshot={recoveryDraft}
@@ -410,8 +433,8 @@ export function AdminPage() {
           adminPosts={adminPosts}
           adminStatusFilter={adminStatusFilter}
           expandedAdminPostId={expandedAdminPostId}
-          onCreate={startCreate}
-          onEdit={startEdit}
+          onCreate={() => void selectNewPost()}
+          onEdit={(post) => void selectPostForEditing(post)}
           onRemove={removePost}
           onSetStatusFilter={setAdminStatusFilter}
           onToggleExpandedPost={(postId) => setExpandedAdminPostId((current) => (current === postId ? null : postId))}
@@ -478,11 +501,21 @@ export function AdminPage() {
             />
             <RevisionPanel
               comparison={revisionHistory.comparison}
+              deletingRevisionId={revisionHistory.deletingRevisionId}
               error={revisionHistory.error}
               loading={revisionHistory.loading}
               onCloseComparison={revisionHistory.closeComparison}
               onCompare={(revisionId) => void revisionHistory.compare(revisionId)}
-              onRemove={(revisionId) => void revisionHistory.remove(revisionId)}
+              onRemove={(revision) => {
+                if (revision.isProtected) {
+                  notify('info', '这是发布或恢复流程的关键版本，系统会保留它以防止内容丢失');
+                  return;
+                }
+                if (!window.confirm(`确认删除《${revision.title || '未命名文章'}》的这个历史版本吗？`)) return;
+                void revisionHistory.remove(revision.id)
+                  .then(() => notify('success', '历史版本已删除'))
+                  .catch((error) => notify('error', error instanceof Error ? error.message : '版本删除失败'));
+              }}
               onRestore={(revisionId) => void revisionHistory.restore(revisionId).then(async (restored) => {
                 await loadPosts(true, localAdminToken);
                 startEdit(restored, false);

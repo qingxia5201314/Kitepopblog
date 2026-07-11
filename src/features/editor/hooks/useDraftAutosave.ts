@@ -16,6 +16,7 @@ interface UseDraftAutosaveOptions {
   token: string;
   editingId: string | null;
   draft: BlogPostDraft;
+  changeVersion: number;
   onBoundEditingId?: (editingId: string) => void;
   onSaved?: (snapshot: ArticleAutosaveDraft) => void;
 }
@@ -25,6 +26,7 @@ export function useDraftAutosave({
   token,
   editingId,
   draft,
+  changeVersion,
   onBoundEditingId,
   onSaved
 }: UseDraftAutosaveOptions) {
@@ -32,6 +34,7 @@ export function useDraftAutosave({
   const latestRef = useRef({ token, editingId, draft });
   const callbacksRef = useRef({ onBoundEditingId, onSaved });
   const generationRef = useRef(0);
+  const observedVersionRef = useRef(0);
   const dirtyRef = useRef(false);
   const queuedRef = useRef(false);
   const inFlightRef = useRef<Promise<ArticleAutosaveDraft | null> | null>(null);
@@ -43,11 +46,21 @@ export function useDraftAutosave({
 
   useEffect(() => {
     latestRef.current = { token, editingId, draft };
-    if (!enabled || !token || !hasDraftContent(draft)) return;
-    generationRef.current += 1;
+    if (changeVersion === 0) {
+      observedVersionRef.current = 0;
+      generationRef.current = 0;
+      dirtyRef.current = false;
+      queuedRef.current = false;
+      setNote(enabled && token ? '当前内容未修改' : '');
+      return;
+    }
+    if (!enabled || !token || !hasDraftContent(draft) || changeVersion <= observedVersionRef.current) return;
+    observedVersionRef.current = changeVersion;
+    generationRef.current = changeVersion;
     dirtyRef.current = true;
+    setNote('10s后自动保存文章');
     repository.save(draft, { editingId });
-  }, [draft, editingId, enabled, token]);
+  }, [changeVersion, draft, editingId, enabled, token]);
 
   const saveNow = useCallback(async () => {
     const latest = latestRef.current;
@@ -64,6 +77,7 @@ export function useDraftAutosave({
       latest.token
     )
       .then((snapshot) => {
+        if (latestRef.current.editingId !== latest.editingId) return snapshot;
         if (snapshot.editingId && snapshot.editingId !== latest.editingId) {
           callbacksRef.current.onBoundEditingId?.(snapshot.editingId);
         }
@@ -106,8 +120,13 @@ export function useDraftAutosave({
       return;
     }
     let remaining = 10;
-    setNote(`${remaining}s后自动保存文章`);
+    setNote(dirtyRef.current ? `${remaining}s后自动保存文章` : '当前内容未修改');
     const timer = window.setInterval(() => {
+      if (!dirtyRef.current) {
+        remaining = 10;
+        if (!inFlightRef.current) setNote('当前内容未修改');
+        return;
+      }
       remaining -= 1;
       if (remaining <= 0) {
         void saveNowRef.current();

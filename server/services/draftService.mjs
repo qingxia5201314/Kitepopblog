@@ -26,6 +26,18 @@ function snapshotTimestamp(post) {
   return new Date(Math.max(Date.now(), postTimestamp + 1)).toISOString();
 }
 
+const recoveryFields = ['title', 'summary', 'category', 'tags', 'content', 'status', 'cover', 'coverImage'];
+
+function snapshotDiffersFromPost(snapshot, post) {
+  return recoveryFields.some((field) => {
+    const draftValue = snapshot.draft?.[field];
+    const postValue = post?.[field];
+    return Array.isArray(draftValue) || Array.isArray(postValue)
+      ? JSON.stringify(draftValue ?? []) !== JSON.stringify(postValue ?? [])
+      : String(draftValue ?? '') !== String(postValue ?? '');
+  });
+}
+
 export function createDraftService({ postStore }) {
   return {
     get() {
@@ -36,7 +48,9 @@ export function createDraftService({ postStore }) {
       const snapshot = postStore.getArticleDraft();
       const post = postStore.get(postId);
       if (!snapshot || !post || snapshot.editingId !== post.id) return null;
-      return Date.parse(snapshot.updatedAt) > Date.parse(post.updatedAt) ? snapshot : null;
+      return Date.parse(snapshot.updatedAt) > Date.parse(post.updatedAt) && snapshotDiffersFromPost(snapshot, post)
+        ? snapshot
+        : null;
     },
 
     save(payload) {

@@ -50,21 +50,23 @@ describe('draft service', () => {
     expect(service.get()?.draft.title).toBe('Must not replace published');
   });
 
-  it('persists across restart and only offers recovery when the database snapshot is newer', async () => {
+  it('persists across restart and only offers recovery for newer content that differs from the post', async () => {
     const dbPath = join(tempDir, 'blog.sqlite');
     const database = await createSqliteDatabase({ dbPath });
     const postStore = await createPostStore({ database });
     const service = createDraftService({ postStore });
     const post = postStore.create(draft);
-    const saved = service.save({ editingId: post.id, draft: { ...draft, content: 'newer snapshot' } });
+    service.save({ editingId: post.id, draft: { ...draft, content: 'newer snapshot' } });
 
     const restartedStore = await createPostStore({ dbPath });
     const restarted = createDraftService({ postStore: restartedStore });
 
     expect(restarted.get()?.draft.content).toBe('newer snapshot');
-    expect(restarted.getRecovery(post.id)?.updatedAt).toBe(saved.updatedAt);
-    restartedStore.update(post.id, { summary: 'newer post' });
     expect(restarted.getRecovery(post.id)).toBeNull();
+
+    const published = restartedStore.create({ ...draft, title: 'Published', status: 'published' });
+    const saved = restarted.save({ editingId: published.id, draft: { ...draft, title: 'Edited published copy', status: 'published' } });
+    expect(restarted.getRecovery(published.id)?.updatedAt).toBe(saved.updatedAt);
   });
 
   it('clears a discarded database draft', async () => {

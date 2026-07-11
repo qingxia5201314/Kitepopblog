@@ -7,6 +7,7 @@ export function useRevisionHistory(postId: string | null, token: string) {
   const [comparison, setComparison] = useState<PostRevisionComparison | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [deletingRevisionId, setDeletingRevisionId] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!postId || !token) return setRevisions([]);
@@ -19,10 +20,22 @@ export function useRevisionHistory(postId: string | null, token: string) {
   useEffect(() => { void reload(); }, [reload]);
 
   return {
-    revisions, comparison, loading, error, reload,
+    revisions, comparison, loading, error, deletingRevisionId, reload,
     compare: async (revisionId: string) => setComparison(await compareRevision(postId!, revisionId, token)),
     restore: (revisionId: string) => restoreRevision(postId!, revisionId, token),
-    remove: async (revisionId: string) => { await deleteRevision(postId!, revisionId, token); await reload(); },
+    remove: async (revisionId: string) => {
+      setDeletingRevisionId(revisionId);
+      setError('');
+      try {
+        await deleteRevision(postId!, revisionId, token);
+        await reload();
+      } catch (reason) {
+        setError(reason instanceof Error ? reason.message : '版本删除失败');
+        throw reason;
+      } finally {
+        setDeletingRevisionId(null);
+      }
+    },
     closeComparison: () => setComparison(null)
   };
 }
