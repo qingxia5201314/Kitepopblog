@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackToTop } from './BackToTop';
@@ -56,6 +56,19 @@ describe('BackToTop', () => {
     expect(button().getAttribute('aria-hidden')).toBe('false');
   });
 
+  it('releases focus when scrolling back below the visibility threshold', () => {
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 500 });
+    act(() => root.render(<BackToTop />));
+    act(() => button().focus());
+    expect(document.activeElement).toBe(button());
+
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 200 });
+    act(() => window.dispatchEvent(new Event('scroll')));
+
+    expect(button().className).toContain('is-hidden');
+    expect(document.activeElement).not.toBe(button());
+  });
+
   it('scrolls smoothly when reduced motion is not requested', () => {
     vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
     act(() => root.render(<BackToTop />));
@@ -75,19 +88,45 @@ describe('BackToTop', () => {
     expect(window.scrollTo).toHaveBeenLastCalledWith({ top: 0, behavior: 'smooth' });
   });
 
-  it('registers one passive listener and removes the same listener on unmount', () => {
-    const addEventListener = vi.spyOn(window, 'addEventListener');
-    const removeEventListener = vi.spyOn(window, 'removeEventListener');
+  it('falls back to coordinate scrolling when options scrolling throws', () => {
+    const scrollTo = vi.fn()
+      .mockImplementationOnce(() => { throw new Error('options unsupported'); })
+      .mockImplementationOnce(() => undefined);
+    Object.defineProperty(window, 'scrollTo', { configurable: true, value: scrollTo });
     act(() => root.render(<BackToTop />));
 
-    const scrollRegistration = addEventListener.mock.calls.find(([type]) => type === 'scroll');
-    expect(scrollRegistration?.[2]).toEqual({ passive: true });
+    expect(() => act(() => button().click())).not.toThrow();
+    expect(scrollTo.mock.calls).toEqual([
+      [{ top: 0, behavior: 'smooth' }],
+      [0, 0]
+    ]);
+  });
+
+  it('pairs every passive scroll listener under StrictMode and leaves none active after unmount', () => {
+    const activeHandlers = new Set<EventListenerOrEventListenerObject>();
+    const originalAdd = window.addEventListener.bind(window);
+    const originalRemove = window.removeEventListener.bind(window);
+    const addEventListener = vi.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'scroll') activeHandlers.add(listener);
+      originalAdd(type, listener, options);
+    });
+    const removeEventListener = vi.spyOn(window, 'removeEventListener').mockImplementation((type, listener, options) => {
+      if (type === 'scroll') activeHandlers.delete(listener);
+      originalRemove(type, listener, options);
+    });
+    act(() => root.render(<StrictMode><BackToTop /></StrictMode>));
+
+    const scrollRegistrations = addEventListener.mock.calls.filter(([type]) => type === 'scroll');
+    expect(scrollRegistrations.length).toBeGreaterThanOrEqual(2);
+    expect(scrollRegistrations.every(([, , options]) =>
+      typeof options === 'object' && options?.passive === true)).toBe(true);
+    expect(activeHandlers.size).toBe(1);
 
     act(() => root.unmount());
-    const scrollCleanup = removeEventListener.mock.calls.find(([type]) => type === 'scroll');
-    expect(scrollCleanup?.[1]).toBe(scrollRegistration?.[1]);
+    const scrollCleanups = removeEventListener.mock.calls.filter(([type]) => type === 'scroll');
+    expect(scrollCleanups).toHaveLength(scrollRegistrations.length);
+    expect(activeHandlers.size).toBe(0);
 
-    expect(() => window.dispatchEvent(new Event('scroll'))).not.toThrow();
     root = createRoot(host);
   });
 });

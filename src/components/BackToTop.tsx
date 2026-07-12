@@ -8,6 +8,7 @@ function isPastThreshold() {
 
 export function BackToTop() {
   const [isVisible, setIsVisible] = useState(isPastThreshold);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const visibilityRef = useRef(isVisible);
 
   useEffect(() => {
@@ -22,10 +23,21 @@ export function BackToTop() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (!isVisible && document.activeElement === button) {
+      button?.blur();
+    }
+  }, [isVisible]);
+
   const scrollToTop = () => {
     const reduceMotion = typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    try {
+      window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    } catch {
+      window.scrollTo(0, 0);
+    }
   };
 
   return (
@@ -34,6 +46,7 @@ export function BackToTop() {
       aria-label="回到页面顶部"
       className={`back-to-top ${isVisible ? 'is-visible' : 'is-hidden'}`}
       onClick={scrollToTop}
+      ref={buttonRef}
       tabIndex={isVisible ? 0 : -1}
       type="button"
     >
