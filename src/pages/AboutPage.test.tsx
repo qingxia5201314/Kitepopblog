@@ -62,7 +62,7 @@ describe('about page', () => {
     expect(githubLinks).toHaveLength(1);
     expect(githubLinks[0].getAttribute('target')).toBe('_blank');
     expect(githubLinks[0].getAttribute('rel')).toBe('noopener noreferrer');
-    expect(host.querySelector('.about-content.about-reveal h2')?.textContent).toBe('长一点的自我介绍');
+    expect(host.querySelector('.about-content h2.about-reveal')?.textContent).toBe('长一点的自我介绍');
     expect(host.querySelector('.about-content strong')?.textContent).toBe('Markdown');
     expect(document.title).toBe('关于我 | Kitepop SOS');
     expect(document.head.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('记录生活与技术。');
@@ -207,10 +207,14 @@ describe('about page', () => {
     const host = renderPage();
     await flush();
 
-    const sections = [...host.querySelectorAll('.about-reveal')];
-    expect(sections).toHaveLength(2);
+    const hero = host.querySelector('.about-hero')!;
+    const heading = host.querySelector('.about-content > h2')!;
+    const paragraph = host.querySelector('.about-content > p')!;
+    const sections = [hero, heading, paragraph];
     expect(observed).toEqual(sections);
+    expect(sections.every((section) => section.classList.contains('about-reveal'))).toBe(true);
     expect(sections.every((section) => section.classList.contains('is-reveal-pending'))).toBe(true);
+    expect((paragraph as HTMLElement).style.getPropertyValue('--about-reveal-delay')).toBe('80ms');
 
     act(() => callback([{ target: sections[0], isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
     expect(sections[0].classList.contains('is-revealed')).toBe(true);
@@ -229,7 +233,10 @@ describe('about page', () => {
     const host = renderPage();
     await flush();
 
-    expect([...host.querySelectorAll('.about-reveal')].every((section) => section.classList.contains('is-revealed'))).toBe(true);
+    const blocks = [...host.querySelectorAll('.about-hero, .about-content > *')];
+    expect(blocks).toHaveLength(3);
+    expect(blocks.every((section) => section.classList.contains('about-reveal'))).toBe(true);
+    expect(blocks.every((section) => section.classList.contains('is-revealed'))).toBe(true);
   });
 
   it('updates parallax variables for a fine pointer and clears listeners and values', async () => {

@@ -59,14 +59,23 @@ export function AboutPage() {
   useEffect(() => {
     const page = pageRef.current;
     if (!page || !profile || isAboutProfileEmpty(profile)) return;
-    const revealTargets = [...page.querySelectorAll<HTMLElement>('.about-reveal')];
+    const hero = page.querySelector<HTMLElement>('.about-hero');
+    const contentBlocks = [...page.querySelectorAll<HTMLElement>('.about-content > *')];
+    const revealTargets = [...(hero ? [hero] : []), ...contentBlocks];
+    revealTargets.forEach((target, index) => {
+      target.classList.add('about-reveal');
+      target.style.setProperty('--about-reveal-delay', `${Math.max(0, index - 1) * 80}ms`);
+    });
     const canObserve = typeof IntersectionObserver === 'function';
     const reduceMotion = typeof window.matchMedia === 'function'
       && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (!canObserve || reduceMotion) {
       revealTargets.forEach((target) => target.classList.add('is-revealed'));
-      return;
+      return () => revealTargets.forEach((target) => {
+        target.classList.remove('about-reveal', 'is-revealed');
+        target.style.removeProperty('--about-reveal-delay');
+      });
     }
 
     revealTargets.forEach((target) => target.classList.add('is-reveal-pending'));
@@ -79,7 +88,14 @@ export function AboutPage() {
       });
     }, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
     revealTargets.forEach((target) => observer.observe(target));
-    return () => observer.disconnect();
+    return () => {
+      revealTargets.forEach((target) => {
+        observer.unobserve(target);
+        target.classList.remove('about-reveal', 'is-reveal-pending', 'is-revealed');
+        target.style.removeProperty('--about-reveal-delay');
+      });
+      observer.disconnect();
+    };
   }, [profile]);
 
   useEffect(() => {
@@ -159,7 +175,7 @@ export function AboutPage() {
         ) : null}
       </section>
       {profile.content ? (
-        <article className="about-content about-reveal">
+        <article className="about-content">
           <MarkdownContent content={profile.content} />
         </article>
       ) : null}

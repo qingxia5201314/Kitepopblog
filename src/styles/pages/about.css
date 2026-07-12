@@ -105,7 +105,7 @@
   position: relative;
   transform: translateY(18px) scale(0.94);
   width: clamp(132px, 17vw, 174px);
-  animation: about-stagger-in 650ms 180ms var(--ease-spring, ease) forwards, about-avatar-glow 3.8s 1s ease-in-out infinite;
+  animation: about-stagger-in 650ms 180ms var(--ease-spring, ease) forwards;
 }
 
 .about-avatar-ring::before {
@@ -120,15 +120,16 @@
 }
 
 .about-avatar-ring::after {
-  background: var(--sos-red, #c53b39);
-  border: 4px solid #fffaf3;
+  background: rgba(197, 59, 57, 0.1);
   border-radius: 50%;
+  box-shadow: 0 0 0 12px rgba(197, 59, 57, 0.08);
   content: '';
-  height: 15px;
+  inset: -10px;
+  opacity: 0.45;
   position: absolute;
-  right: 3px;
-  top: 17px;
-  width: 15px;
+  transform: scale(0.92);
+  z-index: -1;
+  animation: about-avatar-pulse 3.8s 1s ease-in-out infinite;
 }
 
 .about-avatar {
@@ -283,7 +284,7 @@
 .about-reveal.is-revealed {
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 720ms var(--ease-out, ease), transform 720ms var(--ease-out, ease);
+  transition: opacity 720ms var(--about-reveal-delay, 0ms) var(--ease-out, ease), transform 720ms var(--about-reveal-delay, 0ms) var(--ease-out, ease);
 }
 
 @keyframes about-stagger-in {
@@ -306,8 +307,8 @@
 
 @keyframes about-ring-spin { to { transform: rotate(360deg); } }
 
-@keyframes about-avatar-glow {
-  50% { box-shadow: 7px 7px 0 rgba(42, 19, 15, 0.16), 0 0 0 13px rgba(197, 59, 57, 0.08); }
+@keyframes about-avatar-pulse {
+  50% { opacity: 0.78; transform: scale(1.08); }
 }
 
 @media (hover: hover) and (pointer: fine) {
