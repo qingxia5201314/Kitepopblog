@@ -309,7 +309,7 @@ describe('App layout shells', () => {
     roots.push(root);
     root.render(<App />);
 
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    await waitFor(() => (requestCounts.detail === 1 ? host : null));
 
     expect(requestCounts.detail).toBe(1);
     expect(requestCounts.list).toBe(0);
@@ -1225,8 +1225,8 @@ describe('App layout shells', () => {
 
     const passwordInput = (await waitFor(() => host.querySelector('.unlock-panel input[type="password"]'))) as HTMLInputElement | null;
     expect(passwordInput).toBeTruthy();
-    passwordInput!.value = 'secret';
-    passwordInput!.dispatchEvent(new Event('input', { bubbles: true }));
+    fillInput(passwordInput!, 'secret');
+    await Promise.resolve();
 
     const unlockForm = host.querySelector('.unlock-panel') as HTMLFormElement | null;
     expect(unlockForm).toBeTruthy();
