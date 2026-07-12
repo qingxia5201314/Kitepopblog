@@ -36,7 +36,11 @@ describe('about profile contract', () => {
   })
 
   it('requires a non-empty display name', () => {
-    expect(() => normalizeAboutProfile({ displayName: '   ' })).toThrow()
+    expect(() => normalizeAboutProfile({ displayName: '   ' })).toThrow('请填写名称')
+  })
+
+  it.each([null, 42, 'profile', [], new Date(0)])('safely rejects non-profile input %j', (input) => {
+    expect(() => normalizeAboutProfile(input)).toThrow('请填写名称')
   })
 
   it.each([
@@ -45,6 +49,13 @@ describe('about profile contract', () => {
     'https://github.com',
     'https://github.com//',
     'https://github.com///',
+    'https://github.com/KitePPP/repos',
+    'https://github.com/orgs/openai',
+    'https://github.com:444/KitePPP',
+    'https://github.com/-KitePPP',
+    'https://github.com/KitePPP-',
+    'https://github.com/Kite--PPP',
+    `https://github.com/${'k'.repeat(40)}`,
     'https://user:pass@github.com/KitePPP',
     'https://example.com/KitePPP',
   ])('rejects non-profile GitHub URL %s', (githubUrl) => {
@@ -67,13 +78,21 @@ describe('about profile contract', () => {
     expect(profile.content).toHaveLength(100000)
   })
 
+  it('accepts a 39-character GitHub username with single hyphen separators', () => {
+    const username = `${'a'.repeat(18)}-b-${'c'.repeat(18)}`
+    expect(normalizeAboutProfile({
+      displayName: 'Kite',
+      githubUrl: `https://github.com/${username}/`,
+    }).githubUrl).toBe(`https://github.com/${username}`)
+  })
+
   it.each([
-    ['displayName', { displayName: 'n'.repeat(81) }],
-    ['identityTags count', { displayName: 'Kite', identityTags: Array.from({ length: 9 }, (_, index) => String(index)) }],
-    ['identity tag length', { displayName: 'Kite', identityTags: ['t'.repeat(31)] }],
-    ['intro', { displayName: 'Kite', intro: 'i'.repeat(281) }],
-    ['content', { displayName: 'Kite', content: 'c'.repeat(100001) }],
-  ])('rejects values beyond the %s boundary', (_field, input) => {
-    expect(() => normalizeAboutProfile(input)).toThrow()
+    ['displayName', { displayName: 'n'.repeat(81) }, '名称不能超过 80 个字符'],
+    ['identityTags count', { displayName: 'Kite', identityTags: Array.from({ length: 9 }, (_, index) => String(index)) }, '身份标签不能超过 8 个'],
+    ['identity tag length', { displayName: 'Kite', identityTags: ['t'.repeat(31)] }, '身份标签不能超过 30 个字符'],
+    ['intro', { displayName: 'Kite', intro: 'i'.repeat(281) }, '简介不能超过 280 个字符'],
+    ['content', { displayName: 'Kite', content: 'c'.repeat(100001) }, '内容不能超过 100000 个字符'],
+  ])('rejects values beyond the %s boundary', (_field, input, message) => {
+    expect(() => normalizeAboutProfile(input)).toThrow(message)
   })
 })
