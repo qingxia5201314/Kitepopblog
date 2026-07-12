@@ -44,7 +44,7 @@ describe('about routes', () => {
     const response = await app.request('/api/about');
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('cache-control')).toBe('public, max-age=60, stale-while-revalidate=300');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
     expect(await response.json()).toEqual({ profile });
   });
 
@@ -91,7 +91,7 @@ describe('about routes', () => {
     expect(body.message).not.toMatch(/TypeError/i);
   });
 
-  it('returns the store validation message as a 400 response', async () => {
+  it('returns the profile validation message as a 400 response', async () => {
     aboutStore.save.mockImplementation(() => {
       throw new Error('请填写名称');
     });
@@ -104,6 +104,21 @@ describe('about routes', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ ok: false, message: '请填写名称' });
+  });
+
+  it('returns a stable 500 response when profile persistence fails', async () => {
+    aboutStore.save.mockImplementation(() => {
+      throw new Error('SQLITE_IOERR: disk I/O error at C:\\secret\\blog.sqlite');
+    });
+
+    const response = await app.request('/api/admin/about', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ ok: false, message: 'About save failed' });
   });
 });
 

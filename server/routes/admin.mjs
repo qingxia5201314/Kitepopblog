@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { verifyAdminPassword } from '../auth.mjs';
+import { normalizeAboutProfile } from '../aboutModel.mjs';
 import { isAdmin, requireAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
@@ -37,16 +38,24 @@ app.get('/about', requireAdmin, (c) => {
 });
 
 app.put('/about', requireAdmin, async (c) => {
+  let body;
   try {
-    const body = await c.req.json();
-    return c.json({ profile: c.get('aboutStore').save(body) });
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, message: 'Invalid request body' }, 400);
+  }
+
+  let profile;
+  try {
+    profile = normalizeAboutProfile(body);
   } catch (error) {
-    const message = error instanceof SyntaxError
-      ? 'Invalid request body'
-      : error instanceof TypeError
-        ? 'About profile save failed'
-        : error?.message || 'About profile save failed';
-    return c.json({ ok: false, message }, 400);
+    return c.json({ ok: false, message: error?.message || 'Invalid about profile' }, 400);
+  }
+
+  try {
+    return c.json({ profile: c.get('aboutStore').save(profile) });
+  } catch {
+    return c.json({ ok: false, message: 'About save failed' }, 500);
   }
 });
 
