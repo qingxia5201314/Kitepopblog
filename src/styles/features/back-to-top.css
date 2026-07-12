@@ -75,18 +75,18 @@
   box-shadow: 0 0 0 6px var(--sos-red, #c53b39), 6px 6px 0 #2a1310;
 }
 
-@media (max-width: 900px) {
-  .app-shell:has(.mobile-article-toc) .back-to-top {
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
-  }
-}
-
 @media (max-width: 620px) {
   .back-to-top {
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     height: 44px;
     right: max(14px, env(safe-area-inset-right, 0px));
     width: 44px;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell:has(.mobile-article-toc) .back-to-top {
+    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   }
 }
 
