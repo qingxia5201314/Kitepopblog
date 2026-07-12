@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { BackToTop } from './BackToTop';
 
 export function Layout() {
   const location = useLocation();
@@ -53,6 +54,13 @@ export function Layout() {
         <nav>
           <Link aria-current={isNavActive('/') ? 'page' : undefined} className={isNavActive('/') ? 'active' : ''} to="/">
             首页
+          </Link>
+          <Link
+            aria-current={isNavActive('/about') ? 'page' : undefined}
+            className={isNavActive('/about') ? 'active' : ''}
+            to="/about"
+          >
+            关于我
           </Link>
           {toolsUnlocked ? (
             <details className="tool-menu">
@@ -117,6 +125,7 @@ export function Layout() {
       <div id="main-content" tabIndex={-1}>
         <Outlet />
       </div>
+      <BackToTop />
     </main>
   );
 }

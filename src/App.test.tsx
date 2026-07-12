@@ -218,7 +218,7 @@ describe('App layout shells', () => {
     expect(pageRequests).toEqual(['/api/posts?limit=8', '/api/posts?limit=8&cursor=next-page']);
   });
 
-  it('keeps only useful public navigation and removes the homepage about block', async () => {
+  it('keeps useful public navigation and places about immediately after home', async () => {
     window.localStorage.setItem(
       'kitepop-admin-session',
       JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
@@ -236,13 +236,37 @@ describe('App layout shells', () => {
     root.render(<App />);
 
     const nav = await waitFor(() => host.querySelector('.topbar nav'));
-    expect(nav?.textContent).toContain('首页');
+    const publicLinks = Array.from(nav?.querySelectorAll(':scope > a') ?? []);
+    expect(publicLinks.slice(0, 2).map((link) => link.textContent)).toEqual(['首页', '关于我']);
+    expect(publicLinks[1]?.getAttribute('href')).toBe('/about');
     expect(nav?.textContent).toContain('工具');
     expect(nav?.textContent).not.toContain('文章');
     expect(nav?.textContent).not.toContain('分类');
     expect(nav?.textContent).not.toContain('专题');
-    expect(nav?.textContent).not.toContain('关于');
     expect(host.querySelector('.home-about')).toBeFalsy();
+  });
+
+  it('keeps about public while logged out, marks it active, and mounts back-to-top after main content', async () => {
+    vi.stubGlobal('fetch', fetchMock);
+    window.history.pushState({}, '', '/about');
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const nav = await waitFor(() => host.querySelector('.topbar nav'));
+    const aboutLink = nav?.querySelector<HTMLAnchorElement>('a[href="/about"]');
+    expect(aboutLink?.textContent).toBe('关于我');
+    expect(aboutLink?.classList.contains('active')).toBe(true);
+    expect(aboutLink?.getAttribute('aria-current')).toBe('page');
+    expect(nav?.textContent).toContain('登录');
+
+    const mainContent = host.querySelector('#main-content');
+    const backToTop = host.querySelector('button[aria-label="回到页面顶部"]');
+    expect(mainContent).toBeTruthy();
+    expect(backToTop).toBeTruthy();
+    expect(mainContent?.nextElementSibling).toBe(backToTop);
   });
 
   it('uses the clean complete hero character asset', async () => {
