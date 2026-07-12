@@ -29,4 +29,13 @@ describe('about motion and mobile floating controls CSS', () => {
     expect(backToTopCss).toMatch(/@media \(max-width: 900px\)[\s\S]*\.app-shell:has\(\.mobile-article-toc\) \.back-to-top\s*{[\s\S]*bottom:\s*calc\([^;}]*env\(safe-area-inset-bottom/);
     expect(backToTopCss).not.toMatch(/@media \(max-width: 620px\)\s*{[\s\S]*?\.back-to-top\s*{[^}]*bottom:\s*(?:8[4-9]|9\d|\d{3,})px/);
   });
+
+  it('separates avatar parallax transforms from ring entrance animation', () => {
+    const parallaxRule = aboutCss.match(/\.about-avatar-parallax\s*{([^}]*)}/)?.[1] ?? '';
+    const ringRule = aboutCss.match(/\.about-avatar-ring\s*{([^}]*)}/)?.[1] ?? '';
+    expect(parallaxRule).toMatch(/transform:\s*translate/);
+    expect(parallaxRule).not.toMatch(/animation\s*:/);
+    expect(ringRule).toMatch(/animation:\s*about-stagger-in/);
+    expect(ringRule).not.toMatch(/--about-parallax/);
+  });
 });

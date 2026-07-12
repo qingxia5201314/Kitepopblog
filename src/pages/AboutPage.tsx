@@ -105,25 +105,39 @@ export function AboutPage() {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     if (!finePointer.matches || reduceMotion.matches) return;
 
+    let frameId: number | null = null;
+    let latestPointer: { x: number; y: number } | null = null;
     const resetParallax = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+        frameId = null;
+      }
+      latestPointer = null;
       page.style.setProperty('--about-parallax-x', '0');
       page.style.setProperty('--about-parallax-y', '0');
     };
-    const updateParallax = (event: PointerEvent) => {
+    const renderParallax = () => {
+      frameId = null;
+      if (!latestPointer) return;
       const bounds = page.getBoundingClientRect();
       if (!bounds.width || !bounds.height) return resetParallax();
-      const x = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
-      const y = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
+      const x = Math.max(-1, Math.min(1, ((latestPointer.x - bounds.left) / bounds.width - 0.5) * 2));
+      const y = Math.max(-1, Math.min(1, ((latestPointer.y - bounds.top) / bounds.height - 0.5) * 2));
       page.style.setProperty('--about-parallax-x', String(Number(x.toFixed(3))));
       page.style.setProperty('--about-parallax-y', String(Number(y.toFixed(3))));
     };
+    const queueParallax = (event: PointerEvent) => {
+      latestPointer = { x: event.clientX, y: event.clientY };
+      if (frameId !== null) return;
+      frameId = window.requestAnimationFrame(renderParallax);
+    };
 
     resetParallax();
-    window.addEventListener('pointermove', updateParallax, { passive: true });
-    window.addEventListener('pointerleave', resetParallax);
+    page.addEventListener('pointermove', queueParallax, { passive: true });
+    page.addEventListener('pointerleave', resetParallax);
     return () => {
-      window.removeEventListener('pointermove', updateParallax);
-      window.removeEventListener('pointerleave', resetParallax);
+      page.removeEventListener('pointermove', queueParallax);
+      page.removeEventListener('pointerleave', resetParallax);
       resetParallax();
     };
   }, [profile]);
@@ -152,13 +166,15 @@ export function AboutPage() {
       <section className="about-hero about-reveal">
         <span aria-hidden="true" className="about-sos-watermark">SOS</span>
         <span aria-hidden="true" className="about-poster-mark">PERSONAL FILE / KITEPOP</span>
-        <div className="about-avatar-ring">
-          <ImageWithFallback
-            alt={profile.displayName ? `${profile.displayName} 的头像` : '个人头像'}
-            className="about-avatar"
-            fallback={<BrandAvatar name={profile.displayName} />}
-            src={profile.avatarUrl}
-          />
+        <div className="about-avatar-parallax">
+          <div className="about-avatar-ring">
+            <ImageWithFallback
+              alt={profile.displayName ? `${profile.displayName} 的头像` : '个人头像'}
+              className="about-avatar"
+              fallback={<BrandAvatar name={profile.displayName} />}
+              src={profile.avatarUrl}
+            />
+          </div>
         </div>
         {profile.displayName ? <h1 className="about-profile-name">{profile.displayName}</h1> : null}
         {profile.identityTags.length ? (

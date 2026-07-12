@@ -54,7 +54,7 @@ describe('about page', () => {
     expect(host.querySelector('.about-page')).toBeTruthy();
     expect(host.querySelector('.about-hero.about-reveal')).toBeTruthy();
     expect(host.querySelector('.about-sos-watermark')).toBeTruthy();
-    expect(host.querySelector('.about-avatar-ring img')?.getAttribute('src')).toBe('/custom-avatar.png');
+    expect(host.querySelector('.about-avatar-parallax > .about-avatar-ring img')?.getAttribute('src')).toBe('/custom-avatar.png');
     expect(host.querySelector('.about-profile-name')?.textContent).toBe('Kite');
     expect(host.querySelector('.about-identity-tags')?.textContent).toContain('安全研究');
     expect(host.textContent).toContain('记录生活与技术。');
@@ -239,29 +239,47 @@ describe('about page', () => {
     expect(blocks.every((section) => section.classList.contains('is-revealed'))).toBe(true);
   });
 
-  it('updates parallax variables for a fine pointer and clears listeners and values', async () => {
-    const add = vi.spyOn(window, 'addEventListener');
-    const remove = vi.spyOn(window, 'removeEventListener');
+  it('coalesces page-local pointer moves into one animation frame and cancels pending work', async () => {
+    let nextFrame = 1;
+    const frames = new Map<number, FrameRequestCallback>();
+    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      const id = nextFrame++;
+      frames.set(id, callback);
+      return id;
+    });
+    const cancelAnimationFrame = vi.fn((id: number) => frames.delete(id));
+    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame);
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame);
     vi.stubGlobal('IntersectionObserver', undefined);
     vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('pointer: fine') })));
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ profile: completeProfile })));
     const host = renderPage();
     await flush();
     const page = host.querySelector<HTMLElement>('.about-page')!;
-    vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 800, right: 1000, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
+    const bounds = vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 800, right: 1000, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
 
-    act(() => window.dispatchEvent(new MouseEvent('pointermove', { clientX: 750, clientY: 200 })));
+    act(() => {
+      page.dispatchEvent(new MouseEvent('pointermove', { clientX: 600, clientY: 300 }));
+      page.dispatchEvent(new MouseEvent('pointermove', { clientX: 700, clientY: 240 }));
+      page.dispatchEvent(new MouseEvent('pointermove', { clientX: 750, clientY: 200 }));
+    });
+    expect(requestAnimationFrame).toHaveBeenCalledOnce();
+    expect(bounds).not.toHaveBeenCalled();
+    act(() => frames.get(1)?.(16));
+    expect(bounds).toHaveBeenCalledOnce();
     expect(page.style.getPropertyValue('--about-parallax-x')).toBe('0.5');
     expect(page.style.getPropertyValue('--about-parallax-y')).toBe('-0.5');
 
-    act(() => window.dispatchEvent(new Event('pointerleave')));
+    act(() => page.dispatchEvent(new Event('pointerleave')));
     expect(page.style.getPropertyValue('--about-parallax-x')).toBe('0');
     expect(page.style.getPropertyValue('--about-parallax-y')).toBe('0');
 
+    act(() => page.dispatchEvent(new MouseEvent('pointermove', { clientX: 900, clientY: 400 })));
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(2);
     const root = roots.pop()!;
     act(() => root.unmount());
-    expect(remove.mock.calls.some(([type]) => type === 'pointermove')).toBe(true);
-    expect(remove.mock.calls.some(([type]) => type === 'pointerleave')).toBe(true);
-    expect(add.mock.calls.some(([type]) => type === 'pointermove')).toBe(true);
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(2);
+    expect(page.style.getPropertyValue('--about-parallax-x')).toBe('0');
+    expect(page.style.getPropertyValue('--about-parallax-y')).toBe('0');
   });
 });
