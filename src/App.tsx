@@ -4,7 +4,7 @@ import { AppProvider } from './context/AppContext';
 import { BlogDataProvider } from './context/BlogDataContext';
 import { Layout } from './components/Layout';
 import { HomePage } from './pages/HomePage';
-import { LazyAccountingPage, LazyAdminPage, LazyArticlePreviewPage, LazyFilesPage, LazyImagesPage, LazyMediaPreviewPage } from './pages/lazy';
+import { LazyAboutPage, LazyAccountingPage, LazyAdminPage, LazyArticlePreviewPage, LazyFilesPage, LazyImagesPage, LazyMediaPreviewPage } from './pages/lazy';
 
 function App() {
   return (
@@ -25,6 +25,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/posts/:slug" element={<HomePage />} />
                 <Route path="/accounting" element={<LazyAccountingPage />} />
+                <Route path="/about" element={<LazyAboutPage />} />
                 <Route path="/files" element={<LazyFilesPage />} />
                 <Route path="/files/preview" element={<LazyMediaPreviewPage />} />
                 <Route path="/images" element={<LazyImagesPage />} />

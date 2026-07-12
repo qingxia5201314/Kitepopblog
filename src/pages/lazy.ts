@@ -6,3 +6,4 @@ export const LazyImagesPage = lazy(() => import('./ImagesPage').then((module) =>
 export const LazyAdminPage = lazy(() => import('./AdminPage').then((module) => ({ default: module.AdminPage })));
 export const LazyMediaPreviewPage = lazy(() => import('./MediaPreviewPage').then((module) => ({ default: module.MediaPreviewPage })));
 export const LazyArticlePreviewPage = lazy(() => import('./ArticlePreviewPage').then((module) => ({ default: module.ArticlePreviewPage })));
+export const LazyAboutPage = lazy(() => import('./AboutPage').then((module) => ({ default: module.AboutPage })));
