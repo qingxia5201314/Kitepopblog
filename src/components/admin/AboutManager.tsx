@@ -178,7 +178,10 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   return (
     <section className={adminPanelOpen ? 'admin-group admin-about-group open' : 'admin-group admin-about-group'}>
       <div className="panel-heading">
-        <h2>关于我</h2>
+        <div className="admin-about-heading-copy">
+          <span aria-hidden="true">PROFILE / SOS</span>
+          <h2>关于我</h2>
+        </div>
         <button aria-controls="admin-about-panel" aria-expanded={adminPanelOpen} onClick={onTogglePanel} type="button">
           {adminPanelOpen ? '收起' : '展开'}
         </button>
@@ -232,7 +235,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
               role="tabpanel"
             ><MarkdownContent content={form.content} /></div>
           )}
-          <button disabled={saving || uploading || loading} type="submit">{saving ? '保存中…' : '保存资料'}</button>
+          <button className="admin-about-save" disabled={saving || uploading || loading} type="submit">{saving ? '保存中…' : '保存资料'}</button>
         </form>
       ) : null}
     </section>

@@ -15,6 +15,7 @@ export function AboutPage() {
   const [error, setError] = useState('');
   const [profile, setProfile] = useState<AboutProfile | null>(null);
   const activeRequest = useRef<AbortController | null>(null);
+  const pageRef = useRef<HTMLElement>(null);
   const metadata = useMemo(
     () => ({
       title: '关于我 | Kitepop SOS',
@@ -55,13 +56,69 @@ export function AboutPage() {
     return () => activeRequest.current?.abort();
   }, [loadProfile]);
 
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page || !profile || isAboutProfileEmpty(profile)) return;
+    const revealTargets = [...page.querySelectorAll<HTMLElement>('.about-reveal')];
+    const canObserve = typeof IntersectionObserver === 'function';
+    const reduceMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!canObserve || reduceMotion) {
+      revealTargets.forEach((target) => target.classList.add('is-revealed'));
+      return;
+    }
+
+    revealTargets.forEach((target) => target.classList.add('is-reveal-pending'));
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.remove('is-reveal-pending');
+        entry.target.classList.add('is-revealed');
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
+    revealTargets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, [profile]);
+
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!page || !profile || isAboutProfileEmpty(profile) || typeof window.matchMedia !== 'function') return;
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (!finePointer.matches || reduceMotion.matches) return;
+
+    const resetParallax = () => {
+      page.style.setProperty('--about-parallax-x', '0');
+      page.style.setProperty('--about-parallax-y', '0');
+    };
+    const updateParallax = (event: PointerEvent) => {
+      const bounds = page.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return resetParallax();
+      const x = Math.max(-1, Math.min(1, ((event.clientX - bounds.left) / bounds.width - 0.5) * 2));
+      const y = Math.max(-1, Math.min(1, ((event.clientY - bounds.top) / bounds.height - 0.5) * 2));
+      page.style.setProperty('--about-parallax-x', String(Number(x.toFixed(3))));
+      page.style.setProperty('--about-parallax-y', String(Number(y.toFixed(3))));
+    };
+
+    resetParallax();
+    window.addEventListener('pointermove', updateParallax, { passive: true });
+    window.addEventListener('pointerleave', resetParallax);
+    return () => {
+      window.removeEventListener('pointermove', updateParallax);
+      window.removeEventListener('pointerleave', resetParallax);
+      resetParallax();
+    };
+  }, [profile]);
+
   if (loading) {
-    return <main className="about-page"><p role="status">正在加载个人资料…</p></main>;
+    return <main className="about-page" ref={pageRef}><p role="status">正在加载个人资料…</p></main>;
   }
 
   if (error) {
     return (
-      <main className="about-page">
+      <main className="about-page" ref={pageRef}>
         <div role="alert">
           <p>{error}</p>
           <button onClick={() => void loadProfile()} type="button">重试</button>
@@ -71,13 +128,14 @@ export function AboutPage() {
   }
 
   if (!profile || isAboutProfileEmpty(profile)) {
-    return <main className="about-page"><p role="status">个人资料还在准备中，晚些时候再来看看吧。</p></main>;
+    return <main className="about-page" ref={pageRef}><p role="status">个人资料还在准备中，晚些时候再来看看吧。</p></main>;
   }
 
   return (
-    <main className="about-page">
+    <main className="about-page" ref={pageRef}>
       <section className="about-hero about-reveal">
         <span aria-hidden="true" className="about-sos-watermark">SOS</span>
+        <span aria-hidden="true" className="about-poster-mark">PERSONAL FILE / KITEPOP</span>
         <div className="about-avatar-ring">
           <ImageWithFallback
             alt={profile.displayName ? `${profile.displayName} 的头像` : '个人头像'}
@@ -94,7 +152,10 @@ export function AboutPage() {
         ) : null}
         {profile.intro ? <p>{profile.intro}</p> : null}
         {profile.githubUrl ? (
-          <a className="about-social-link" href={profile.githubUrl} rel="noopener noreferrer" target="_blank">GitHub</a>
+          <a aria-label={`${profile.displayName} 的 GitHub`} className="about-social-link" href={profile.githubUrl} rel="noopener noreferrer" target="_blank">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.02c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.78 1.2 1.78 1.2 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.57-.29-5.27-1.28-5.27-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.58.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.79 1.07.79 2.16v3.2c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z" /></svg>
+            <span>GitHub</span>
+          </a>
         ) : null}
       </section>
       {profile.content ? (

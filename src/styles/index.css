@@ -11,7 +11,9 @@
 @import './effects.css';
 @import './pages/home.css';
 @import './pages/article.css';
+@import './pages/about.css';
 @import './features/article-discovery.css';
 @import './features/mobile-article-toc.css';
 @import './features/draft-recovery.css';
 @import './features/editor-workflow.css';
+@import './features/back-to-top.css';

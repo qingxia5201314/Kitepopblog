@@ -183,4 +183,78 @@ describe('about page', () => {
     act(() => avatar.dispatchEvent(new Event('error')));
     expect(host.querySelector('.about-avatar-ring img')?.getAttribute('src')).toMatch(/haruhi-avatar/);
   });
+
+  it('reveals observed sections with one observer and disconnects it on unmount', async () => {
+    const observed: Element[] = [];
+    const unobserved: Element[] = [];
+    let callback!: IntersectionObserverCallback;
+    const disconnect = vi.fn();
+    class ObserverMock {
+      constructor(nextCallback: IntersectionObserverCallback) {
+        callback = nextCallback;
+      }
+      observe(element: Element) { observed.push(element); }
+      unobserve(element: Element) { unobserved.push(element); }
+      disconnect() { disconnect(); }
+    }
+    vi.stubGlobal('IntersectionObserver', ObserverMock);
+    /*
+      Class syntax is intentional: production correctly constructs the native API
+      with `new`, and Vitest function mocks are not constructable here.
+    */
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({ matches: false }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ profile: completeProfile })));
+    const host = renderPage();
+    await flush();
+
+    const sections = [...host.querySelectorAll('.about-reveal')];
+    expect(sections).toHaveLength(2);
+    expect(observed).toEqual(sections);
+    expect(sections.every((section) => section.classList.contains('is-reveal-pending'))).toBe(true);
+
+    act(() => callback([{ target: sections[0], isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
+    expect(sections[0].classList.contains('is-revealed')).toBe(true);
+    expect(sections[0].classList.contains('is-reveal-pending')).toBe(false);
+    expect(unobserved).toEqual([sections[0]]);
+
+    const root = roots.pop()!;
+    act(() => root.unmount());
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
+
+  it('shows reveal content immediately when observers are unavailable', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
+    vi.stubGlobal('matchMedia', undefined);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ profile: completeProfile })));
+    const host = renderPage();
+    await flush();
+
+    expect([...host.querySelectorAll('.about-reveal')].every((section) => section.classList.contains('is-revealed'))).toBe(true);
+  });
+
+  it('updates parallax variables for a fine pointer and clears listeners and values', async () => {
+    const add = vi.spyOn(window, 'addEventListener');
+    const remove = vi.spyOn(window, 'removeEventListener');
+    vi.stubGlobal('IntersectionObserver', undefined);
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('pointer: fine') })));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ profile: completeProfile })));
+    const host = renderPage();
+    await flush();
+    const page = host.querySelector<HTMLElement>('.about-page')!;
+    vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 800, right: 1000, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
+
+    act(() => window.dispatchEvent(new MouseEvent('pointermove', { clientX: 750, clientY: 200 })));
+    expect(page.style.getPropertyValue('--about-parallax-x')).toBe('0.5');
+    expect(page.style.getPropertyValue('--about-parallax-y')).toBe('-0.5');
+
+    act(() => window.dispatchEvent(new Event('pointerleave')));
+    expect(page.style.getPropertyValue('--about-parallax-x')).toBe('0');
+    expect(page.style.getPropertyValue('--about-parallax-y')).toBe('0');
+
+    const root = roots.pop()!;
+    act(() => root.unmount());
+    expect(remove.mock.calls.some(([type]) => type === 'pointermove')).toBe(true);
+    expect(remove.mock.calls.some(([type]) => type === 'pointerleave')).toBe(true);
+    expect(add.mock.calls.some(([type]) => type === 'pointermove')).toBe(true);
+  });
 });
