@@ -88,7 +88,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
       setSaving(false);
     }
     if (!adminPanelOpen || !adminToken || loadedTokenRef.current === adminToken) {
-      if (!adminPanelOpen) {
+      if (!adminPanelOpen || !adminToken) {
         loadRequestRef.current += 1;
         uploadRequestRef.current += 1;
         saveRequestRef.current += 1;
@@ -179,31 +179,58 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     <section className={adminPanelOpen ? 'admin-group admin-about-group open' : 'admin-group admin-about-group'}>
       <div className="panel-heading">
         <h2>关于我</h2>
-        <button onClick={onTogglePanel} type="button">{adminPanelOpen ? '收起' : '展开'}</button>
+        <button aria-controls="admin-about-panel" aria-expanded={adminPanelOpen} onClick={onTogglePanel} type="button">
+          {adminPanelOpen ? '收起' : '展开'}
+        </button>
       </div>
       {adminPanelOpen ? (
-        <form className="admin-about-form" onSubmit={save}>
+        <form className="admin-about-form" id="admin-about-panel" onSubmit={save}>
           {loading ? <p role="status">正在加载个人资料…</p> : null}
           <div className="admin-about-avatar-field">
             {form.avatarUrl ? <img alt="头像预览" className="admin-about-avatar-preview" src={form.avatarUrl} /> : null}
             <label>
               上传头像
-              <input accept="image/*" aria-label="上传头像" disabled={uploading || saving} onChange={uploadAvatar} type="file" />
+              <input accept="image/*" aria-label="上传头像" disabled={loading || uploading || saving} onChange={uploadAvatar} type="file" />
             </label>
             {uploading ? <span role="status">正在上传头像…</span> : null}
           </div>
-          <label>名称<input aria-label="名称" onChange={(event) => updateForm({ displayName: event.target.value })} value={form.displayName} /></label>
-          <label>身份标签<textarea aria-label="身份标签" onChange={(event) => setTagInput(event.target.value)} placeholder="用逗号或换行分隔" rows={2} value={tagInput} /></label>
-          <label>简短介绍<textarea aria-label="简短介绍" onChange={(event) => updateForm({ intro: event.target.value })} value={form.intro} /></label>
-          <label>GitHub 个人链接<input aria-label="GitHub 个人链接" onChange={(event) => updateForm({ githubUrl: event.target.value })} placeholder="https://github.com/username" value={form.githubUrl} /></label>
-          <div className="segmented-control admin-about-markdown-tabs">
-            <button className={markdownTab === 'edit' ? 'active' : ''} onClick={() => setMarkdownTab('edit')} type="button">编辑</button>
-            <button className={markdownTab === 'preview' ? 'active' : ''} onClick={() => setMarkdownTab('preview')} type="button">预览</button>
+          <label>名称<input aria-label="名称" disabled={loading} onChange={(event) => updateForm({ displayName: event.target.value })} value={form.displayName} /></label>
+          <label>身份标签<textarea aria-label="身份标签" disabled={loading} onChange={(event) => setTagInput(event.target.value)} placeholder="用逗号或换行分隔" rows={2} value={tagInput} /></label>
+          <label>简短介绍<textarea aria-label="简短介绍" disabled={loading} onChange={(event) => updateForm({ intro: event.target.value })} value={form.intro} /></label>
+          <label>GitHub 个人链接<input aria-label="GitHub 个人链接" disabled={loading} onChange={(event) => updateForm({ githubUrl: event.target.value })} placeholder="https://github.com/username" value={form.githubUrl} /></label>
+          <div aria-label="Markdown 详细介绍模式" className="segmented-control admin-about-markdown-tabs" role="tablist">
+            <button
+              aria-controls="admin-about-markdown-edit-panel"
+              aria-selected={markdownTab === 'edit'}
+              className={markdownTab === 'edit' ? 'active' : ''}
+              disabled={loading}
+              id="admin-about-markdown-edit-tab"
+              onClick={() => setMarkdownTab('edit')}
+              role="tab"
+              type="button"
+            >编辑</button>
+            <button
+              aria-controls="admin-about-markdown-preview-panel"
+              aria-selected={markdownTab === 'preview'}
+              className={markdownTab === 'preview' ? 'active' : ''}
+              disabled={loading}
+              id="admin-about-markdown-preview-tab"
+              onClick={() => setMarkdownTab('preview')}
+              role="tab"
+              type="button"
+            >预览</button>
           </div>
           {markdownTab === 'edit' ? (
-            <label>Markdown 详细介绍<textarea aria-label="Markdown 详细介绍" onChange={(event) => updateForm({ content: event.target.value })} value={form.content} /></label>
+            <div aria-labelledby="admin-about-markdown-edit-tab" id="admin-about-markdown-edit-panel" role="tabpanel">
+              <label>Markdown 详细介绍<textarea aria-label="Markdown 详细介绍" disabled={loading} onChange={(event) => updateForm({ content: event.target.value })} value={form.content} /></label>
+            </div>
           ) : (
-            <div className="admin-about-markdown-preview"><MarkdownContent content={form.content} /></div>
+            <div
+              aria-labelledby="admin-about-markdown-preview-tab"
+              className="admin-about-markdown-preview"
+              id="admin-about-markdown-preview-panel"
+              role="tabpanel"
+            ><MarkdownContent content={form.content} /></div>
           )}
           <button disabled={saving || uploading || loading} type="submit">{saving ? '保存中…' : '保存资料'}</button>
         </form>

@@ -88,6 +88,39 @@ describe('AboutManager', () => {
     expect(getAdminAboutProfile).toHaveBeenCalledTimes(1);
   });
 
+  it('disables every editing control while loading and fills the form after the response', async () => {
+    let resolveLoad!: (loaded: typeof profile) => void;
+    getAdminAboutProfile.mockReturnValue(new Promise((resolve) => { resolveLoad = resolve; }));
+    const { host } = render(true);
+
+    expect(Array.from(host.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('.admin-about-form input, .admin-about-form textarea'))
+      .every((control) => control.disabled)).toBe(true);
+    expect(Array.from(host.querySelectorAll<HTMLButtonElement>('.admin-about-form button'))
+      .every((button) => button.disabled)).toBe(true);
+
+    resolveLoad(profile);
+    await flush();
+    expect(input(host, '名称').value).toBe('Kite');
+    expect(input(host, '名称').disabled).toBe(false);
+    expect(Array.from(host.querySelectorAll<HTMLButtonElement>('.admin-about-markdown-tabs button'))
+      .every((button) => !button.disabled)).toBe(true);
+  });
+
+  it('clears pending state immediately when the admin token becomes empty', async () => {
+    let resolveLoad!: (loaded: typeof profile) => void;
+    getAdminAboutProfile.mockReturnValue(new Promise((resolve) => { resolveLoad = resolve; }));
+    const { host, rerender } = render(true, 'old-token');
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('正在加载个人资料');
+
+    rerender(true, '');
+
+    expect(Array.from(host.querySelectorAll('[role="status"]')).some((item) => item.textContent?.includes('正在加载个人资料'))).toBe(false);
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toBe('保存资料');
+    resolveLoad(profile);
+    await flush();
+    expect(input(host, '名称').value).toBe('');
+  });
+
   it('uploads a PNG into the preview without saving the profile', async () => {
     getAdminAboutProfile.mockResolvedValue(profile);
     uploadHostedImage.mockResolvedValue({ path: '/images/new.png' });
@@ -184,6 +217,32 @@ describe('AboutManager', () => {
     act(() => preview.click());
     expect(host.querySelector('.admin-about-markdown-preview h3')?.textContent).toBe('预览标题');
     expect(host.querySelector('.admin-about-markdown-preview strong')?.textContent).toBe('粗体');
+  });
+
+  it('connects the collapsible panel and Markdown tabs with accessible semantics', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    const { host, rerender } = render(false);
+    const toggle = host.querySelector('.admin-about-group .panel-heading button')!;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe('admin-about-panel');
+
+    rerender(true);
+    await flush();
+    expect(host.querySelector('#admin-about-panel')).toBeTruthy();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const tablist = host.querySelector('[role="tablist"]')!;
+    const tabs = tablist.querySelectorAll('[role="tab"]');
+    expect(tabs).toHaveLength(2);
+    expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[0].getAttribute('aria-controls')).toBe('admin-about-markdown-edit-panel');
+    expect(host.querySelector('#admin-about-markdown-edit-panel[role="tabpanel"]')?.getAttribute('aria-labelledby'))
+      .toBe('admin-about-markdown-edit-tab');
+
+    act(() => (tabs[1] as HTMLButtonElement).click());
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(tabs[1].getAttribute('aria-controls')).toBe('admin-about-markdown-preview-panel');
+    expect(host.querySelector('#admin-about-markdown-preview-panel[role="tabpanel"]')?.getAttribute('aria-labelledby'))
+      .toBe('admin-about-markdown-preview-tab');
   });
 
   it('does not overwrite current input when loading fails', async () => {
