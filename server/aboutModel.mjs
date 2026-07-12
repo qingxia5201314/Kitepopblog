@@ -71,7 +71,9 @@ function normalizeGithubUrl(value) {
     ) {
       throw new Error(GITHUB_URL_ERROR)
     }
-    url.pathname = url.pathname.replace(/\/+$/, '')
+    const normalizedPathname = url.pathname.replace(/\/+$/, '')
+    if (!normalizedPathname) throw new Error(GITHUB_URL_ERROR)
+    url.pathname = normalizedPathname
     return url.toString()
   } catch {
     throw new Error(GITHUB_URL_ERROR)

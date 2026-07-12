@@ -43,6 +43,8 @@ describe('about profile contract', () => {
     'http://github.com/KitePPP',
     'https://www.github.com/KitePPP',
     'https://github.com',
+    'https://github.com//',
+    'https://github.com///',
     'https://user:pass@github.com/KitePPP',
     'https://example.com/KitePPP',
   ])('rejects non-profile GitHub URL %s', (githubUrl) => {
