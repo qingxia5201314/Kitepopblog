@@ -56,11 +56,18 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   const [markdownTab, setMarkdownTab] = useState<'edit' | 'preview'>('edit');
   const mountedRef = useRef(true);
   const loadedTokenRef = useRef('');
+  const generationRef = useRef(0);
+  const asyncContextRef = useRef({ adminPanelOpen, adminToken });
+  const statusTokenRef = useRef(adminToken);
   const loadRequestRef = useRef(0);
   const uploadRequestRef = useRef(0);
   const saveRequestRef = useRef(0);
   const openRef = useRef(adminPanelOpen);
 
+  if (asyncContextRef.current.adminPanelOpen !== adminPanelOpen || asyncContextRef.current.adminToken !== adminToken) {
+    generationRef.current += 1;
+    asyncContextRef.current = { adminPanelOpen, adminToken };
+  }
   openRef.current = adminPanelOpen;
 
   useEffect(() => {
@@ -74,6 +81,12 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   }, []);
 
   useEffect(() => {
+    const tokenChanged = statusTokenRef.current !== adminToken;
+    statusTokenRef.current = adminToken;
+    if (tokenChanged) {
+      setUploading(false);
+      setSaving(false);
+    }
     if (!adminPanelOpen || !adminToken || loadedTokenRef.current === adminToken) {
       if (!adminPanelOpen) {
         loadRequestRef.current += 1;
@@ -87,20 +100,21 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     }
 
     const requestId = ++loadRequestRef.current;
+    const generation = generationRef.current;
     setLoading(true);
     void getAdminAboutProfile(adminToken)
       .then((profile) => {
-        if (!mountedRef.current || !openRef.current || requestId !== loadRequestRef.current) return;
+        if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== loadRequestRef.current) return;
         setForm(profile);
         setTagInput(formatTags(profile.identityTags));
         loadedTokenRef.current = adminToken;
       })
       .catch((error) => {
-        if (!mountedRef.current || !openRef.current || requestId !== loadRequestRef.current) return;
+        if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== loadRequestRef.current) return;
         notify('error', error instanceof Error ? error.message : '个人资料加载失败');
       })
       .finally(() => {
-        if (mountedRef.current && openRef.current && requestId === loadRequestRef.current) setLoading(false);
+        if (mountedRef.current && openRef.current && generation === generationRef.current && requestId === loadRequestRef.current) setLoading(false);
       });
   }, [adminPanelOpen, adminToken, notify]);
 
@@ -116,44 +130,48 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     }
 
     const requestId = ++uploadRequestRef.current;
+    const generation = generationRef.current;
     setUploading(true);
     try {
       const image = await uploadHostedImage(file, adminToken);
-      if (!mountedRef.current || !openRef.current || requestId !== uploadRequestRef.current) return;
+      if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== uploadRequestRef.current) return;
       updateForm({ avatarUrl: image.path });
       notify('success', '头像上传成功，请保存资料以正式生效');
     } catch (error) {
-      if (!mountedRef.current || !openRef.current || requestId !== uploadRequestRef.current) return;
+      if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== uploadRequestRef.current) return;
       notify('error', error instanceof Error ? error.message : '头像上传失败');
     } finally {
-      if (mountedRef.current && openRef.current && requestId === uploadRequestRef.current) setUploading(false);
+      if (mountedRef.current && openRef.current && generation === generationRef.current && requestId === uploadRequestRef.current) setUploading(false);
     }
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.displayName.trim()) return notify('error', '请填写名称');
+    const displayName = form.displayName.trim();
+    if (!displayName) return notify('error', '请填写名称');
+    if (displayName.length > 80) return notify('error', '名称不能超过 80 个字符');
     if (!isValidGithubUrl(form.githubUrl)) return notify('error', GITHUB_ERROR);
 
     const payload: AboutProfile = {
       ...form,
-      displayName: form.displayName.trim(),
+      displayName,
       identityTags: parseTags(tagInput),
       githubUrl: form.githubUrl.trim()
     };
     const requestId = ++saveRequestRef.current;
+    const generation = generationRef.current;
     setSaving(true);
     try {
       const saved = await updateAboutProfile(payload, adminToken);
-      if (!mountedRef.current || !openRef.current || requestId !== saveRequestRef.current) return;
+      if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== saveRequestRef.current) return;
       setForm(saved);
       setTagInput(formatTags(saved.identityTags));
       notify('success', '关于我资料已保存');
     } catch (error) {
-      if (!mountedRef.current || !openRef.current || requestId !== saveRequestRef.current) return;
+      if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== saveRequestRef.current) return;
       notify('error', error instanceof Error ? error.message : '个人资料保存失败');
     } finally {
-      if (mountedRef.current && openRef.current && requestId === saveRequestRef.current) setSaving(false);
+      if (mountedRef.current && openRef.current && generation === generationRef.current && requestId === saveRequestRef.current) setSaving(false);
     }
   };
 

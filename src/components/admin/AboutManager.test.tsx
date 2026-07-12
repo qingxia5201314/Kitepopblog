@@ -46,13 +46,13 @@ describe('AboutManager', () => {
     document.body.innerHTML = '';
   });
 
-  function render(open = false) {
+  function render(open = false, token = 'admin-token') {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
     roots.push(root);
-    const rerender = (nextOpen: boolean) => act(() => root.render(
-      <AboutManager adminPanelOpen={nextOpen} adminToken="admin-token" notify={notify} onTogglePanel={vi.fn()} />
+    const rerender = (nextOpen: boolean, nextToken = token) => act(() => root.render(
+      <AboutManager adminPanelOpen={nextOpen} adminToken={nextToken} notify={notify} onTogglePanel={vi.fn()} />
     ));
     rerender(open);
     return { host, rerender };
@@ -163,6 +163,18 @@ describe('AboutManager', () => {
     expect(notify).toHaveBeenLastCalledWith('error', 'GitHub 链接必须是 https://github.com/{用户名}');
   });
 
+  it('rejects a trimmed display name over 80 characters before saving', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    const { host } = render(true);
+    await flush();
+    change(input(host, '名称'), ` ${'名'.repeat(81)} `);
+
+    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+
+    expect(updateAboutProfile).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenLastCalledWith('error', '名称不能超过 80 个字符');
+  });
+
   it('renders Markdown in the preview tab', async () => {
     getAdminAboutProfile.mockResolvedValue(profile);
     const { host } = render(true);
@@ -203,5 +215,72 @@ describe('AboutManager', () => {
 
     expect((input(host, '上传头像') as HTMLInputElement).disabled).toBe(false);
     expect(host.querySelector<HTMLImageElement>('.admin-about-avatar-preview')?.src).toContain('/old.png');
+  });
+
+  it('keeps the full form and restores uploading after an upload failure', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    uploadHostedImage.mockRejectedValue(new Error('图片服务失败'));
+    const { host } = render(true);
+    await flush();
+    change(input(host, '名称'), '保留名称');
+    change(input(host, 'Markdown 详细介绍'), '保留 Markdown');
+
+    const picker = input(host, '上传头像') as HTMLInputElement;
+    Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['png'], 'avatar.png', { type: 'image/png' })] });
+    act(() => picker.dispatchEvent(new Event('change', { bubbles: true })));
+    await flush();
+
+    expect(host.querySelector<HTMLImageElement>('.admin-about-avatar-preview')?.src).toContain('/old.png');
+    expect(input(host, '名称').value).toBe('保留名称');
+    expect(input(host, 'Markdown 详细介绍').value).toBe('保留 Markdown');
+    expect(picker.disabled).toBe(false);
+    expect(notify).toHaveBeenLastCalledWith('error', '图片服务失败');
+  });
+
+  it('invalidates a late upload when the admin token changes', async () => {
+    let resolveUpload!: (image: { path: string }) => void;
+    getAdminAboutProfile
+      .mockResolvedValueOnce(profile)
+      .mockResolvedValueOnce({ ...profile, avatarUrl: '/new-token.png', displayName: '新会话' });
+    uploadHostedImage.mockReturnValue(new Promise((resolve) => { resolveUpload = resolve; }));
+    const { host, rerender } = render(true, 'old-token');
+    await flush();
+
+    const picker = input(host, '上传头像') as HTMLInputElement;
+    Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['png'], 'avatar.png', { type: 'image/png' })] });
+    act(() => picker.dispatchEvent(new Event('change', { bubbles: true })));
+    rerender(true, 'new-token');
+    await flush();
+    resolveUpload({ path: '/late-old-token.png' });
+    await flush();
+
+    expect(uploadHostedImage).toHaveBeenCalledWith(expect.any(File), 'old-token');
+    expect(input(host, '名称').value).toBe('新会话');
+    expect(host.querySelector<HTMLImageElement>('.admin-about-avatar-preview')?.src).toContain('/new-token.png');
+    expect((input(host, '上传头像') as HTMLInputElement).disabled).toBe(false);
+    expect(notify).not.toHaveBeenCalledWith('success', expect.stringContaining('头像上传成功'));
+  });
+
+  it('invalidates a late save when the admin token changes', async () => {
+    let resolveSave!: (saved: typeof profile) => void;
+    getAdminAboutProfile
+      .mockResolvedValueOnce(profile)
+      .mockResolvedValueOnce({ ...profile, displayName: '新会话资料', content: '新会话内容' });
+    updateAboutProfile.mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
+    const { host, rerender } = render(true, 'old-token');
+    await flush();
+    change(input(host, '名称'), '旧会话编辑');
+    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+
+    rerender(true, 'new-token');
+    await flush();
+    resolveSave({ ...profile, displayName: '迟到的旧保存', content: '旧内容' });
+    await flush();
+
+    expect(updateAboutProfile).toHaveBeenCalledWith(expect.objectContaining({ displayName: '旧会话编辑' }), 'old-token');
+    expect(input(host, '名称').value).toBe('新会话资料');
+    expect(input(host, 'Markdown 详细介绍').value).toBe('新会话内容');
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+    expect(notify).not.toHaveBeenCalledWith('success', '关于我资料已保存');
   });
 });
