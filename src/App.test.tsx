@@ -164,6 +164,37 @@ describe('App layout shells', () => {
     expect(host.querySelector('.post-item.tilt-card')).toBeTruthy();
   });
 
+  it('keeps a single main landmark when rendering the About route inside Layout', async () => {
+    window.history.pushState({}, '', '/about');
+    const aboutFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/about') {
+        return Response.json({
+          profile: {
+            avatarUrl: '',
+            displayName: 'Kite',
+            identityTags: ['写作者'],
+            intro: '个人介绍',
+            githubUrl: '',
+            content: '# 关于我',
+            updatedAt: '2026-07-12T00:00:00.000Z'
+          }
+        });
+      }
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', aboutFetch);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const aboutRoot = await waitFor(() => host.querySelector('.about-page'));
+    expect(aboutRoot).toBeTruthy();
+    expect(host.querySelectorAll('main')).toHaveLength(1);
+    expect(aboutRoot?.tagName).not.toBe('MAIN');
+  });
+
   it('loads the public article index page by page and appends with load more', async () => {
     const pageRequests: string[] = [];
     const pagedFetch = vi.fn(async (input: RequestInfo | URL) => {

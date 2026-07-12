@@ -143,26 +143,26 @@ export function AboutPage() {
   }, [profile]);
 
   if (loading) {
-    return <main className="about-page" ref={pageRef}><p role="status">正在加载个人资料…</p></main>;
+    return <section className="about-page" ref={pageRef}><p role="status">正在加载个人资料…</p></section>;
   }
 
   if (error) {
     return (
-      <main className="about-page" ref={pageRef}>
+      <section className="about-page" ref={pageRef}>
         <div role="alert">
           <p>{error}</p>
           <button onClick={() => void loadProfile()} type="button">重试</button>
         </div>
-      </main>
+      </section>
     );
   }
 
   if (!profile || isAboutProfileEmpty(profile)) {
-    return <main className="about-page" ref={pageRef}><p role="status">个人资料还在准备中，晚些时候再来看看吧。</p></main>;
+    return <section className="about-page" ref={pageRef}><p role="status">个人资料还在准备中，晚些时候再来看看吧。</p></section>;
   }
 
   return (
-    <main className="about-page" ref={pageRef}>
+    <section className="about-page" aria-labelledby={profile.displayName ? 'about-profile-heading' : undefined} ref={pageRef}>
       <section className="about-hero about-reveal">
         <span aria-hidden="true" className="about-sos-watermark">SOS</span>
         <span aria-hidden="true" className="about-poster-mark">PERSONAL FILE / KITEPOP</span>
@@ -176,7 +176,7 @@ export function AboutPage() {
             />
           </div>
         </div>
-        {profile.displayName ? <h1 className="about-profile-name">{profile.displayName}</h1> : null}
+        {profile.displayName ? <h1 className="about-profile-name" id="about-profile-heading">{profile.displayName}</h1> : null}
         {profile.identityTags.length ? (
           <div className="about-identity-tags" aria-label="身份标签">
             {profile.identityTags.map((tag) => <span key={tag}>{tag}</span>)}
@@ -195,6 +195,6 @@ export function AboutPage() {
           <MarkdownContent content={profile.content} />
         </article>
       ) : null}
-    </main>
+    </section>
   );
 }
