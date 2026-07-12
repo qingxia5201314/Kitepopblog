@@ -64,6 +64,24 @@ describe('about page', () => {
     expect(githubLinks[0].getAttribute('rel')).toBe('noopener noreferrer');
     expect(host.querySelector('.about-content.about-reveal h2')?.textContent).toBe('长一点的自我介绍');
     expect(host.querySelector('.about-content strong')?.textContent).toBe('Markdown');
+    expect(document.title).toBe('关于我 | Kitepop SOS');
+    expect(document.head.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('记录生活与技术。');
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toMatch(/\/about$/);
+    expect(document.head.querySelector('meta[property="og:url"]')?.getAttribute('content')).toMatch(/\/about$/);
+    expect(document.head.querySelector('meta[property="og:type"]')?.getAttribute('content')).toBe('website');
+    expect(JSON.parse(document.head.querySelector('script[data-kitepop-jsonld]')?.textContent || '{}')).toMatchObject({
+      '@type': 'ProfilePage',
+      url: expect.stringMatching(/\/about$/)
+    });
+  });
+
+  it('uses stable About metadata while the profile is still loading', () => {
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => undefined)));
+    renderPage();
+
+    expect(document.title).toBe('关于我 | Kitepop SOS');
+    expect(document.head.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('了解 Kitepop 的个人介绍、身份与创作记录。');
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toMatch(/\/about$/);
   });
 
   it('does not render a social link when GitHub is empty and permits an empty Markdown body', async () => {
@@ -84,6 +102,23 @@ describe('about page', () => {
     await flush();
 
     expect(host.querySelector('.about-page [role="status"]')?.textContent).toContain('个人资料还在准备中');
+  });
+
+  it('treats a profile without both display name and content as empty despite other fields', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ profile: {
+      avatarUrl: '/avatar.png',
+      displayName: '   ',
+      identityTags: ['安全研究'],
+      intro: '只有简介',
+      githubUrl: 'https://github.com/kite',
+      content: '\n ',
+      updatedAt: '2026-07-12T00:00:00.000Z'
+    } })));
+    const host = renderPage();
+    await flush();
+
+    expect(host.querySelector('.about-page [role="status"]')?.textContent).toContain('个人资料还在准备中');
+    expect(host.querySelector('.about-hero')).toBeFalsy();
   });
 
   it('shows an error and retries the request', async () => {

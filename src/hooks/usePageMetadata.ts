@@ -5,6 +5,14 @@ import { normalizeImageUrl } from '../lib/imageUrl';
 const HOME_TITLE = 'Kitepop SOS | 生活、SRC、学习与知识记录';
 const HOME_DESCRIPTION = 'Kitepop 的个人博客，记录个人生活、SRC 挖掘案例、专业学习与知识点。';
 
+export interface StaticPageMetadata {
+  title: string;
+  description: string;
+  path: `/${string}`;
+  schemaType?: 'WebPage' | 'ProfilePage';
+  subjectName?: string;
+}
+
 function ensureMeta(selector: string, attributes: Record<string, string>) {
   let element = document.head.querySelector(selector) as HTMLMetaElement | null;
   if (!element) {
@@ -34,12 +42,12 @@ function canonicalOrigin() {
   }
 }
 
-export function usePageMetadata(post: BlogPost | null) {
+export function usePageMetadata(post: BlogPost | null, staticPage?: StaticPageMetadata) {
   useEffect(() => {
-    const title = post ? `${post.title} | Kitepop SOS` : HOME_TITLE;
-    const description = post?.summary || HOME_DESCRIPTION;
+    const title = staticPage?.title || (post ? `${post.title} | Kitepop SOS` : HOME_TITLE);
+    const description = staticPage?.description || post?.summary || HOME_DESCRIPTION;
     const publicOrigin = canonicalOrigin();
-    const canonical = new URL(post ? `/posts/${post.slug}` : '/', `${publicOrigin}/`).toString();
+    const canonical = new URL(staticPage?.path || (post ? `/posts/${post.slug}` : '/'), `${publicOrigin}/`).toString();
     const normalizedImage = normalizeImageUrl(post?.coverImage || '');
     const image = normalizedImage
       ? new URL(normalizedImage, `${publicOrigin}/`).toString()
@@ -48,7 +56,7 @@ export function usePageMetadata(post: BlogPost | null) {
     document.title = title;
     ensureCanonical(canonical);
     ensureMeta('meta[name="description"]', { name: 'description', content: description });
-    ensureMeta('meta[property="og:type"]', { property: 'og:type', content: post ? 'article' : 'website' });
+    ensureMeta('meta[property="og:type"]', { property: 'og:type', content: post && !staticPage ? 'article' : 'website' });
     ensureMeta('meta[property="og:title"]', { property: 'og:title', content: title });
     ensureMeta('meta[property="og:description"]', { property: 'og:description', content: description });
     ensureMeta('meta[property="og:url"]', { property: 'og:url', content: canonical });
@@ -66,7 +74,25 @@ export function usePageMetadata(post: BlogPost | null) {
       document.head.appendChild(jsonLd);
     }
     jsonLd.textContent = JSON.stringify(
-      post
+      staticPage
+        ? {
+            '@context': 'https://schema.org',
+            '@type': staticPage.schemaType || 'WebPage',
+            name: staticPage.title,
+            description,
+            url: canonical,
+            ...(staticPage.schemaType === 'ProfilePage'
+              ? {
+                  mainEntity: {
+                    '@type': 'Person',
+                    name: staticPage.subjectName || 'Kitepop',
+                    description,
+                    url: canonical
+                  }
+                }
+              : {})
+          }
+        : post
         ? {
             '@context': 'https://schema.org',
             '@type': 'BlogPosting',
@@ -86,5 +112,5 @@ export function usePageMetadata(post: BlogPost | null) {
             url: canonical
           }
     );
-  }, [post]);
+  }, [post, staticPage]);
 }

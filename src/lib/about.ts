@@ -23,12 +23,5 @@ export function emptyAboutProfile(): AboutProfile {
 }
 
 export function isAboutProfileEmpty(profile: AboutProfile): boolean {
-  return !(
-    profile.avatarUrl.trim() ||
-    profile.displayName.trim() ||
-    profile.identityTags.some((tag) => tag.trim()) ||
-    profile.intro.trim() ||
-    profile.githubUrl.trim() ||
-    profile.content.trim()
-  );
+  return !profile.displayName.trim() && !profile.content.trim();
 }

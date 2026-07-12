@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import brandAvatar from '../assets/haruhi-avatar.png';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { ImageWithFallback } from '../components/shared';
@@ -14,7 +14,17 @@ export function AboutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [profile, setProfile] = useState<AboutProfile | null>(null);
-  usePageMetadata(null);
+  const metadata = useMemo(
+    () => ({
+      title: '关于我 | Kitepop SOS',
+      description: profile?.intro.trim() || '了解 Kitepop 的个人介绍、身份与创作记录。',
+      path: '/about' as const,
+      schemaType: 'ProfilePage' as const,
+      subjectName: profile?.displayName.trim() || 'Kitepop'
+    }),
+    [profile?.displayName, profile?.intro]
+  );
+  usePageMetadata(null, metadata);
 
   const loadProfile = useCallback(async () => {
     setLoading(true);
