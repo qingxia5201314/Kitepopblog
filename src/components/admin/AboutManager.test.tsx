@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AboutManager } from './AboutManager';
@@ -46,14 +46,15 @@ describe('AboutManager', () => {
     document.body.innerHTML = '';
   });
 
-  function render(open = false, token = 'admin-token') {
+  function render(open = false, token = 'admin-token', strict = false) {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
     roots.push(root);
-    const rerender = (nextOpen: boolean, nextToken = token) => act(() => root.render(
-      <AboutManager adminPanelOpen={nextOpen} adminToken={nextToken} notify={notify} onTogglePanel={vi.fn()} />
-    ));
+    const rerender = (nextOpen: boolean, nextToken = token) => act(() => {
+      const manager = <AboutManager adminPanelOpen={nextOpen} adminToken={nextToken} notify={notify} onTogglePanel={vi.fn()} />;
+      root.render(strict ? <StrictMode>{manager}</StrictMode> : manager);
+    });
     rerender(open);
     return { host, rerender };
   }
@@ -70,8 +71,10 @@ describe('AboutManager', () => {
     });
   }
 
-  it('loads only after opening, fills fields, and avoids duplicate loads', async () => {
-    getAdminAboutProfile.mockResolvedValue(profile);
+  it('loads once per open cycle and refreshes from the server when reopened', async () => {
+    getAdminAboutProfile
+      .mockResolvedValueOnce(profile)
+      .mockResolvedValueOnce({ ...profile, displayName: '重新打开后的资料', content: '# 新资料' });
     const { host, rerender } = render(false);
     expect(getAdminAboutProfile).not.toHaveBeenCalled();
 
@@ -82,10 +85,25 @@ describe('AboutManager', () => {
     expect(input(host, '身份标签').value).toBe('安全研究, 写作者');
     expect(input(host, 'Markdown 详细介绍').value).toBe('# 关于我');
 
-    rerender(false);
     rerender(true);
     await flush();
     expect(getAdminAboutProfile).toHaveBeenCalledTimes(1);
+
+    rerender(false);
+    rerender(true);
+    await flush();
+    expect(getAdminAboutProfile).toHaveBeenCalledTimes(2);
+    expect(input(host, '名称').value).toBe('重新打开后的资料');
+    expect(input(host, 'Markdown 详细介绍').value).toBe('# 新资料');
+  });
+
+  it('does not duplicate the open-cycle request in StrictMode', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    const { host } = render(true, 'admin-token', true);
+    await flush();
+
+    expect(getAdminAboutProfile).toHaveBeenCalledTimes(1);
+    expect(input(host, '名称').value).toBe('Kite');
   });
 
   it('disables every editing control while loading and fills the form after the response', async () => {
@@ -206,6 +224,67 @@ describe('AboutManager', () => {
 
     expect(updateAboutProfile).not.toHaveBeenCalled();
     expect(notify).toHaveBeenLastCalledWith('error', '名称不能超过 80 个字符');
+  });
+
+  it('shows display-name errors inline, focuses the field, and clears the error on edit', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    const { host } = render(true);
+    await flush();
+    change(input(host, '名称'), '   ');
+
+    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+
+    expect(host.querySelector('#admin-about-display-name-error[role="alert"]')?.textContent).toBe('请填写名称');
+    expect(input(host, '名称').getAttribute('aria-describedby')).toBe('admin-about-display-name-error');
+    expect(document.activeElement).toBe(input(host, '名称'));
+    change(input(host, '名称'), '新名称');
+    expect(host.querySelector('#admin-about-display-name-error')).toBeFalsy();
+  });
+
+  it.each([
+    ['身份标签', 'A,B,C,D,E,F,G,H,I', '身份标签不能超过 8 个', 'admin-about-identity-tags-error'],
+    ['身份标签', `${'长'.repeat(31)},正常`, '身份标签不能超过 30 个字符', 'admin-about-identity-tags-error'],
+    ['简短介绍', '介'.repeat(281), '简介不能超过 280 个字符', 'admin-about-intro-error'],
+    ['Markdown 详细介绍', '文'.repeat(100001), '内容不能超过 100000 个字符', 'admin-about-content-error'],
+    ['GitHub 个人链接', 'https://github.com/user/repos', 'GitHub 链接必须是 https://github.com/{用户名}', 'admin-about-github-url-error']
+  ])('validates %s inline and focuses its first invalid control', async (label, value, message, errorId) => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    const { host } = render(true);
+    await flush();
+    change(input(host, label), value);
+
+    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+
+    expect(updateAboutProfile).not.toHaveBeenCalled();
+    expect(host.querySelector(`#${errorId}[role="alert"]`)?.textContent).toBe(message);
+    expect(document.activeElement).toBe(input(host, label));
+  });
+
+  it('focuses the first invalid field when several fields are invalid', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    const { host } = render(true);
+    await flush();
+    change(input(host, '名称'), '');
+    change(input(host, '简短介绍'), '介'.repeat(281));
+
+    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+
+    expect(document.activeElement).toBe(input(host, '名称'));
+    expect(host.querySelector('#admin-about-intro-error')?.textContent).toBe('简介不能超过 280 个字符');
+  });
+
+  it('matches the server by trimming intro whitespace before the length limit', async () => {
+    getAdminAboutProfile.mockResolvedValue(profile);
+    updateAboutProfile.mockResolvedValue(profile);
+    const { host } = render(true);
+    await flush();
+    change(input(host, '简短介绍'), `  ${'介'.repeat(280)}  `);
+
+    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await flush();
+
+    expect(updateAboutProfile).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('#admin-about-intro-error')).toBeFalsy();
   });
 
   it('renders Markdown in the preview tab', async () => {

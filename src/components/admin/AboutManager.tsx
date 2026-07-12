@@ -5,6 +5,8 @@ import { uploadHostedImage } from '../../lib/imageApi';
 import { MarkdownContent } from '../MarkdownContent';
 
 type Notify = (type: 'success' | 'error' | 'info', message: string) => void;
+type FieldName = 'displayName' | 'identityTags' | 'intro' | 'githubUrl' | 'content';
+type FieldErrors = Partial<Record<FieldName, string>>;
 
 interface AboutManagerProps {
   adminPanelOpen: boolean;
@@ -54,8 +56,10 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [markdownTab, setMarkdownTab] = useState<'edit' | 'preview'>('edit');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const mountedRef = useRef(true);
-  const loadedTokenRef = useRef('');
+  const loadedGenerationRef = useRef(-1);
+  const inFlightLoadRef = useRef<{ generation: number; promise: Promise<AboutProfile> } | null>(null);
   const generationRef = useRef(0);
   const asyncContextRef = useRef({ adminPanelOpen, adminToken });
   const statusTokenRef = useRef(adminToken);
@@ -63,6 +67,12 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   const uploadRequestRef = useRef(0);
   const saveRequestRef = useRef(0);
   const openRef = useRef(adminPanelOpen);
+  const focusFieldRef = useRef<FieldName | null>(null);
+  const displayNameRef = useRef<HTMLInputElement>(null);
+  const identityTagsRef = useRef<HTMLTextAreaElement>(null);
+  const introRef = useRef<HTMLTextAreaElement>(null);
+  const githubUrlRef = useRef<HTMLInputElement>(null);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
 
   if (asyncContextRef.current.adminPanelOpen !== adminPanelOpen || asyncContextRef.current.adminToken !== adminToken) {
     generationRef.current += 1;
@@ -81,13 +91,25 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   }, []);
 
   useEffect(() => {
+    const field = focusFieldRef.current;
+    if (!field) return;
+    if (field === 'content' && markdownTab !== 'edit') {
+      setMarkdownTab('edit');
+      return;
+    }
+    const refs = { displayName: displayNameRef, identityTags: identityTagsRef, intro: introRef, githubUrl: githubUrlRef, content: contentRef };
+    refs[field].current?.focus();
+    focusFieldRef.current = null;
+  }, [fieldErrors, markdownTab]);
+
+  useEffect(() => {
     const tokenChanged = statusTokenRef.current !== adminToken;
     statusTokenRef.current = adminToken;
     if (tokenChanged) {
       setUploading(false);
       setSaving(false);
     }
-    if (!adminPanelOpen || !adminToken || loadedTokenRef.current === adminToken) {
+    if (!adminPanelOpen || !adminToken || loadedGenerationRef.current === generationRef.current) {
       if (!adminPanelOpen || !adminToken) {
         loadRequestRef.current += 1;
         uploadRequestRef.current += 1;
@@ -102,23 +124,48 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     const requestId = ++loadRequestRef.current;
     const generation = generationRef.current;
     setLoading(true);
-    void getAdminAboutProfile(adminToken)
+    const existingRequest = inFlightLoadRef.current;
+    const promise = existingRequest?.generation === generation
+      ? existingRequest.promise
+      : getAdminAboutProfile(adminToken);
+    inFlightLoadRef.current = { generation, promise };
+    void promise
       .then((profile) => {
         if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== loadRequestRef.current) return;
         setForm(profile);
         setTagInput(formatTags(profile.identityTags));
-        loadedTokenRef.current = adminToken;
+        setFieldErrors({});
+        loadedGenerationRef.current = generation;
       })
       .catch((error) => {
         if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== loadRequestRef.current) return;
         notify('error', error instanceof Error ? error.message : '个人资料加载失败');
       })
       .finally(() => {
+        if (inFlightLoadRef.current?.generation === generation) inFlightLoadRef.current = null;
         if (mountedRef.current && openRef.current && generation === generationRef.current && requestId === loadRequestRef.current) setLoading(false);
       });
   }, [adminPanelOpen, adminToken, notify]);
 
-  const updateForm = (patch: Partial<AboutProfile>) => setForm((current) => ({ ...current, ...patch }));
+  const clearFieldError = (field: FieldName) => {
+    setFieldErrors((current) => {
+      if (!current[field]) return current;
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const updateForm = (field: FieldName, patch: Partial<AboutProfile>) => {
+    clearFieldError(field);
+    setForm((current) => ({ ...current, ...patch }));
+  };
+
+  const focusFirstError = (errors: FieldErrors) => {
+    const order: FieldName[] = ['displayName', 'identityTags', 'intro', 'githubUrl', 'content'];
+    focusFieldRef.current = order.find((field) => errors[field]) ?? null;
+    setFieldErrors(errors);
+  };
 
   const uploadAvatar = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -135,7 +182,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     try {
       const image = await uploadHostedImage(file, adminToken);
       if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== uploadRequestRef.current) return;
-      updateForm({ avatarUrl: image.path });
+      setForm((current) => ({ ...current, avatarUrl: image.path }));
       notify('success', '头像上传成功，请保存资料以正式生效');
     } catch (error) {
       if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== uploadRequestRef.current) return;
@@ -148,14 +195,26 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const displayName = form.displayName.trim();
-    if (!displayName) return notify('error', '请填写名称');
-    if (displayName.length > 80) return notify('error', '名称不能超过 80 个字符');
-    if (!isValidGithubUrl(form.githubUrl)) return notify('error', GITHUB_ERROR);
+    const identityTags = parseTags(tagInput);
+    const errors: FieldErrors = {};
+    if (!displayName) errors.displayName = '请填写名称';
+    else if (displayName.length > 80) errors.displayName = '名称不能超过 80 个字符';
+    if (identityTags.length > 8) errors.identityTags = '身份标签不能超过 8 个';
+    else if (identityTags.some((tag) => tag.length > 30)) errors.identityTags = '身份标签不能超过 30 个字符';
+    if (form.intro.trim().length > 280) errors.intro = '简介不能超过 280 个字符';
+    if (!isValidGithubUrl(form.githubUrl)) errors.githubUrl = GITHUB_ERROR;
+    if (form.content.length > 100000) errors.content = '内容不能超过 100000 个字符';
+    if (Object.keys(errors).length) {
+      focusFirstError(errors);
+      notify('error', Object.values(errors)[0]!);
+      return;
+    }
 
     const payload: AboutProfile = {
       ...form,
       displayName,
-      identityTags: parseTags(tagInput),
+      identityTags,
+      intro: form.intro.trim(),
       githubUrl: form.githubUrl.trim()
     };
     const requestId = ++saveRequestRef.current;
@@ -169,7 +228,15 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
       notify('success', '关于我资料已保存');
     } catch (error) {
       if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== saveRequestRef.current) return;
-      notify('error', error instanceof Error ? error.message : '个人资料保存失败');
+      const message = error instanceof Error ? error.message : '个人资料保存失败';
+      const field = message.includes('名称') ? 'displayName'
+        : message.includes('身份标签') ? 'identityTags'
+          : message.includes('简介') ? 'intro'
+            : message.includes('GitHub') ? 'githubUrl'
+              : message.includes('内容') ? 'content'
+                : null;
+      if (field) focusFirstError({ [field]: message });
+      notify('error', message);
     } finally {
       if (mountedRef.current && openRef.current && generation === generationRef.current && requestId === saveRequestRef.current) setSaving(false);
     }
@@ -197,10 +264,10 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
             </label>
             {uploading ? <span role="status">正在上传头像…</span> : null}
           </div>
-          <label>名称<input aria-label="名称" disabled={loading} onChange={(event) => updateForm({ displayName: event.target.value })} value={form.displayName} /></label>
-          <label>身份标签<textarea aria-label="身份标签" disabled={loading} onChange={(event) => setTagInput(event.target.value)} placeholder="用逗号或换行分隔" rows={2} value={tagInput} /></label>
-          <label>简短介绍<textarea aria-label="简短介绍" disabled={loading} onChange={(event) => updateForm({ intro: event.target.value })} value={form.intro} /></label>
-          <label>GitHub 个人链接<input aria-label="GitHub 个人链接" disabled={loading} onChange={(event) => updateForm({ githubUrl: event.target.value })} placeholder="https://github.com/username" value={form.githubUrl} /></label>
+          <label>名称<input aria-describedby={fieldErrors.displayName ? 'admin-about-display-name-error' : undefined} aria-invalid={Boolean(fieldErrors.displayName)} aria-label="名称" disabled={loading} onChange={(event) => updateForm('displayName', { displayName: event.target.value })} ref={displayNameRef} value={form.displayName} />{fieldErrors.displayName ? <span id="admin-about-display-name-error" role="alert">{fieldErrors.displayName}</span> : null}</label>
+          <label>身份标签<textarea aria-describedby={fieldErrors.identityTags ? 'admin-about-identity-tags-error' : undefined} aria-invalid={Boolean(fieldErrors.identityTags)} aria-label="身份标签" disabled={loading} onChange={(event) => { clearFieldError('identityTags'); setTagInput(event.target.value); }} placeholder="用逗号或换行分隔" ref={identityTagsRef} rows={2} value={tagInput} />{fieldErrors.identityTags ? <span id="admin-about-identity-tags-error" role="alert">{fieldErrors.identityTags}</span> : null}</label>
+          <label>简短介绍<textarea aria-describedby={fieldErrors.intro ? 'admin-about-intro-error' : undefined} aria-invalid={Boolean(fieldErrors.intro)} aria-label="简短介绍" disabled={loading} onChange={(event) => updateForm('intro', { intro: event.target.value })} ref={introRef} value={form.intro} />{fieldErrors.intro ? <span id="admin-about-intro-error" role="alert">{fieldErrors.intro}</span> : null}</label>
+          <label>GitHub 个人链接<input aria-describedby={fieldErrors.githubUrl ? 'admin-about-github-url-error' : undefined} aria-invalid={Boolean(fieldErrors.githubUrl)} aria-label="GitHub 个人链接" disabled={loading} onChange={(event) => updateForm('githubUrl', { githubUrl: event.target.value })} placeholder="https://github.com/username" ref={githubUrlRef} value={form.githubUrl} />{fieldErrors.githubUrl ? <span id="admin-about-github-url-error" role="alert">{fieldErrors.githubUrl}</span> : null}</label>
           <div aria-label="Markdown 详细介绍模式" className="segmented-control admin-about-markdown-tabs" role="tablist">
             <button
               aria-controls="admin-about-markdown-edit-panel"
@@ -225,7 +292,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
           </div>
           {markdownTab === 'edit' ? (
             <div aria-labelledby="admin-about-markdown-edit-tab" id="admin-about-markdown-edit-panel" role="tabpanel">
-              <label>Markdown 详细介绍<textarea aria-label="Markdown 详细介绍" disabled={loading} onChange={(event) => updateForm({ content: event.target.value })} value={form.content} /></label>
+              <label>Markdown 详细介绍<textarea aria-describedby={fieldErrors.content ? 'admin-about-content-error' : undefined} aria-invalid={Boolean(fieldErrors.content)} aria-label="Markdown 详细介绍" disabled={loading} onChange={(event) => updateForm('content', { content: event.target.value })} ref={contentRef} value={form.content} />{fieldErrors.content ? <span id="admin-about-content-error" role="alert">{fieldErrors.content}</span> : null}</label>
             </div>
           ) : (
             <div
