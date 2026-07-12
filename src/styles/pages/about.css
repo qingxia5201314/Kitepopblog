@@ -373,13 +373,25 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .about-page *,
-  .about-page *::before,
-  .about-page *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
+  .about-hero::before,
+  .about-sos-watermark,
+  .about-avatar-ring,
+  .about-avatar-ring::before,
+  .about-avatar-ring::after,
+  .about-profile-name,
+  .about-identity-tags,
+  .about-hero > p,
+  .about-social-link,
+  .about-reveal,
+  .about-reveal.is-reveal-pending,
+  .about-reveal.is-revealed {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .about-page,
+  .about-page * {
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
   }
 
   .about-reveal,

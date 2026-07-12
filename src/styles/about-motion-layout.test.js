@@ -38,4 +38,29 @@ describe('about motion and mobile floating controls CSS', () => {
     expect(ringRule).toMatch(/animation:\s*about-stagger-in/);
     expect(ringRule).not.toMatch(/--about-parallax/);
   });
+
+  it('fully disables About animations when reduced motion is requested', () => {
+    const reducedStart = aboutCss.indexOf('@media (prefers-reduced-motion: reduce)');
+    expect(reducedStart).toBeGreaterThanOrEqual(0);
+    const reducedEnd = aboutCss.indexOf('/* About editor:', reducedStart);
+    const reducedMotion = aboutCss.slice(reducedStart, reducedEnd);
+    for (const selector of [
+      '.about-hero::before',
+      '.about-sos-watermark',
+      '.about-avatar-ring',
+      '.about-avatar-ring::before',
+      '.about-avatar-ring::after',
+      '.about-profile-name',
+      '.about-identity-tags',
+      '.about-hero > p',
+      '.about-social-link',
+      '.about-reveal'
+    ]) {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      expect(reducedMotion, `${selector} must disable animation`).toMatch(
+        new RegExp(`${escaped}[\\s\\S]*?animation:\\s*none\\s*!important`)
+      );
+    }
+    expect(reducedMotion).toMatch(/transition:\s*none\s*!important/);
+  });
 });
