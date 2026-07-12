@@ -54,31 +54,29 @@ export function createAboutStore({ database }) {
         updatedAt: new Date().toISOString(),
       }
 
-      database.transaction(() => {
-        database.db.run(`
-          INSERT INTO about_profile (
-            profile_key, avatar_url, display_name, identity_tags_json, intro, github_url, content, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(profile_key) DO UPDATE SET
-            avatar_url = excluded.avatar_url,
-            display_name = excluded.display_name,
-            identity_tags_json = excluded.identity_tags_json,
-            intro = excluded.intro,
-            github_url = excluded.github_url,
-            content = excluded.content,
-            updated_at = excluded.updated_at
-        `, [
-          PROFILE_KEY,
-          saved.avatarUrl,
-          saved.displayName,
-          JSON.stringify(saved.identityTags),
-          saved.intro,
-          saved.githubUrl,
-          saved.content,
-          saved.updatedAt,
-        ])
-        database.persist()
-      })
+      database.db.run(`
+        INSERT INTO about_profile (
+          profile_key, avatar_url, display_name, identity_tags_json, intro, github_url, content, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(profile_key) DO UPDATE SET
+          avatar_url = excluded.avatar_url,
+          display_name = excluded.display_name,
+          identity_tags_json = excluded.identity_tags_json,
+          intro = excluded.intro,
+          github_url = excluded.github_url,
+          content = excluded.content,
+          updated_at = excluded.updated_at
+      `, [
+        PROFILE_KEY,
+        saved.avatarUrl,
+        saved.displayName,
+        JSON.stringify(saved.identityTags),
+        saved.intro,
+        saved.githubUrl,
+        saved.content,
+        saved.updatedAt,
+      ])
+      database.persist()
 
       return saved
     },
@@ -88,7 +86,7 @@ export function createAboutStore({ database }) {
 function parseIdentityTags(value) {
   try {
     const parsed = JSON.parse(value)
-    return Array.isArray(parsed) ? parsed : []
+    return Array.isArray(parsed) && parsed.every((tag) => typeof tag === 'string') ? parsed : []
   } catch {
     return []
   }

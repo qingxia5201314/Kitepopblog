@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createSqliteDatabase } from './sqliteDatabase.mjs'
 import { createAboutStore } from './aboutStore.mjs'
@@ -119,11 +119,45 @@ describe('about profile store', () => {
     database.db.close()
   })
 
+  it('runs the single upsert directly and persists exactly once', () => {
+    const run = vi.fn()
+    const persist = vi.fn()
+    const transaction = vi.fn(() => {
+      throw new Error('save must not open a transaction')
+    })
+    const database = {
+      db: {
+        exec: vi.fn(() => [{}]),
+        run,
+      },
+      persist,
+      transaction,
+    }
+    const store = createAboutStore({ database })
+    run.mockClear()
+
+    store.save(validProfile())
+
+    expect(transaction).not.toHaveBeenCalled()
+    expect(run).toHaveBeenCalledTimes(1)
+    expect(run.mock.calls[0][0]).toContain('INSERT INTO about_profile')
+    expect(persist).toHaveBeenCalledTimes(1)
+  })
+
   it('falls back to empty tags when stored JSON is corrupted', async () => {
     const { database, store } = await openStore()
     store.save(validProfile())
     database.db.run("UPDATE about_profile SET identity_tags_json = '{broken' WHERE profile_key = 'primary'")
     database.persist()
+
+    expect(store.get().identityTags).toEqual([])
+    database.db.close()
+  })
+
+  it('falls back to empty tags when stored JSON is an array with non-string values', async () => {
+    const { database, store } = await openStore()
+    store.save(validProfile())
+    database.db.run("UPDATE about_profile SET identity_tags_json = '[1,null,{}]' WHERE profile_key = 'primary'")
 
     expect(store.get().identityTags).toEqual([])
     database.db.close()
