@@ -1,4 +1,4 @@
-import { ClipboardEvent, FormEvent, ReactNode, RefObject } from 'react';
+import { ClipboardEvent, FormEvent, KeyboardEvent, ReactNode, RefObject } from 'react';
 import { BLOG_CATEGORIES, BlogCategoryId, PostStatus } from '../../lib/blog';
 import { normalizeImageUrl } from '../../lib/imageUrl';
 import { safeImageAttributes } from '../shared';
@@ -33,6 +33,7 @@ interface EditorPanelProps {
   onInsertImage: (file?: File) => void;
   onInsertSnippet: (before: string, after?: string, placeholder?: string) => void;
   onPasteImage: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
+  onEditorKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   previewAction?: ReactNode;
   workflowContent?: ReactNode;
 }
@@ -55,6 +56,7 @@ export function EditorPanel({
   onInsertImage,
   onInsertSnippet,
   onPasteImage,
+  onEditorKeyDown,
   previewAction,
   workflowContent
 }: EditorPanelProps) {
@@ -213,6 +215,7 @@ export function EditorPanel({
             <textarea
               className="content-editor"
               onChange={(event) => onUpdateForm({ content: event.target.value })}
+              onKeyDown={onEditorKeyDown}
               onPaste={onPasteImage}
               placeholder="支持 Markdown：标题、粗体、代码、链接、引用、列表、代码块、图片、行内公式和块级公式。"
               ref={contentEditorRef}

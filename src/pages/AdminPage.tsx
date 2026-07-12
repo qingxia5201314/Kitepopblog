@@ -1,4 +1,4 @@
-import React, { ClipboardEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArticleManager } from '../components/admin/ArticleManager';
 import { EditorPanel } from '../components/admin/EditorPanel';
@@ -11,6 +11,7 @@ import { useRevisionHistory } from '../features/editor/hooks/useRevisionHistory'
 import { cancelSchedule, retrySchedule, schedulePost } from '../features/editor/api/editorWorkflowApi';
 import { needsDraftRecovery } from '../features/editor/draftRecovery';
 import { useDraftAutosave } from '../features/editor/hooks/useDraftAutosave';
+import { useMarkdownEditor } from '../features/editor/hooks/useMarkdownEditor';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
 import { useAdminAccess } from '../hooks/useAdminAccess';
@@ -28,8 +29,6 @@ import {
 } from '../lib/blogApi';
 import { createDraftAutosaveRepository } from '../lib/draftAutosave';
 import { normalizeImageUrl } from '../lib/imageUrl';
-import { uploadHostedImage } from '../lib/imageApi';
-import { createMarkdownImageBlock, getFirstClipboardImage, insertAtSelection } from '../lib/markdownInsert';
 import { formatTagInput, parseTagInput } from '../lib/tags';
 
 const draftRepository = createDraftAutosaveRepository();
@@ -65,7 +64,6 @@ export function AdminPage() {
   const [tagInput, setTagInput] = useState('');
   const [editorChangeVersion, setEditorChangeVersion] = useState(0);
   const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
-  const [uploadingImage, setUploadingImage] = useState(false);
   const [adminStatusFilter, setAdminStatusFilter] = useState<'all' | PostStatus>('all');
   const [expandedAdminPostId, setExpandedAdminPostId] = useState<string | null>(null);
   const [adminPanelOpen, setAdminPanelOpen] = useState({ content: false, users: false });
@@ -74,9 +72,6 @@ export function AdminPage() {
   const [serverDraft, setServerDraft] = useState<ArticleAutosaveDraft | null>(null);
   const [recoveryDraft, setRecoveryDraft] = useState<ArticleAutosaveDraft | null>(null);
 
-  const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const coverImageInputRef = useRef<HTMLInputElement | null>(null);
-  const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const loadedAdminUsersTokenRef = useRef('');
   const handledEditQueryRef = useRef('');
 
@@ -157,6 +152,13 @@ export function AdminPage() {
     setTagInput(value);
     updateForm({ tags: parseTagInput(value) });
   };
+
+  const markdownEditor = useMarkdownEditor({
+    adminToken: localAdminToken,
+    content: form.content,
+    updateForm,
+    notify
+  });
 
   const startCreate = () => {
     setRecoveryDraft(null);
@@ -327,67 +329,6 @@ export function AdminPage() {
     setAdminUsers((current) => current.map((item) => (item.id === userId ? { ...item, ...patch } : item)));
   };
 
-  const insertMarkdownAtEditor = (snippet: string, selectionStart?: number, selectionEnd?: number) => {
-    const editor = contentEditorRef.current;
-    const source = editor?.value ?? form.content;
-    const start = selectionStart ?? editor?.selectionStart ?? source.length;
-    const end = selectionEnd ?? editor?.selectionEnd ?? start;
-    const next = insertAtSelection(source, snippet, start, end);
-    updateForm({ content: next.value });
-    window.setTimeout(() => {
-      contentEditorRef.current?.focus();
-      contentEditorRef.current?.setSelectionRange(next.cursor, next.cursor);
-    }, 0);
-  };
-
-  const insertMarkdownSnippet = (before: string, after = '', placeholder = '内容') => {
-    insertMarkdownAtEditor(`${before}${placeholder}${after}`);
-    notify('info', '已插入 Markdown 片段');
-  };
-
-  const insertImageFile = async (file?: File, selectionStart?: number, selectionEnd?: number) => {
-    if (!file) return;
-    if (!localAdminToken) return notify('error', '请先进入后台再上传图片');
-    if (!file.type.startsWith('image/')) return notify('error', '只能上传图片文件');
-    setUploadingImage(true);
-    try {
-      const image = await uploadHostedImage(file, localAdminToken);
-      insertMarkdownAtEditor(createMarkdownImageBlock(image.originalName, image.path), selectionStart, selectionEnd);
-      notify('success', '图片已上传并插入正文');
-    } catch (error) {
-      notify('error', error instanceof Error ? error.message : '图片上传失败');
-    } finally {
-      setUploadingImage(false);
-      if (imageInputRef.current) imageInputRef.current.value = '';
-    }
-  };
-
-  const uploadCoverImageFile = async (file?: File) => {
-    if (!file) return;
-    if (!localAdminToken) return notify('error', '请先进入后台再上传封面');
-    if (!file.type.startsWith('image/')) return notify('error', '只能上传图片文件');
-    setUploadingImage(true);
-    try {
-      const image = await uploadHostedImage(file, localAdminToken);
-      updateForm({ coverImage: image.path });
-      notify('success', '封面已上传并填入');
-    } catch (error) {
-      notify('error', error instanceof Error ? error.message : '封面上传失败');
-    } finally {
-      setUploadingImage(false);
-      if (coverImageInputRef.current) coverImageInputRef.current.value = '';
-    }
-  };
-
-  const pasteImageIntoEditor = (event: ClipboardEvent<HTMLTextAreaElement>) => {
-    const image = getFirstClipboardImage(event.clipboardData.items);
-    if (!image) return;
-    const start = event.currentTarget.selectionStart;
-    const end = event.currentTarget.selectionEnd;
-    event.preventDefault();
-    void insertImageFile(image, start, end);
-  };
-
   if (!adminUnlocked) {
     return (
       <section className="admin-layout">
@@ -456,20 +397,21 @@ export function AdminPage() {
 
       <EditorPanel
         autosaveNote={autosaveNote}
-        contentEditorRef={contentEditorRef}
-        coverImageInputRef={coverImageInputRef}
+        contentEditorRef={markdownEditor.contentEditorRef}
+        coverImageInputRef={markdownEditor.coverImageInputRef}
         editorTab={editorTab}
         editingId={editingId}
         form={form}
-        imageInputRef={imageInputRef}
-        onInsertImage={(file) => void insertImageFile(file)}
-        onInsertSnippet={insertMarkdownSnippet}
-        onPasteImage={pasteImageIntoEditor}
+        imageInputRef={markdownEditor.imageInputRef}
+        onEditorKeyDown={markdownEditor.handleEditorKeyDown}
+        onInsertImage={(file) => void markdownEditor.insertImageFile(file)}
+        onInsertSnippet={markdownEditor.insertMarkdownSnippet}
+        onPasteImage={markdownEditor.pasteImageIntoEditor}
         onSetEditorTab={setEditorTab}
         onSubmit={savePost}
         onUpdateForm={updateForm}
         onUpdateTagInput={updateTagInput}
-        onUploadCoverImage={(file) => void uploadCoverImageFile(file)}
+        onUploadCoverImage={(file) => void markdownEditor.uploadCoverImageFile(file)}
         previewAction={
           <ArticlePreviewAction
             disabled={!form.title.trim() && !form.summary.trim() && !form.content.trim()}
@@ -478,7 +420,7 @@ export function AdminPage() {
           />
         }
         tagInput={tagInput}
-        uploadingImage={uploadingImage}
+        uploadingImage={markdownEditor.uploadingImage}
         workflowContent={editingId ? (
           <>
             <PublishScheduleControl

@@ -507,6 +507,13 @@ describe('App layout shells', () => {
     expect(await waitFor(() => host.querySelector('.admin-create'))).toBeTruthy();
     expect(host.querySelector('.admin-create')?.textContent?.trim()).toBe('新建文章');
     expect(host.querySelector('.admin-user-group .panel-heading h2')?.textContent).toBe('用户管理');
+
+    const contentEditor = host.querySelector('.content-editor') as HTMLTextAreaElement;
+    contentEditor.focus();
+    contentEditor.setSelectionRange(0, 0);
+    contentEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    expect(await waitFor(() => contentEditor.value === '  ' ? contentEditor : null)).toBeTruthy();
+    expect(document.activeElement).toBe(contentEditor);
   });
 
   it('loads draft posts automatically when an admin session already exists', async () => {
