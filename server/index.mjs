@@ -10,6 +10,7 @@ import { createAccountingStore } from './accountingStore.mjs';
 import { createPostStore } from './postStore.mjs';
 import { createRevisionStore } from './revisionStore.mjs';
 import { createUserStore } from './userStore.mjs';
+import { createAboutStore } from './aboutStore.mjs';
 import { createFileStore } from './fileStore.mjs';
 import { createImageStore } from './imageStore.mjs';
 import { createPostService } from './services/postService.mjs';
@@ -27,6 +28,7 @@ import { accountingRoutes } from './routes/accounting.mjs';
 import { filesRoutes } from './routes/files.mjs';
 import { imagesRoutes } from './routes/images.mjs';
 import { folderRoutes } from './routes/folders.mjs';
+import { aboutRoutes } from './routes/about.mjs';
 import { renderRobots, renderRss, renderSeoPage, renderSitemap } from './seo.mjs';
 import { PUBLIC_DYNAMIC_CACHE, PUBLIC_FEED_CACHE } from './httpCache.mjs';
 import { apiNotFound } from './middleware/apiNotFound.mjs';
@@ -65,6 +67,7 @@ const scheduledPublishService = createScheduledPublishService({
 });
 const draftService = createDraftService({ postStore: store });
 const userStore = createUserStore({ database });
+const aboutStore = createAboutStore({ database });
 const accountingStore = createAccountingStore({ database });
 const accountingSessions = createAccountingSessions({ store: accountingStore });
 const fileStore = createFileStore({ database, uploadDir });
@@ -100,6 +103,7 @@ app.use('*', async (c, next) => {
   c.set('scheduledPublishService', scheduledPublishService);
   c.set('draftService', draftService);
   c.set('userStore', userStore);
+  c.set('aboutStore', aboutStore);
   c.set('accountingStore', accountingStore);
   c.set('accountingSessions', accountingSessions);
   c.set('fileStore', fileStore);
@@ -112,6 +116,7 @@ app.use('*', async (c, next) => {
 
 // API routes
 app.route('/api/admin', adminRoutes);
+app.route('/api/about', aboutRoutes);
 app.route('/api/admin/posts', revisionsRoutes);
 app.route('/api/posts', postsRoutes);
 app.route('/api/users', usersRoutes);

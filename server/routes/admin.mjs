@@ -32,6 +32,24 @@ app.get('/session', (c) => {
   return c.json({ ok }, ok ? 200 : 401);
 });
 
+app.get('/about', requireAdmin, (c) => {
+  return c.json({ profile: c.get('aboutStore').get() });
+});
+
+app.put('/about', requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    return c.json({ profile: c.get('aboutStore').save(body) });
+  } catch (error) {
+    const message = error instanceof SyntaxError
+      ? 'Invalid request body'
+      : error instanceof TypeError
+        ? 'About profile save failed'
+        : error?.message || 'About profile save failed';
+    return c.json({ ok: false, message }, 400);
+  }
+});
+
 app.get('/article-draft', requireAdmin, (c) => {
   const draftService = c.get('draftService');
   const postId = c.req.query('postId');
