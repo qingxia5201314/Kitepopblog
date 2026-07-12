@@ -489,6 +489,10 @@ describe('App layout shells', () => {
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      if (url === '/api/admin/about') return Response.json({ profile: {
+        avatarUrl: '/avatar.png', displayName: 'Kite', identityTags: ['写作者'], intro: '简介',
+        githubUrl: 'https://github.com/kite', content: '# 关于我', updatedAt: '2026-07-12T00:00:00.000Z'
+      } });
       return Response.json({ ok: true });
     });
     vi.stubGlobal('fetch', adminFetchMock);
@@ -507,6 +511,10 @@ describe('App layout shells', () => {
     expect(await waitFor(() => host.querySelector('.admin-create'))).toBeTruthy();
     expect(host.querySelector('.admin-create')?.textContent?.trim()).toBe('新建文章');
     expect(host.querySelector('.admin-user-group .panel-heading h2')?.textContent).toBe('用户管理');
+    expect(host.querySelector('.admin-about-group .panel-heading h2')?.textContent).toBe('关于我');
+    expect(adminFetchMock).not.toHaveBeenCalledWith('/api/admin/about', expect.anything());
+    (host.querySelector('.admin-about-group .panel-heading button') as HTMLButtonElement).click();
+    expect(await waitFor(() => (host.querySelector('[aria-label="名称"]') as HTMLInputElement)?.value === 'Kite' ? host : null)).toBeTruthy();
 
     const contentEditor = host.querySelector('.content-editor') as HTMLTextAreaElement;
     contentEditor.focus();

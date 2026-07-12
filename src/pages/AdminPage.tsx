@@ -1,6 +1,7 @@
 import React, { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArticleManager } from '../components/admin/ArticleManager';
+import { AboutManager } from '../components/admin/AboutManager';
 import { EditorPanel } from '../components/admin/EditorPanel';
 import { UserManager } from '../components/admin/UserManager';
 import { DraftRecoveryDialog } from '../features/editor/components/DraftRecoveryDialog';
@@ -66,7 +67,7 @@ export function AdminPage() {
   const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
   const [adminStatusFilter, setAdminStatusFilter] = useState<'all' | PostStatus>('all');
   const [expandedAdminPostId, setExpandedAdminPostId] = useState<string | null>(null);
-  const [adminPanelOpen, setAdminPanelOpen] = useState({ content: false, users: false });
+  const [adminPanelOpen, setAdminPanelOpen] = useState({ content: false, users: false, about: false });
   const [adminUsers, setAdminUsers] = useState<BlogUser[]>([]);
   const [adminUserForm, setAdminUserForm] = useState(EMPTY_ADMIN_USER_FORM);
   const [serverDraft, setServerDraft] = useState<ArticleAutosaveDraft | null>(null);
@@ -392,6 +393,12 @@ export function AdminPage() {
           onSaveUser={saveAdminUser}
           onSubmit={submitAdminUser}
           onTogglePanel={() => setAdminPanelOpen((current) => ({ ...current, users: !current.users }))}
+        />
+        <AboutManager
+          adminPanelOpen={adminPanelOpen.about}
+          adminToken={localAdminToken}
+          notify={notify}
+          onTogglePanel={() => setAdminPanelOpen((current) => ({ ...current, about: !current.about }))}
         />
       </aside>
 
