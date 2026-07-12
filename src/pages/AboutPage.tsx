@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import brandAvatar from '../assets/haruhi-avatar.png';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { ImageWithFallback } from '../components/shared';
@@ -14,6 +14,7 @@ export function AboutPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [profile, setProfile] = useState<AboutProfile | null>(null);
+  const activeRequest = useRef<AbortController | null>(null);
   const metadata = useMemo(
     () => ({
       title: '关于我 | Kitepop SOS',
@@ -27,20 +28,31 @@ export function AboutPage() {
   usePageMetadata(null, metadata);
 
   const loadProfile = useCallback(async () => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setLoading(true);
     setError('');
     try {
-      setProfile(await getAboutProfile());
+      const nextProfile = await getAboutProfile(controller.signal);
+      if (activeRequest.current !== controller || controller.signal.aborted) return;
+      setProfile(nextProfile);
     } catch (loadError) {
+      if (activeRequest.current !== controller || controller.signal.aborted || (loadError instanceof DOMException && loadError.name === 'AbortError')) {
+        return;
+      }
       setProfile(null);
       setError(loadError instanceof Error ? loadError.message : '获取个人资料失败，请稍后重试');
     } finally {
+      if (activeRequest.current !== controller || controller.signal.aborted) return;
+      activeRequest.current = null;
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void loadProfile();
+    return () => activeRequest.current?.abort();
   }, [loadProfile]);
 
   if (loading) {

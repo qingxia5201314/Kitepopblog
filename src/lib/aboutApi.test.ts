@@ -22,6 +22,19 @@ describe('about api client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/about', { cache: 'no-cache' });
   });
 
+  it('passes an optional abort signal to public profile requests', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ profile }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await getAboutProfile(controller.signal);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/about', {
+      cache: 'no-cache',
+      signal: controller.signal
+    });
+  });
+
   it('uses bearer authentication for admin reads and JSON updates', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ profile })));
     vi.stubGlobal('fetch', fetchMock);

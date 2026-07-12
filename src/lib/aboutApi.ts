@@ -50,8 +50,8 @@ async function requestProfile(input: RequestInfo | URL, init?: RequestInit): Pro
   }
 }
 
-export function getAboutProfile(): Promise<AboutProfile> {
-  return requestProfile('/api/about', { cache: 'no-cache' });
+export function getAboutProfile(signal?: AbortSignal): Promise<AboutProfile> {
+  return requestProfile('/api/about', signal ? { cache: 'no-cache', signal } : { cache: 'no-cache' });
 }
 
 export function getAdminAboutProfile(token: string): Promise<AboutProfile> {

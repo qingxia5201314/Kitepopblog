@@ -8,10 +8,20 @@ export interface AboutProfile {
   updatedAt: string;
 }
 
-export const EMPTY_ABOUT_PROFILE: Readonly<AboutProfile> = Object.freeze({
+export type ReadonlyAboutProfile = {
+  readonly avatarUrl: string;
+  readonly displayName: string;
+  readonly identityTags: readonly string[];
+  readonly intro: string;
+  readonly githubUrl: string;
+  readonly content: string;
+  readonly updatedAt: string;
+};
+
+export const EMPTY_ABOUT_PROFILE: ReadonlyAboutProfile = Object.freeze({
   avatarUrl: '',
   displayName: '',
-  identityTags: Object.freeze([]) as unknown as string[],
+  identityTags: Object.freeze([]),
   intro: '',
   githubUrl: '',
   content: '',
@@ -19,7 +29,15 @@ export const EMPTY_ABOUT_PROFILE: Readonly<AboutProfile> = Object.freeze({
 });
 
 export function emptyAboutProfile(): AboutProfile {
-  return { ...EMPTY_ABOUT_PROFILE, identityTags: [] };
+  return {
+    avatarUrl: EMPTY_ABOUT_PROFILE.avatarUrl,
+    displayName: EMPTY_ABOUT_PROFILE.displayName,
+    identityTags: [],
+    intro: EMPTY_ABOUT_PROFILE.intro,
+    githubUrl: EMPTY_ABOUT_PROFILE.githubUrl,
+    content: EMPTY_ABOUT_PROFILE.content,
+    updatedAt: EMPTY_ABOUT_PROFILE.updatedAt
+  };
 }
 
 export function isAboutProfileEmpty(profile: AboutProfile): boolean {

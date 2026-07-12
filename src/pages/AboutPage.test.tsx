@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, StrictMode } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AboutPage } from './AboutPage';
@@ -33,12 +33,12 @@ describe('about page', () => {
     vi.unstubAllGlobals();
   });
 
-  function renderPage() {
+  function renderPage(strict = false) {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
     roots.push(root);
-    act(() => root.render(<AboutPage />));
+    act(() => root.render(strict ? <StrictMode><AboutPage /></StrictMode> : <AboutPage />));
     return host;
   }
 
@@ -136,6 +136,42 @@ describe('about page', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(host.querySelector('.about-profile-name')?.textContent).toBe('Kite');
+  });
+
+  it('aborts the superseded StrictMode request and ignores its late response', async () => {
+    const pending: Array<{ resolve: (response: Response) => void; signal?: AbortSignal }> = [];
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((resolve) => {
+      pending.push({ resolve, signal: init?.signal || undefined });
+    })));
+    const host = renderPage(true);
+
+    expect(pending).toHaveLength(2);
+    expect(pending[0].signal?.aborted).toBe(true);
+    pending[1].resolve(Response.json({ profile: completeProfile }));
+    await flush();
+    expect(host.querySelector('.about-profile-name')?.textContent).toBe('Kite');
+
+    pending[0].resolve(Response.json({ profile: { ...completeProfile, displayName: '旧资料' } }));
+    await flush();
+    expect(host.querySelector('.about-profile-name')?.textContent).toBe('Kite');
+    expect(host.textContent).not.toContain('旧资料');
+  });
+
+  it('aborts the active request on unmount and ignores a late completion', async () => {
+    let resolveResponse!: (response: Response) => void;
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal || undefined;
+      return new Promise<Response>((resolve) => { resolveResponse = resolve; });
+    }));
+    const host = renderPage();
+    const root = roots.pop()!;
+
+    act(() => root.unmount());
+    expect(requestSignal?.aborted).toBe(true);
+    resolveResponse(Response.json({ profile: completeProfile }));
+    await flush();
+    expect(host.textContent).toBe('');
   });
 
   it('falls back to the brand avatar when the avatar is missing or fails', async () => {
