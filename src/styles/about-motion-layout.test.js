@@ -63,4 +63,26 @@ describe('about motion and mobile floating controls CSS', () => {
     }
     expect(reducedMotion).toMatch(/transition:\s*none\s*!important/);
   });
+
+  it('keeps all core profile content visible after reduced-motion animations are removed', () => {
+    const reducedStart = aboutCss.indexOf('@media (prefers-reduced-motion: reduce)');
+    const reducedEnd = aboutCss.indexOf('/* About editor:', reducedStart);
+    const reducedMotion = aboutCss.slice(reducedStart, reducedEnd);
+    for (const selector of [
+      '.about-profile-name',
+      '.about-identity-tags',
+      '.about-hero > p',
+      '.about-social-link',
+      '.about-reveal',
+      '.about-avatar-ring',
+      '.about-avatar-parallax'
+    ]) {
+      const matchingBodies = [...reducedMotion.matchAll(/([^{}]+)\{([^{}]*)}/g)]
+        .filter((match) => match[1].split(',').map((item) => item.trim()).includes(selector))
+        .map((match) => match[2]);
+      expect(matchingBodies, `${selector} must have a reduced-motion rule`).not.toHaveLength(0);
+      expect(matchingBodies.some((body) => /opacity:\s*1\s*!important/.test(body)
+        && /transform:\s*none\s*!important/.test(body)), `${selector} must remain visible`).toBe(true);
+    }
+  });
 });

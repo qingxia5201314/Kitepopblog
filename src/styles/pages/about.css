@@ -397,6 +397,9 @@
   .about-reveal,
   .about-reveal.is-reveal-pending,
   .about-reveal.is-revealed,
+  .about-profile-name,
+  .about-identity-tags,
+  .about-hero > p,
   .about-avatar-ring,
   .about-avatar-parallax,
   .about-social-link {
