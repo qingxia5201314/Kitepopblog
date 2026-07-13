@@ -11,7 +11,6 @@ import {
   AccountingEntry,
   AccountingEntryType,
   formatMoney,
-  getAccountingCategory,
   getVisibleAccountingEntries,
   sanitizeMoneyInput,
   sortAccountingEntries,
@@ -27,6 +26,7 @@ import {
   updateAccountingEntry,
   updateAccountingSettings
 } from '../lib/accountingApi';
+import { formatAccountingCreatedAt, getAccountingEntryTitle } from '../lib/accountingPresentation';
 import { formatBytes } from '../components/shared';
 import accountingHeroImage from '../assets/accounting-hero.webp';
 
@@ -450,49 +450,44 @@ export function AccountingPage() {
             </label>
           </div>
           <div className="entry-list">
-            {visibleAccountingEntries.map((entry: any) => {
-              const category = getAccountingCategory(entry.category, accountingData?.categories);
-              return (
-                <div className="entry-item" key={entry.id}>
-                  <span className={`entry-type entry-${entry.type}`}>
-                    {entry.type === 'expense' ? '支' : '收'}
-                  </span>
-                  <span className="entry-main">
-                    <strong>
-                      {category.name} · {entry.account}
-                    </strong>
-                    <small>
-                      {new Date(entry.createdAt || entry.spentAt).toLocaleString('zh-CN')} · 发生 {entry.spentAt}
-                      {entry.note ? ` · ${entry.note}` : ''}
-                      <em className={`entry-saving-badge ${entry.includeInSaving ? 'active' : ''}`}>
-                        {entry.includeInSaving ? '存钱项目' : '普通流水'}
-                      </em>
-                    </small>
-                  </span>
-                  <strong className={entry.type === 'expense' ? 'money-expense' : 'money-income'}>
-                    {entry.type === 'expense' ? '-' : '+'}
-                    {formatMoney(entry.amountCents)}
-                  </strong>
-                  <span className="entry-actions">
-                    <button
-                      onClick={() => {
-                        startEditAccountingEntry(entry);
-                      }}
-                      type="button"
-                    >
-                      编辑
-                    </button>
-                    <button
-                      className="danger"
-                      onClick={() => removeAccountingEntry(entry)}
-                      type="button"
-                    >
-                      删除
-                    </button>
-                  </span>
-                </div>
-              );
-            })}
+            {visibleAccountingEntries.map((entry: AccountingEntry) => (
+              <div className="entry-item" key={entry.id}>
+                <span className={`entry-type entry-${entry.type}`}>
+                  {entry.type === 'expense' ? '支' : '收'}
+                </span>
+                <span className="entry-main">
+                  <strong>{getAccountingEntryTitle(entry, accountingData?.categories)}</strong>
+                  <small>
+                    <time dateTime={entry.createdAt}>{formatAccountingCreatedAt(entry)}</time>
+                    <em className={`entry-saving-badge ${entry.includeInSaving ? 'active' : ''}`}>
+                      {entry.includeInSaving ? '存钱项目' : '普通流水'}
+                    </em>
+                  </small>
+                </span>
+                <strong className={entry.type === 'expense' ? 'money-expense' : 'money-income'}>
+                  {entry.type === 'expense' ? '-' : '+'}
+                  {formatMoney(entry.amountCents)}
+                </strong>
+                <span className="entry-actions">
+                  <button
+                    className="entry-edit"
+                    onClick={() => {
+                      startEditAccountingEntry(entry);
+                    }}
+                    type="button"
+                  >
+                    编辑
+                  </button>
+                  <button
+                    className="danger"
+                    onClick={() => removeAccountingEntry(entry)}
+                    type="button"
+                  >
+                    删除
+                  </button>
+                </span>
+              </div>
+            ))}
             {accountingData && accountingData.entries.length === 0 ? (
               <div className="empty-state">这个筛选条件下还没有流水。</div>
             ) : null}
