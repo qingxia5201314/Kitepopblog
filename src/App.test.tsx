@@ -1,3 +1,4 @@
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1269,6 +1270,148 @@ describe('App layout shells', () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
 
     expect(await waitFor(() => host.querySelector('.image-item'))).toBeTruthy();
+  });
+
+  it('switches mobile accounting panels while keeping entry content mounted', async () => {
+    window.localStorage.setItem(
+      'kitepop-accounting-session',
+      JSON.stringify({ token: 'accounting-token', expiresAt: '2099-01-01T00:00:00.000Z' })
+    );
+    window.history.pushState({}, '', '/accounting');
+
+    const savingGoal = {
+      name: '本月存钱计划',
+      targetCents: 120000,
+      savedCents: 30000,
+      currentBalanceCents: 30000,
+      targetBalanceCents: 150000,
+      targetSavingCents: 120000,
+      plannedAvailableCents: 180000,
+      availableBudgetCents: 180000,
+      budgetLimitCents: 180000,
+      spentCents: 2500,
+      remainingAvailableCents: 177500,
+      overBudgetCents: 0,
+      savingGapCents: 0,
+      savingSurplusCents: 57500,
+      startDate: '2026-07-01',
+      endDate: '2026-07-31',
+      progressPercent: 25,
+      remainingCents: 90000,
+      balanceDeltaCents: 0,
+      safeToSpendCents: 177500,
+      daysLeft: 18,
+      dailyAvailableCents: 9861,
+      dailyRequiredCents: 5000,
+      projectedSavingCents: 177500
+    };
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith('/api/posts') || url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url.startsWith('/api/accounting/month')) {
+        return Response.json({
+          entries: [
+            {
+              id: 'entry-1',
+              type: 'expense',
+              amountCents: 2500,
+              category: 'food',
+              account: '微信',
+              spentAt: '2026-07-13',
+              note: '午饭',
+              includeInSaving: true,
+              createdAt: '2026-07-13T04:30:00.000Z',
+              updatedAt: '2026-07-13T04:30:00.000Z'
+            }
+          ],
+          categories: [
+            { id: 'food', name: '餐饮', type: 'expense', accent: '#b6423c' },
+            { id: 'salary', name: '工资', type: 'income', accent: '#2f7d67' }
+          ],
+          settings: { monthlyBudgetCents: 300000, savingGoal },
+          summary: {
+            incomeCents: 0,
+            expenseCents: 2500,
+            savingIncomeCents: 0,
+            savingExpenseCents: 2500,
+            savingNetExpenseCents: 2500,
+            balanceCents: -2500,
+            dailyExpenseCents: 2500,
+            budgetLimitCents: 180000,
+            plannedAvailableCents: 180000,
+            targetSavingCents: 120000,
+            budgetUsedPercent: 1.39,
+            budgetRemainingCents: 177500,
+            topExpenseCategory: { category: 'food', amountCents: 2500 }
+          },
+          savingGoal
+        });
+      }
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+    const previousActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    try {
+      await act(async () => {
+        root.render(<App />);
+      });
+      for (let attempt = 0; attempt < 80 && !host.querySelector('[data-accounting-tab="entry"]'); attempt += 1) {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+      }
+
+      expect(pageFetchMock.mock.calls.some(([input]) =>
+        String(input).startsWith('/api/accounting/month')
+      )).toBe(true);
+
+      const entryTab = host.querySelector<HTMLButtonElement>('[data-accounting-tab="entry"]');
+      const ledgerTab = host.querySelector<HTMLButtonElement>('[data-accounting-tab="ledger"]');
+      const entryPanel = host.querySelector<HTMLElement>('#accounting-panel-entry');
+      const ledgerPanel = host.querySelector<HTMLElement>('#accounting-panel-ledger');
+      const planPanel = host.querySelector<HTMLElement>('#accounting-panel-plan');
+
+      expect(entryTab?.textContent).toBe('记一笔');
+      expect(entryTab?.getAttribute('aria-selected')).toBe('true');
+      expect(entryPanel?.classList.contains('is-mobile-active')).toBe(true);
+      expect(ledgerPanel?.classList.contains('is-mobile-active')).toBe(false);
+      expect(entryPanel?.tagName).toBe('FORM');
+      expect(entryPanel?.getAttribute('role')).toBeNull();
+      expect(planPanel?.tagName).toBe('FORM');
+      expect(planPanel?.getAttribute('role')).toBeNull();
+
+      const monthRequestsBeforeSwitch = pageFetchMock.mock.calls.filter(([input]) =>
+        String(input).startsWith('/api/accounting/month')
+      ).length;
+      await act(async () => {
+        ledgerTab?.click();
+      });
+
+      expect(ledgerTab?.getAttribute('aria-selected')).toBe('true');
+      expect(ledgerPanel?.classList.contains('is-mobile-active')).toBe(true);
+      expect(entryPanel?.classList.contains('is-mobile-active')).toBe(false);
+      expect(host.querySelector('#accounting-panel-entry')).toBe(entryPanel);
+      expect(pageFetchMock.mock.calls.filter(([input]) =>
+        String(input).startsWith('/api/accounting/month')
+      )).toHaveLength(monthRequestsBeforeSwitch);
+    } finally {
+      await act(async () => root.unmount());
+      roots.splice(roots.indexOf(root), 1);
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
+    }
+
+    expect(errorSpy.mock.calls.some((messages) =>
+      messages.some((message) => String(message).toLowerCase().includes('act('))
+    )).toBe(false);
   });
 
   it('reloads accounting entries when ledger filters change', async () => {

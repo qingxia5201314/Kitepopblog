@@ -28,6 +28,7 @@ import {
 } from '../lib/accountingApi';
 import { formatAccountingCreatedAt, getAccountingEntryTitle } from '../lib/accountingPresentation';
 import { formatBytes } from '../components/shared';
+import { AccountingMobileTabs, type AccountingPanel } from '../components/accounting/AccountingMobileTabs';
 import accountingHeroImage from '../assets/accounting-hero.webp';
 
 const ACCOUNTING_SESSION_KEY = 'kitepop-accounting-session';
@@ -76,6 +77,7 @@ export function AccountingPage() {
     loadAccountingSession()
   );
   const [accountingPassword, setAccountingPassword] = useState('');
+  const [mobilePanel, setMobilePanel] = useState<AccountingPanel>('entry');
 
   const {
     accountingMonth,
@@ -201,13 +203,21 @@ export function AccountingPage() {
             type="month"
             value={accountingMonth}
           />
-          <button className="ghost" onClick={handleLogoutAccounting} type="button">
+          <button className="ghost accounting-secondary-action" onClick={handleLogoutAccounting} type="button">
             退出记账
           </button>
         </div>
       </section>
 
-      <section className="accounting-metrics">
+      <AccountingMobileTabs active={mobilePanel} onChange={setMobilePanel} />
+
+      <section
+        aria-labelledby="accounting-tab-overview"
+        className={`accounting-metrics ${mobilePanel === 'overview' ? 'is-mobile-active' : ''}`}
+        data-accounting-panel="overview"
+        id="accounting-panel-overview"
+        role="tabpanel"
+      >
         <div className="metric-card">
           <i className="metric-icon metric-income" aria-hidden="true" />
           <span className="metric-label">本月收入</span>
@@ -241,11 +251,17 @@ export function AccountingPage() {
       </section>
 
       <section className="accounting-layout">
-        <form className="accounting-card accounting-form" onSubmit={saveAccountingEntry}>
+        <form
+          aria-labelledby="accounting-tab-entry"
+          className={`accounting-card accounting-form ${mobilePanel === 'entry' ? 'is-mobile-active' : ''}`}
+          data-accounting-panel="entry"
+          id="accounting-panel-entry"
+          onSubmit={saveAccountingEntry}
+        >
           <div className="panel-heading">
             <h2>{localEditingId ? '编辑流水' : '快速记一笔'}</h2>
             {localEditingId ? (
-              <button onClick={() => resetAccountingForm()} type="button">
+              <button className="accounting-secondary-action" onClick={() => resetAccountingForm()} type="button">
                 取消编辑
               </button>
             ) : null}
@@ -336,7 +352,7 @@ export function AccountingPage() {
                 <option value="expense">支出</option>
                 <option value="income">收入</option>
               </select>
-              <button onClick={() => addCustomAccountingCategory()} type="button">
+              <button className="accounting-secondary-action" onClick={() => addCustomAccountingCategory()} type="button">
                 添加
               </button>
             </div>
@@ -368,7 +384,11 @@ export function AccountingPage() {
                         <option value="income">收入</option>
                         <option value="both">通用</option>
                       </select>
-                      <button onClick={() => saveCustomAccountingCategory(category.id)} type="button">
+                      <button
+                        className="accounting-secondary-action"
+                        onClick={() => saveCustomAccountingCategory(category.id)}
+                        type="button"
+                      >
                         保存
                       </button>
                       <button
@@ -403,14 +423,23 @@ export function AccountingPage() {
               <small>勾选后参与剩余可用计算；收入不会进入本月收入。</small>
             </span>
           </label>
-          <button type="submit">{localEditingId ? '保存更新' : '保存流水'}</button>
+          <button className="accounting-primary-action" type="submit">
+            {localEditingId ? '保存更新' : '保存流水'}
+          </button>
         </form>
 
-        <section className="accounting-card">
+        <section
+          aria-labelledby="accounting-tab-ledger"
+          className={`accounting-card ${mobilePanel === 'ledger' ? 'is-mobile-active' : ''}`}
+          data-accounting-panel="ledger"
+          id="accounting-panel-ledger"
+          role="tabpanel"
+        >
           <div className="panel-heading">
             <h2>流水筛选 · {accountingEntries.length} 条</h2>
             {hasCollapsedAccountingEntries ? (
               <button
+                className="accounting-secondary-action"
                 onClick={() => setAccountingEntriesExpanded((expanded) => !expanded)}
                 type="button"
               >
@@ -493,7 +522,7 @@ export function AccountingPage() {
             ) : null}
             {hasCollapsedAccountingEntries ? (
               <button
-                className="entry-toggle"
+                className="entry-toggle accounting-secondary-action"
                 onClick={() => setAccountingEntriesExpanded((expanded) => !expanded)}
                 type="button"
               >
@@ -505,10 +534,16 @@ export function AccountingPage() {
           </div>
         </section>
 
-        <form className="accounting-card saving-panel" onSubmit={saveAccountingSettings}>
+        <form
+          aria-labelledby="accounting-tab-plan"
+          className={`accounting-card saving-panel ${mobilePanel === 'plan' ? 'is-mobile-active' : ''}`}
+          data-accounting-panel="plan"
+          id="accounting-panel-plan"
+          onSubmit={saveAccountingSettings}
+        >
           <div className="panel-heading">
             <h2>预算和存钱计划</h2>
-            <button type="submit">保存设置</button>
+            <button className="accounting-primary-action" type="submit">保存设置</button>
           </div>
           <label>
             每月生活费

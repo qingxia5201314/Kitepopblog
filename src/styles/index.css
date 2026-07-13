@@ -2,11 +2,11 @@
 @import './base.css';
 @import './layout.css';
 @import './pages/admin.css';
-@import './pages/accounting.css';
 @import './pages/files.css';
 @import './pages/images.css';
 @import './pages/media.css';
 @import '../App.css';
+@import './pages/accounting.css';
 @import './features/mobile-unlock.css';
 @import './motion.css';
 @import './effects.css';
