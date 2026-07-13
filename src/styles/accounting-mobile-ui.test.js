@@ -78,4 +78,30 @@ describe('accounting mobile presentation CSS', () => {
     );
     expect(ruleBody(reducedMotionCss, '[data-accounting-panel].is-mobile-active')).toMatch(/animation:\s*none/);
   });
+
+  it('keeps a visible high-specificity focus ring on every styled accounting action', () => {
+    const focusSelectors = [
+      '.accounting-card .accounting-primary-action:focus-visible',
+      '.accounting-card .accounting-secondary-action:focus-visible',
+      '.entry-actions .entry-edit:focus-visible',
+      '.entry-actions .danger:focus-visible'
+    ];
+
+    for (const selector of focusSelectors) {
+      const body = ruleBody(accountingCss, `.accounting-page ${selector}`);
+      expect(body, `${selector} must define its own focus rule`).toMatch(/outline:\s*3px solid/);
+      expect(body, `${selector} must offset the focus ring`).toMatch(/outline-offset:\s*3px/);
+    }
+
+    for (const selector of [focusSelectors[0], focusSelectors[3]]) {
+      expect(ruleBody(accountingCss, `.accounting-page ${selector}`)).toMatch(/box-shadow:[^;]*inset/);
+    }
+
+    const pressedPrimary = ruleBody(
+      accountingCss,
+      '.accounting-page .accounting-card .accounting-primary-action:active:focus-visible'
+    );
+    expect(pressedPrimary).toMatch(/drop-shadow\(1px 2px 0 #7f2328\)/);
+    expect(pressedPrimary).toMatch(/transform:\s*translate\(3px, 3px\)/);
+  });
 });
