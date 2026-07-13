@@ -42,6 +42,12 @@ describe('accounting mobile presentation CSS', () => {
 
     const mobileCss = blockAfter(accountingCss, '@media (max-width: 720px)');
     expect(ruleBody(mobileCss, '.accounting-mobile-tabs')).toMatch(/display:\s*grid/);
+    expect(ruleBody(mobileCss, ".accounting-mobile-tabs button[aria-pressed='true']")).toMatch(
+      /border-bottom-color:\s*#d84b49/
+    );
+    const tabFocus = ruleBody(mobileCss, '.accounting-mobile-tabs button:focus-visible');
+    expect(tabFocus).toMatch(/outline:\s*none/);
+    expect(tabFocus).toMatch(/box-shadow:[^;]*inset/);
     expect(ruleBody(mobileCss, '[data-accounting-panel]')).toMatch(/display:\s*none/);
     expect(ruleBody(mobileCss, '[data-accounting-panel].is-mobile-active')).toMatch(/display:\s*grid/);
   });
@@ -75,6 +81,9 @@ describe('accounting mobile presentation CSS', () => {
     expect(ruleBody(reducedMotionCss, '.accounting-page::after')).toMatch(/animation:\s*none/);
     expect(ruleBody(reducedMotionCss, '.accounting-page .accounting-primary-action::after')).toMatch(
       /animation:\s*none/
+    );
+    expect(ruleBody(reducedMotionCss, '.accounting-page .accounting-primary-action::after')).toMatch(
+      /opacity:\s*0/
     );
     expect(ruleBody(reducedMotionCss, '[data-accounting-panel].is-mobile-active')).toMatch(/animation:\s*none/);
   });

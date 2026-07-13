@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useEffect, useState, FormEvent } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAccounting } from '../hooks/useAccounting';
 import { loginAccounting } from '../lib/accountingApi';
@@ -32,6 +32,7 @@ import { AccountingMobileTabs, type AccountingPanel } from '../components/accoun
 import accountingHeroImage from '../assets/accounting-hero.webp';
 
 const ACCOUNTING_SESSION_KEY = 'kitepop-accounting-session';
+const ACCOUNTING_MOBILE_QUERY = '(max-width: 720px)';
 
 const ACCOUNTING_CATEGORY_TYPE_LABELS: Record<AccountingCategory['type'], string> = {
   expense: '支出',
@@ -71,6 +72,30 @@ function clearAccountingSession() {
   window.localStorage.removeItem(ACCOUNTING_SESSION_KEY);
 }
 
+function useAccountingMobileMode() {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window.matchMedia === 'function' ? window.matchMedia(ACCOUNTING_MOBILE_QUERY).matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+
+    const query = window.matchMedia(ACCOUNTING_MOBILE_QUERY);
+    const handleChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    setIsMobile(query.matches);
+
+    if (typeof query.addEventListener === 'function') {
+      query.addEventListener('change', handleChange);
+      return () => query.removeEventListener('change', handleChange);
+    }
+
+    query.addListener(handleChange);
+    return () => query.removeListener(handleChange);
+  }, []);
+
+  return isMobile;
+}
+
 export function AccountingPage() {
   const { notify } = useApp();
   const [accountingSession, setAccountingSession] = useState<{ token: string; expiresAt: string } | null>(() =>
@@ -78,6 +103,7 @@ export function AccountingPage() {
   );
   const [accountingPassword, setAccountingPassword] = useState('');
   const [mobilePanel, setMobilePanel] = useState<AccountingPanel>('entry');
+  const isMobileAccounting = useAccountingMobileMode();
 
   const {
     accountingMonth,
@@ -209,14 +235,13 @@ export function AccountingPage() {
         </div>
       </section>
 
-      <AccountingMobileTabs active={mobilePanel} onChange={setMobilePanel} />
+      {isMobileAccounting ? <AccountingMobileTabs active={mobilePanel} onChange={setMobilePanel} /> : null}
 
       <section
-        aria-labelledby="accounting-tab-overview"
+        aria-label="本月概览"
         className={`accounting-metrics ${mobilePanel === 'overview' ? 'is-mobile-active' : ''}`}
         data-accounting-panel="overview"
         id="accounting-panel-overview"
-        role="tabpanel"
       >
         <div className="metric-card">
           <i className="metric-icon metric-income" aria-hidden="true" />
@@ -252,7 +277,7 @@ export function AccountingPage() {
 
       <section className="accounting-layout">
         <form
-          aria-labelledby="accounting-tab-entry"
+          aria-label="快速记一笔"
           className={`accounting-card accounting-form ${mobilePanel === 'entry' ? 'is-mobile-active' : ''}`}
           data-accounting-panel="entry"
           id="accounting-panel-entry"
@@ -429,11 +454,10 @@ export function AccountingPage() {
         </form>
 
         <section
-          aria-labelledby="accounting-tab-ledger"
+          aria-label="流水"
           className={`accounting-card ${mobilePanel === 'ledger' ? 'is-mobile-active' : ''}`}
           data-accounting-panel="ledger"
           id="accounting-panel-ledger"
-          role="tabpanel"
         >
           <div className="panel-heading">
             <h2>流水筛选 · {accountingEntries.length} 条</h2>
@@ -502,6 +526,7 @@ export function AccountingPage() {
                     className="entry-edit"
                     onClick={() => {
                       startEditAccountingEntry(entry);
+                      setMobilePanel('entry');
                     }}
                     type="button"
                   >
@@ -535,7 +560,7 @@ export function AccountingPage() {
         </section>
 
         <form
-          aria-labelledby="accounting-tab-plan"
+          aria-label="预算和存钱计划"
           className={`accounting-card saving-panel ${mobilePanel === 'plan' ? 'is-mobile-active' : ''}`}
           data-accounting-panel="plan"
           id="accounting-panel-plan"

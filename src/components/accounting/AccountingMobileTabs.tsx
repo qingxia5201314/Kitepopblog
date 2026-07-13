@@ -33,20 +33,19 @@ export function AccountingMobileTabs({ active, onChange }: AccountingMobileTabsP
   };
 
   return (
-    <div aria-label="记账工作区" className="accounting-mobile-tabs" role="tablist">
+    <div aria-label="记账工作区" className="accounting-mobile-tabs" role="group">
       {ACCOUNTING_TABS.map(({ panel, label }, index) => {
         const selected = panel === active;
 
         return (
           <button
             aria-controls={`accounting-panel-${panel}`}
-            aria-selected={selected}
+            aria-pressed={selected}
             data-accounting-tab={panel}
             id={`accounting-tab-${panel}`}
             key={panel}
             onClick={() => onChange(panel)}
             onKeyDown={(event) => handleKeyDown(event, index)}
-            role="tab"
             tabIndex={selected ? 0 : -1}
             type="button"
           >

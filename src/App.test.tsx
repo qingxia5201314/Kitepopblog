@@ -1272,7 +1272,7 @@ describe('App layout shells', () => {
     expect(await waitFor(() => host.querySelector('.image-item'))).toBeTruthy();
   });
 
-  it('switches mobile accounting panels while keeping entry content mounted', async () => {
+  it('switches mobile accounting panels, opens edits, and removes mobile semantics on desktop', async () => {
     window.localStorage.setItem(
       'kitepop-accounting-session',
       JSON.stringify({ token: 'accounting-token', expiresAt: '2099-01-01T00:00:00.000Z' })
@@ -1350,7 +1350,26 @@ describe('App layout shells', () => {
       return Response.json({ ok: true });
     });
     vi.stubGlobal('fetch', pageFetchMock);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let mobileMatches = true;
+    const mediaListeners = new Set<(event: MediaQueryListEvent) => void>();
+    const mobileQuery = {
+      get matches() {
+        return mobileMatches;
+      },
+      media: '(max-width: 720px)',
+      onchange: null,
+      addEventListener: vi.fn((_type: string, listener: (event: MediaQueryListEvent) => void) => {
+        mediaListeners.add(listener);
+      }),
+      removeEventListener: vi.fn((_type: string, listener: (event: MediaQueryListEvent) => void) => {
+        mediaListeners.delete(listener);
+      }),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    } as unknown as MediaQueryList;
+    vi.stubGlobal('matchMedia', vi.fn(() => mobileQuery));
+    const errorSpy = vi.spyOn(console, 'error');
     const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
     const previousActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT;
     actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
@@ -1369,6 +1388,11 @@ describe('App layout shells', () => {
           await new Promise((resolve) => setTimeout(resolve, 10));
         });
       }
+      for (let attempt = 0; attempt < 80 && !host.querySelector('.entry-edit'); attempt += 1) {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        });
+      }
 
       expect(pageFetchMock.mock.calls.some(([input]) =>
         String(input).startsWith('/api/accounting/month')
@@ -1379,15 +1403,24 @@ describe('App layout shells', () => {
       const entryPanel = host.querySelector<HTMLElement>('#accounting-panel-entry');
       const ledgerPanel = host.querySelector<HTMLElement>('#accounting-panel-ledger');
       const planPanel = host.querySelector<HTMLElement>('#accounting-panel-plan');
+      const overviewPanel = host.querySelector<HTMLElement>('#accounting-panel-overview');
+      const controls = Array.from(host.querySelectorAll<HTMLButtonElement>('[data-accounting-tab]'));
 
+      expect(host.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('记账工作区');
+      expect(host.querySelector('[role="tablist"]')).toBeNull();
+      expect(controls).toHaveLength(4);
+      for (const control of controls) {
+        expect(host.querySelector(`#${control.getAttribute('aria-controls')}`)).toBeTruthy();
+      }
       expect(entryTab?.textContent).toBe('记一笔');
-      expect(entryTab?.getAttribute('aria-selected')).toBe('true');
+      expect(entryTab?.getAttribute('aria-pressed')).toBe('true');
       expect(entryPanel?.classList.contains('is-mobile-active')).toBe(true);
       expect(ledgerPanel?.classList.contains('is-mobile-active')).toBe(false);
       expect(entryPanel?.tagName).toBe('FORM');
       expect(entryPanel?.getAttribute('role')).toBeNull();
       expect(planPanel?.tagName).toBe('FORM');
       expect(planPanel?.getAttribute('role')).toBeNull();
+      expect(host.querySelector('[role="tabpanel"]')).toBeNull();
 
       const monthRequestsBeforeSwitch = pageFetchMock.mock.calls.filter(([input]) =>
         String(input).startsWith('/api/accounting/month')
@@ -1396,22 +1429,60 @@ describe('App layout shells', () => {
         ledgerTab?.click();
       });
 
-      expect(ledgerTab?.getAttribute('aria-selected')).toBe('true');
+      expect(ledgerTab?.getAttribute('aria-pressed')).toBe('true');
       expect(ledgerPanel?.classList.contains('is-mobile-active')).toBe(true);
       expect(entryPanel?.classList.contains('is-mobile-active')).toBe(false);
+
+      const editButton = host.querySelector<HTMLButtonElement>('.entry-edit');
+      expect(editButton).toBeTruthy();
+      await act(async () => {
+        editButton?.click();
+      });
+
+      const amountInput = entryPanel?.querySelector<HTMLInputElement>('input[placeholder="0.00"]');
+      const noteInput = entryPanel?.querySelector<HTMLInputElement>('input[placeholder="例如：午饭、课程、工资"]');
+      expect(entryTab?.getAttribute('aria-pressed')).toBe('true');
+      expect(entryPanel?.classList.contains('is-mobile-active')).toBe(true);
+      expect(ledgerPanel?.classList.contains('is-mobile-active')).toBe(false);
       expect(host.querySelector('#accounting-panel-entry')).toBe(entryPanel);
+      expect(amountInput?.value).toBe('25');
+      expect(noteInput?.value).toBe('午饭');
+
+      await act(async () => {
+        ledgerTab?.click();
+      });
+      expect(entryPanel?.classList.contains('is-mobile-active')).toBe(false);
+      expect(amountInput?.value).toBe('25');
+      expect(noteInput?.value).toBe('午饭');
+      await act(async () => {
+        entryTab?.click();
+      });
+      expect(entryPanel?.classList.contains('is-mobile-active')).toBe(true);
+      expect(amountInput?.value).toBe('25');
+      expect(noteInput?.value).toBe('午饭');
+
       expect(pageFetchMock.mock.calls.filter(([input]) =>
         String(input).startsWith('/api/accounting/month')
       )).toHaveLength(monthRequestsBeforeSwitch);
+
+      mobileMatches = false;
+      await act(async () => {
+        const event = { matches: false, media: mobileQuery.media } as MediaQueryListEvent;
+        mediaListeners.forEach((listener) => listener(event));
+      });
+
+      expect(host.querySelector('.accounting-mobile-tabs')).toBeNull();
+      for (const panel of [overviewPanel, entryPanel, ledgerPanel, planPanel]) {
+        expect(panel?.getAttribute('role')).toBeNull();
+        expect(panel?.getAttribute('aria-labelledby')).toBeNull();
+      }
     } finally {
       await act(async () => root.unmount());
       roots.splice(roots.indexOf(root), 1);
       actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment;
     }
 
-    expect(errorSpy.mock.calls.some((messages) =>
-      messages.some((message) => String(message).toLowerCase().includes('act('))
-    )).toBe(false);
+    expect(errorSpy).not.toHaveBeenCalled();
   });
 
   it('reloads accounting entries when ledger filters change', async () => {
