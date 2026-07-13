@@ -645,7 +645,6 @@
 /* Home filter stacking fix: preserve layout and raise only the floating menu. */
 .home-filter-panel {
   overflow: visible;
-  position: relative;
   z-index: 3;
 }
 
