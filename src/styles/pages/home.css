@@ -641,3 +641,27 @@
   border-color: rgba(197, 59, 57, 0.24);
   box-shadow: 0 10px 22px rgba(42, 19, 15, 0.07);
 }
+
+/* Home filter stacking fix: preserve layout and raise only the floating menu. */
+.home-filter-panel {
+  overflow: visible;
+  position: relative;
+  z-index: 3;
+}
+
+.home-post-panel {
+  position: relative;
+  z-index: 1;
+}
+
+.index-filters .filter-menu {
+  position: relative;
+}
+
+.index-filters .filter-menu[open] {
+  z-index: 40;
+}
+
+.index-filters .filter-menu > div {
+  z-index: 41;
+}
