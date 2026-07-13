@@ -313,6 +313,7 @@
 
   .accounting-hero {
     align-items: center;
+    display: grid;
     gap: 10px;
     grid-template-columns: minmax(0, 1fr) auto;
     padding: 14px;
@@ -469,7 +470,7 @@
 
 @media (max-width: 380px) {
   .accounting-hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .accounting-actions input {

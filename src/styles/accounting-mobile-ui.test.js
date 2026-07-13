@@ -52,6 +52,16 @@ describe('accounting mobile presentation CSS', () => {
     expect(ruleBody(mobileCss, '[data-accounting-panel].is-mobile-active')).toMatch(/display:\s*grid/);
   });
 
+  it('keeps the mobile accounting hero on its responsive grid instead of the legacy flex row', () => {
+    const mobileCss = blockAfter(accountingCss, '@media (max-width: 720px)');
+    const narrowMobileCss = blockAfter(accountingCss, '@media (max-width: 380px)');
+
+    expect(ruleBody(mobileCss, '.accounting-hero')).toMatch(/display:\s*grid/);
+    expect(ruleBody(narrowMobileCss, '.accounting-hero')).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*1fr\)/
+    );
+  });
+
   it('uses the container-relative glint track and exposes the approved action selectors', () => {
     const glint = blockAfter(accountingCss, '@keyframes accounting-button-glint');
 
