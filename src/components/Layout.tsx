@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { BackToTop } from './BackToTop';
+import { ToolMenu } from './ToolMenu';
 
 export function Layout() {
   const location = useLocation();
@@ -63,39 +64,15 @@ export function Layout() {
             关于我
           </Link>
           {toolsUnlocked ? (
-            <details className="tool-menu">
-              <summary>工具</summary>
-              <div>
-                <Link
-                  aria-current={isNavActive('/accounting') ? 'page' : undefined}
-                  className={isNavActive('/accounting') ? 'active' : ''}
-                  to="/accounting"
-                >
-                  记账
-                </Link>
-                <Link
-                  aria-current={isNavActive('/files') ? 'page' : undefined}
-                  className={isNavActive('/files') ? 'active' : ''}
-                  to="/files"
-                >
-                  文件
-                </Link>
-                <Link
-                  aria-current={isNavActive('/images') ? 'page' : undefined}
-                  className={isNavActive('/images') ? 'active' : ''}
-                  to="/images"
-                >
-                  图床
-                </Link>
-                <Link
-                  aria-current={isNavActive('/admin') ? 'page' : undefined}
-                  className={isNavActive('/admin') ? 'active' : ''}
-                  to="/admin"
-                >
-                  后台
-                </Link>
-              </div>
-            </details>
+            <ToolMenu
+              items={[
+                { label: '记账', to: '/accounting', active: isNavActive('/accounting') },
+                { label: '文件', to: '/files', active: isNavActive('/files') },
+                { label: '图床', to: '/images', active: isNavActive('/images') },
+                { label: '后台', to: '/admin', active: isNavActive('/admin') }
+              ]}
+              routeKey={location.pathname}
+            />
           ) : (
             <Link
               aria-current={isNavActive('/admin') ? 'page' : undefined}
