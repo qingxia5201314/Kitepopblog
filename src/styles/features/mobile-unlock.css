@@ -1,6 +1,10 @@
 /* Shared phone layout for admin, files, images, and accounting unlock forms. */
 @media (max-width: 720px) {
   .unlock-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
     box-sizing: border-box;
     margin: clamp(28px, 9vh, 72px) auto;
     max-width: calc(100vw - 24px);

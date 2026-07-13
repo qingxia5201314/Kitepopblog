@@ -50,6 +50,10 @@ describe('shared mobile unlock layout', () => {
     const phoneCss = blockAfter(mobileUnlockCss, '@media (max-width: 720px)');
 
     expectRule(phoneCss, '.unlock-panel', [
+      /display:\s*flex/,
+      /flex-direction:\s*column/,
+      /align-items:\s*stretch/,
+      /justify-content:\s*flex-start/,
       /box-sizing:\s*border-box/,
       /margin:\s*clamp\(28px,\s*9vh,\s*72px\) auto/,
       /max-width:\s*calc\(100vw - 24px\)/,
