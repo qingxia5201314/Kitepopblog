@@ -47,7 +47,7 @@ const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     } as Response;
   }
 
-  if (url.startsWith('/api/users/me') || url.startsWith('/api/admin/session')) {
+  if (url.startsWith('/api/users/me')) {
     return {
       ok: false,
       json: async () => ({ message: 'Unauthorized' })
@@ -106,6 +106,18 @@ function AdminAutosaveTestShell() {
 describe('App layout shells', () => {
   const roots: Array<ReturnType<typeof createRoot>> = [];
 
+  const sessionFor = (permission: 'reader' | 'admin') => ({
+    expiresAt: '2099-01-01T00:00:00.000Z',
+    user: {
+      id: `${permission}-1`,
+      username: permission,
+      nickname: permission === 'admin' ? 'Admin' : 'Reader',
+      permission,
+      createdAt: '2026-07-15T00:00:00.000Z',
+      updatedAt: '2026-07-15T00:00:00.000Z'
+    }
+  });
+
   async function waitFor(check: () => Element | null, attempts = 80) {
     for (let index = 0; index < attempts; index += 1) {
       const result = check();
@@ -146,6 +158,113 @@ describe('App layout shells', () => {
     vi.restoreAllMocks();
     vi.useRealTimers();
     FakeXMLHttpRequest.latest = null;
+  });
+
+  it('removes every legacy token session when the app starts', async () => {
+    window.localStorage.setItem('kitepop-admin-session', '{"token":"old-admin"}');
+    window.localStorage.setItem('kitepop-user-session', '{"token":"old-user"}');
+    window.localStorage.setItem('kitepop-accounting-session', '{"token":"old-accounting"}');
+    vi.stubGlobal('fetch', fetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    root.render(<App />);
+
+    expect(await waitFor(() => (
+      window.localStorage.getItem('kitepop-admin-session') === null &&
+      window.localStorage.getItem('kitepop-user-session') === null &&
+      window.localStorage.getItem('kitepop-accounting-session') === null
+    ) ? host : null)).toBeTruthy();
+  });
+
+  it('shows the account login form to an anonymous management-route visitor', async () => {
+    window.history.pushState({}, '', '/accounting');
+    vi.stubGlobal('fetch', fetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    root.render(<App />);
+
+    expect(await waitFor(() => host.querySelector('form.unlock-panel input[name="username"]'))).toBeTruthy();
+    expect(host.querySelector('form.unlock-panel')?.textContent).toContain('管理员登录');
+    expect(host.querySelector('input[aria-label="记账口令"]')).toBeFalsy();
+  });
+
+  it('shows the forbidden state to a signed-in reader on management routes', async () => {
+    window.history.pushState({}, '', '/images');
+    const readerFetch = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/users/me') return Response.json(sessionFor('reader'));
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', readerFetch);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    root.render(<App />);
+
+    expect(await waitFor(() => host.querySelector('.unlock-panel h1'))).toHaveProperty(
+      'textContent',
+      '当前账号没有管理员权限'
+    );
+    expect(readerFetch.mock.calls.some(([input]) => String(input).startsWith('/api/images'))).toBe(false);
+  });
+
+  it.each([
+    ['/admin', '/api/admin/users', 'input[aria-label="文章标题"]'],
+    ['/accounting', '/api/accounting/month', '.accounting-metrics'],
+    ['/images', '/api/images', '.image-list-panel'],
+    ['/files', '/api/files', '.file-list-panel']
+  ])('loads %s directly for an admin without a second password form', async (route, dataEndpoint, pageSelector) => {
+    window.history.pushState({}, '', route);
+    const adminFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      if (url === '/api/admin/article-draft') return Response.json({ draft: null });
+      if (url.startsWith('/api/accounting/month')) {
+        return Response.json({
+          entries: [],
+          categories: [],
+          settings: { monthlyBudgetCents: 0 },
+          savingGoal: null,
+          summary: {
+            incomeCents: 0,
+            expenseCents: 0,
+            balanceCents: 0,
+            budgetLimitCents: 0,
+            budgetRemainingCents: 0,
+            budgetUsedPercent: 0,
+            targetSavingCents: 0
+          }
+        });
+      }
+      if (url.startsWith('/api/images')) return Response.json({ images: [] });
+      if (url.startsWith('/api/files')) {
+        return Response.json({ folder: null, breadcrumbs: [], folders: [], files: [] });
+      }
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', adminFetch);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+
+    root.render(<App />);
+
+    expect(await waitFor(() => (
+      adminFetch.mock.calls.some(([input]) => String(input).startsWith(dataEndpoint))
+        ? host.querySelector(pageSelector)
+        : null
+    ))).toBeTruthy();
+    expect(host.querySelector('.unlock-panel')).toBeFalsy();
+    expect(host.querySelector('input[type="password"]')).toBeFalsy();
   });
 
   it('renders the redesigned home shell with hero and article index areas', async () => {
@@ -224,7 +343,8 @@ describe('App layout shells', () => {
           nextCursor: null, hasMore: false, total: 2
         });
       }
-      if (url.startsWith('/api/users/me') || url.startsWith('/api/admin/session')) {
+      if (url === '/api/posts?summary=1') return Response.json({ posts: [] });
+      if (url.startsWith('/api/users/me')) {
         return Response.json({ message: 'Unauthorized' }, { status: 401 });
       }
       return Response.json({ ok: true });
@@ -251,12 +371,8 @@ describe('App layout shells', () => {
   });
 
   it('keeps useful public navigation and places about immediately after home', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (String(input) === '/api/users/me') return Response.json(sessionFor('admin'));
       return fetchMock(input);
     });
     vi.stubGlobal('fetch', pageFetchMock);
@@ -267,7 +383,10 @@ describe('App layout shells', () => {
     roots.push(root);
     root.render(<App />);
 
-    const nav = await waitFor(() => host.querySelector('.topbar nav'));
+    const nav = await waitFor(() => {
+      const current = host.querySelector('.topbar nav');
+      return current?.textContent?.includes('工具') ? current : null;
+    });
     const publicLinks = Array.from(nav?.querySelectorAll(':scope > a') ?? []);
     expect(publicLinks.slice(0, 2).map((link) => link.textContent)).toEqual(['首页', '关于我']);
     expect(publicLinks[1]?.getAttribute('href')).toBe('/about');
@@ -328,7 +447,8 @@ describe('App layout shells', () => {
         requestCounts.detail += 1;
         return Response.json({ message: 'Post not found' }, { status: 404 });
       }
-      if (url.startsWith('/api/users/me') || url.startsWith('/api/admin/session')) {
+      if (url === '/api/posts?summary=1') return Response.json({ posts: [] });
+      if (url.startsWith('/api/users/me')) {
         return Response.json({ message: 'Unauthorized' }, { status: 401 });
       }
       return Response.json({ ok: true });
@@ -348,12 +468,8 @@ describe('App layout shells', () => {
   });
 
   it('marks the current top navigation item as active', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (String(input) === '/api/users/me') return Response.json(sessionFor('admin'));
       return fetchMock(input);
     });
     vi.stubGlobal('fetch', pageFetchMock);
@@ -371,15 +487,11 @@ describe('App layout shells', () => {
   });
 
   it('shows inline and display formula controls in the admin editor', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/admin');
     const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       return Response.json({ ok: true });
     });
@@ -399,10 +511,6 @@ describe('App layout shells', () => {
 
   it('autosaves the admin article editor through the atomic draft endpoint every ten seconds without a toast', async () => {
     vi.useFakeTimers();
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/admin');
     const adminFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -422,7 +530,7 @@ describe('App layout shells', () => {
         );
       }
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       if (url === '/api/admin/article-draft' && init?.method === 'PUT') {
         const body = JSON.parse(String(init.body));
@@ -459,7 +567,7 @@ describe('App layout shells', () => {
       ([input, init]) => String(input) === '/api/admin/article-draft' && init?.method === 'PUT'
     );
     expect(saveCall).toBeTruthy();
-    expect(saveCall?.[1]?.headers).toEqual({ 'content-type': 'application/json', Authorization: 'Bearer admin-token' });
+    expect(saveCall?.[1]?.headers).toEqual({ 'content-type': 'application/json' });
     expect(JSON.parse(String(saveCall?.[1]?.body))).toMatchObject({
       editingId: null,
       draft: { title: '数据库自动保存测试' }
@@ -469,10 +577,6 @@ describe('App layout shells', () => {
   });
 
   it('switches articles after draft recovery and always opens new articles with an empty form', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/admin');
     const posts = [
       {
@@ -488,7 +592,7 @@ describe('App layout shells', () => {
     ];
     const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       if (url === '/api/admin/article-draft') return Response.json({ draft: {
         editingId: 'post-a', updatedAt: '2026-07-10T03:00:00.000Z',
@@ -535,15 +639,11 @@ describe('App layout shells', () => {
   });
 
   it('renders readable Chinese labels in the admin content managers', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/admin');
     const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       if (url === '/api/admin/about') return Response.json({ profile: {
         avatarUrl: '/avatar.png', displayName: 'Kite', identityTags: ['写作者'], intro: '简介',
@@ -581,18 +681,13 @@ describe('App layout shells', () => {
   });
 
   it('loads draft posts automatically when an admin session already exists', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/admin');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       if (url.startsWith('/api/posts')) {
-        const headers = init?.headers as Record<string, string> | undefined;
-        const isDraftRequest = url.includes('includeDrafts=1') && headers?.Authorization === 'Bearer admin-token';
+        const isDraftRequest = url.includes('includeDrafts=1');
         return Response.json({
           posts: isDraftRequest
             ? [
@@ -630,9 +725,7 @@ describe('App layout shells', () => {
     (expandContentButton as HTMLButtonElement).click();
 
     expect(await waitFor(() => (host.textContent?.includes('Draft post') ? host : null))).toBeTruthy();
-    expect(pageFetchMock).toHaveBeenCalledWith('/api/posts?includeDrafts=1', {
-      headers: { Authorization: 'Bearer admin-token' }
-    });
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/posts?includeDrafts=1', { credentials: 'same-origin' });
   });
 
   it('renders article detail shell when the clean URL points to a post', async () => {
@@ -697,34 +790,10 @@ describe('App layout shells', () => {
   });
 
   it('shows an edit article action for admin users on article detail pages', async () => {
-    window.localStorage.setItem(
-      'kitepop-user-session',
-      JSON.stringify({
-        token: 'user-admin-token',
-        expiresAt: '2099-01-01T00:00:00.000Z',
-        user: {
-          id: 'user-admin',
-          username: 'admin',
-          nickname: 'Admin',
-          permission: 'admin',
-          createdAt: '2026-07-09T00:00:00.000Z',
-          updatedAt: '2026-07-09T00:00:00.000Z'
-        }
-      })
-    );
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/users/me')) {
-        return Response.json({
-          user: {
-            id: 'user-admin',
-            username: 'admin',
-            nickname: 'Admin',
-            permission: 'admin',
-            createdAt: '2026-07-09T00:00:00.000Z',
-            updatedAt: '2026-07-09T00:00:00.000Z'
-          }
-        });
+        return Response.json(sessionFor('admin'));
       }
       return fetchMock(input);
     });
@@ -746,14 +815,10 @@ describe('App layout shells', () => {
   });
 
   it('opens the requested article in the admin editor from the edit query', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/admin?edit=post-1');
     const adminFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
       return fetchMock(input);
     });
@@ -804,7 +869,7 @@ describe('App layout shells', () => {
     root.render(<App />);
 
     expect(await waitFor(() => (host.textContent?.includes('Persisted comment') ? host : null))).toBeTruthy();
-    expect(pageFetchMock).toHaveBeenCalledWith('/api/posts/post-1/comments');
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/posts/post-1/comments', { credentials: 'same-origin' });
     expect(host.querySelector('.comment-panel h3')?.textContent).toContain('1');
   });
 
@@ -849,7 +914,6 @@ describe('App layout shells', () => {
       const url = String(input);
       if (url.startsWith('/api/users/login')) {
         return Response.json({
-          token: 'user-token',
           expiresAt: '2099-01-01T00:00:00.000Z',
           user: {
             id: 'user-1',
@@ -885,10 +949,11 @@ describe('App layout shells', () => {
     expect(pageFetchMock).toHaveBeenCalledWith('/api/users/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'kite', password: 'secret123' })
+      body: JSON.stringify({ username: 'kite', password: 'secret123' }),
+      credentials: 'same-origin'
     });
     expect((await waitFor(() => host.querySelector('.user-auth-card strong')))?.textContent).toBe('Kite');
-    expect(window.localStorage.getItem('kitepop-user-session')).toContain('user-token');
+    expect(window.localStorage.getItem('kitepop-user-session')).toBeNull();
   });
 
   it('registers public users from the home auth form and keeps the session', async () => {
@@ -897,7 +962,6 @@ describe('App layout shells', () => {
       if (url.startsWith('/api/users/register')) {
         return Response.json(
           {
-            token: 'registered-token',
             expiresAt: '2099-01-01T00:00:00.000Z',
             user: {
               id: 'user-2',
@@ -942,10 +1006,11 @@ describe('App layout shells', () => {
     expect(pageFetchMock).toHaveBeenCalledWith('/api/users/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username: 'newkite', password: 'secret123', nickname: 'New Kite' })
+      body: JSON.stringify({ username: 'newkite', password: 'secret123', nickname: 'New Kite' }),
+      credentials: 'same-origin'
     });
     expect((await waitFor(() => host.querySelector('.user-auth-card strong')))?.textContent).toBe('New Kite');
-    expect(window.localStorage.getItem('kitepop-user-session')).toContain('registered-token');
+    expect(window.localStorage.getItem('kitepop-user-session')).toBeNull();
   });
 
   it('shows a clear public auth error when registration input is invalid', async () => {
@@ -998,16 +1063,11 @@ describe('App layout shells', () => {
   });
 
   it('loads hosted images automatically when an admin session already exists', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/images');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/images')) {
         return Response.json({
           images: [
@@ -1033,23 +1093,16 @@ describe('App layout shells', () => {
     root.render(<App />);
 
     expect(await waitFor(() => host.querySelector('.image-item'))).toBeTruthy();
-    expect(pageFetchMock).toHaveBeenCalledWith('/api/images', {
-      headers: { Authorization: 'Bearer admin-token' }
-    });
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/images', { credentials: 'same-origin' });
   });
 
   it('shows upload progress tips for image uploads', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/images');
     vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/images')) return Response.json({ images: [] });
       return Response.json({ ok: true });
     });
@@ -1083,16 +1136,11 @@ describe('App layout shells', () => {
   });
 
   it('loads file storage automatically when an admin session already exists', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/files');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files')) {
         return Response.json({
           folder: null,
@@ -1121,16 +1169,10 @@ describe('App layout shells', () => {
     root.render(<App />);
 
     expect(await waitFor(() => host.querySelector('.file-item'))).toBeTruthy();
-    expect(pageFetchMock).toHaveBeenCalledWith('/api/files', {
-      headers: { Authorization: 'Bearer admin-token' }
-    });
+    expect(pageFetchMock).toHaveBeenCalledWith('/api/files', { credentials: 'same-origin' });
   });
 
   it('falls back when copying file links without navigator clipboard', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/files');
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -1144,8 +1186,7 @@ describe('App layout shells', () => {
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files/file-1/link')) {
         return Response.json({ link: { path: '/api/files/raw/file-1?token=signed-token' } });
       }
@@ -1185,17 +1226,12 @@ describe('App layout shells', () => {
   });
 
   it('shows upload progress tips for file uploads', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/files');
     vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files')) {
         return Response.json({ folder: null, breadcrumbs: [], folders: [], files: [] });
       }
@@ -1236,16 +1272,7 @@ describe('App layout shells', () => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) {
-        return Response.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
-      }
-      if (url.startsWith('/api/admin/login')) {
-        return Response.json({
-          ok: true,
-          token: 'admin-token',
-          expiresAt: '2099-01-01T00:00:00.000Z'
-        });
-      }
+      if (url.startsWith('/api/users/login')) return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files')) {
         return Response.json({
           folder: null,
@@ -1264,10 +1291,6 @@ describe('App layout shells', () => {
         });
       }
       if (url.startsWith('/api/images')) {
-        const headers = init?.headers as Record<string, string> | undefined;
-        if (headers?.Authorization !== 'Bearer admin-token') {
-          return Response.json({ message: 'Unauthorized' }, { status: 401 });
-        }
         return Response.json({
           images: [
             {
@@ -1293,6 +1316,7 @@ describe('App layout shells', () => {
 
     const passwordInput = (await waitFor(() => host.querySelector('.unlock-panel input[type="password"]'))) as HTMLInputElement | null;
     expect(passwordInput).toBeTruthy();
+    fillInput(host.querySelector('.unlock-panel input[name="username"]') as HTMLInputElement, 'admin');
     fillInput(passwordInput!, 'secret');
     await Promise.resolve();
 
@@ -1309,10 +1333,6 @@ describe('App layout shells', () => {
   });
 
   it('switches mobile accounting panels, opens edits, and removes mobile semantics on desktop', async () => {
-    window.localStorage.setItem(
-      'kitepop-accounting-session',
-      JSON.stringify({ token: 'accounting-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/accounting');
 
     const savingGoal = {
@@ -1343,7 +1363,8 @@ describe('App layout shells', () => {
     };
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.startsWith('/api/posts') || url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
+      if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url.startsWith('/api/accounting/month')) {
         return Response.json({
           entries: [
@@ -1522,15 +1543,11 @@ describe('App layout shells', () => {
   });
 
   it('reloads accounting entries when ledger filters change', async () => {
-    window.localStorage.setItem(
-      'kitepop-accounting-session',
-      JSON.stringify({ token: 'accounting-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/accounting');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/accounting/month')) {
         return Response.json({
           entries: [
@@ -1604,16 +1621,11 @@ describe('App layout shells', () => {
   });
 
   it('opens the in-site media preview shell for uploaded videos', async () => {
-    window.localStorage.setItem(
-      'kitepop-admin-session',
-      JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' })
-    );
     window.history.pushState({}, '', '/files');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
-      if (url.startsWith('/api/users/me')) return fetchMock(input);
-      if (url.startsWith('/api/admin/session')) return Response.json({ ok: true });
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files/file-1/preview-link')) {
         return Response.json({ link: { path: '/api/files/raw/file-1?token=preview-token' } });
       }

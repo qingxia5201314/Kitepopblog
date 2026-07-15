@@ -13,7 +13,6 @@ function hasDraftContent(draft: BlogPostDraft) {
 
 interface UseDraftAutosaveOptions {
   enabled: boolean;
-  token: string;
   editingId: string | null;
   draft: BlogPostDraft;
   changeVersion: number;
@@ -23,7 +22,6 @@ interface UseDraftAutosaveOptions {
 
 export function useDraftAutosave({
   enabled,
-  token,
   editingId,
   draft,
   changeVersion,
@@ -31,7 +29,7 @@ export function useDraftAutosave({
   onSaved
 }: UseDraftAutosaveOptions) {
   const [note, setNote] = useState('');
-  const latestRef = useRef({ token, editingId, draft });
+  const latestRef = useRef({ editingId, draft });
   const callbacksRef = useRef({ onBoundEditingId, onSaved });
   const generationRef = useRef(0);
   const observedVersionRef = useRef(0);
@@ -45,26 +43,26 @@ export function useDraftAutosave({
   }, [onBoundEditingId, onSaved]);
 
   useEffect(() => {
-    latestRef.current = { token, editingId, draft };
+    latestRef.current = { editingId, draft };
     if (changeVersion === 0) {
       observedVersionRef.current = 0;
       generationRef.current = 0;
       dirtyRef.current = false;
       queuedRef.current = false;
-      setNote(enabled && token ? '当前内容未修改' : '');
+      setNote(enabled ? '当前内容未修改' : '');
       return;
     }
-    if (!enabled || !token || !hasDraftContent(draft) || changeVersion <= observedVersionRef.current) return;
+    if (!enabled || !hasDraftContent(draft) || changeVersion <= observedVersionRef.current) return;
     observedVersionRef.current = changeVersion;
     generationRef.current = changeVersion;
     dirtyRef.current = true;
     setNote('10s后自动保存文章');
     repository.save(draft, { editingId });
-  }, [changeVersion, draft, editingId, enabled, token]);
+  }, [changeVersion, draft, editingId, enabled]);
 
   const saveNow = useCallback(async () => {
     const latest = latestRef.current;
-    if (!enabled || !latest.token || !dirtyRef.current || !hasDraftContent(latest.draft)) return null;
+    if (!enabled || !dirtyRef.current || !hasDraftContent(latest.draft)) return null;
     if (inFlightRef.current) {
       queuedRef.current = true;
       return inFlightRef.current;
@@ -72,10 +70,7 @@ export function useDraftAutosave({
 
     const savedGeneration = generationRef.current;
     setNote('正在自动保存...');
-    const request = saveArticleAutosaveDraft(
-      { editingId: latest.editingId, draft: latest.draft },
-      latest.token
-    )
+    const request = saveArticleAutosaveDraft({ editingId: latest.editingId, draft: latest.draft })
       .then((snapshot) => {
         if (latestRef.current.editingId !== latest.editingId) return snapshot;
         if (snapshot.editingId && snapshot.editingId !== latest.editingId) {
@@ -115,7 +110,7 @@ export function useDraftAutosave({
   saveNowRef.current = saveNow;
 
   useEffect(() => {
-    if (!enabled || !token) {
+    if (!enabled) {
       setNote('');
       return;
     }
@@ -136,21 +131,19 @@ export function useDraftAutosave({
       }
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [enabled, token]);
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;
     const handleOnline = () => void saveNowRef.current();
     const handlePageHide = () => {
       const latest = latestRef.current;
-      if (!latest.token || !dirtyRef.current || !hasDraftContent(latest.draft)) return;
+      if (!dirtyRef.current || !hasDraftContent(latest.draft)) return;
       void fetch('/api/admin/article-draft', {
         method: 'PUT',
-        headers: {
-          'content-type': 'application/json',
-          Authorization: `Bearer ${latest.token}`
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ editingId: latest.editingId, draft: latest.draft }),
+        credentials: 'same-origin',
         keepalive: true
       });
     };

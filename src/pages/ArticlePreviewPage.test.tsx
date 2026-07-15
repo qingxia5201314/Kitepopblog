@@ -14,8 +14,7 @@ describe('article preview page', () => {
   });
 
   it('renders the authenticated draft with the shared markdown article structure', async () => {
-    localStorage.setItem('kitepop-admin-session', JSON.stringify({ token: 'admin-token', expiresAt: '2099-01-01T00:00:00.000Z' }));
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ post: {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ post: {
       id: 'post-1', slug: 'post-1', title: '预览标题', summary: '预览摘要', category: 'notes', tags: ['preview'],
       content: '# 章节\n\n公式 $x^2$', status: 'draft', createdAt: '', updatedAt: '', cover: 'notes', coverImage: ''
     } }));
@@ -34,6 +33,7 @@ describe('article preview page', () => {
     expect(host.querySelector('.article-body h2#章节')).toBeTruthy();
     expect(host.querySelector('.katex')).toBeTruthy();
     expect(host.querySelector('a[href="/admin?edit=post-1"]')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/article-preview/post-1', expect.objectContaining({ credentials: 'same-origin' }));
     await act(async () => root.unmount());
     host.remove();
   });

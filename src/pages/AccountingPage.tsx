@@ -1,37 +1,19 @@
-import React, { useEffect, useState, FormEvent } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAccounting } from '../hooks/useAccounting';
-import { loginAccounting } from '../lib/accountingApi';
 import {
-  ACCOUNTING_CATEGORIES,
   ACCOUNTING_ENTRY_COLLAPSE_LIMIT,
-  ACCOUNTING_PAYMENT_METHODS,
   AccountingCategory,
   AccountingCategoryId,
   AccountingEntry,
   AccountingEntryType,
   formatMoney,
-  getVisibleAccountingEntries,
-  sanitizeMoneyInput,
-  sortAccountingEntries,
-  todayDateInput,
-  currentMonthInput
+  sanitizeMoneyInput
 } from '../lib/accounting';
-import {
-  createAccountingEntry,
-  createAccountingCategory,
-  deleteAccountingEntry,
-  deleteAccountingCategory,
-  updateAccountingCategory,
-  updateAccountingEntry,
-  updateAccountingSettings
-} from '../lib/accountingApi';
 import { formatAccountingCreatedAt, getAccountingEntryTitle } from '../lib/accountingPresentation';
-import { formatBytes } from '../components/shared';
 import { AccountingMobileTabs, type AccountingPanel } from '../components/accounting/AccountingMobileTabs';
 import accountingHeroImage from '../assets/accounting-hero.webp';
 
-const ACCOUNTING_SESSION_KEY = 'kitepop-accounting-session';
 const ACCOUNTING_MOBILE_QUERY = '(max-width: 720px)';
 
 const ACCOUNTING_CATEGORY_TYPE_LABELS: Record<AccountingCategory['type'], string> = {
@@ -43,33 +25,6 @@ const ACCOUNTING_CATEGORY_TYPE_LABELS: Record<AccountingCategory['type'], string
 function getAccountingCategoryLabel(category: AccountingCategory, categories: AccountingCategory[]) {
   const hasDuplicateName = categories.some((item) => item.id !== category.id && item.name === category.name);
   return hasDuplicateName ? `${category.name} · ${ACCOUNTING_CATEGORY_TYPE_LABELS[category.type]}` : category.name;
-}
-
-function centsToInput(cents = 0): string {
-  return cents > 0 ? String(cents / 100) : '';
-}
-
-function loadAccountingSession(): { token: string; expiresAt: string } | null {
-  try {
-    const raw = window.localStorage.getItem(ACCOUNTING_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { token?: string; expiresAt?: string };
-    if (!parsed.token || (parsed.expiresAt && Date.parse(parsed.expiresAt) <= Date.now())) {
-      window.localStorage.removeItem(ACCOUNTING_SESSION_KEY);
-      return null;
-    }
-    return { token: parsed.token, expiresAt: parsed.expiresAt || '' };
-  } catch {
-    return null;
-  }
-}
-
-function saveAccountingSession(session: { token: string; expiresAt: string }) {
-  window.localStorage.setItem(ACCOUNTING_SESSION_KEY, JSON.stringify(session));
-}
-
-function clearAccountingSession() {
-  window.localStorage.removeItem(ACCOUNTING_SESSION_KEY);
 }
 
 function useAccountingMobileMode() {
@@ -98,10 +53,6 @@ function useAccountingMobileMode() {
 
 export function AccountingPage() {
   const { notify } = useApp();
-  const [accountingSession, setAccountingSession] = useState<{ token: string; expiresAt: string } | null>(() =>
-    loadAccountingSession()
-  );
-  const [accountingPassword, setAccountingPassword] = useState('');
   const [mobilePanel, setMobilePanel] = useState<AccountingPanel>('entry');
   const isMobileAccounting = useAccountingMobileMode();
 
@@ -143,75 +94,21 @@ export function AccountingPage() {
     editingAccountingId,
     startEditAccountingEntry,
     resetAccountingForm
-  } = useAccounting(accountingSession?.token || '', notify);
+  } = useAccounting(notify);
 
   const [localEditingId, setLocalEditingId] = useState<string | null>(null);
 
   const handleAccountingTypeFilterChange = (type: AccountingEntryType | 'all') => {
     setAccountingTypeFilter(type);
     setAccountingEntriesExpanded(false);
-    void loadAccountingData(accountingSession?.token || '', accountingMonth, type, accountingCategoryFilter);
+    void loadAccountingData(accountingMonth, type, accountingCategoryFilter);
   };
 
   const handleAccountingCategoryFilterChange = (category: AccountingCategoryId | 'all') => {
     setAccountingCategoryFilter(category);
     setAccountingEntriesExpanded(false);
-    void loadAccountingData(accountingSession?.token || '', accountingMonth, accountingTypeFilter, category);
+    void loadAccountingData(accountingMonth, accountingTypeFilter, category);
   };
-
-  const handleUnlockAccounting = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    try {
-      const response = await fetch('/api/accounting/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ password: accountingPassword })
-      });
-      const result = (await response.json()) as { ok?: boolean; message?: string; token?: string; expiresAt?: string };
-
-      if (!response.ok || !result.ok || !result.token) {
-        notify('error', result.message || '记账口令不正确');
-        return;
-      }
-
-      const session = { token: result.token, expiresAt: result.expiresAt || '' };
-      saveAccountingSession(session);
-      setAccountingSession(session);
-      setAccountingPassword('');
-      await loadAccountingData(session.token);
-      notify('success', '记账会话已保持 30 天');
-    } catch (error) {
-      notify('error', error instanceof Error ? error.message : '记账口令不正确');
-    }
-  };
-
-  const handleLogoutAccounting = () => {
-    clearAccountingSession();
-    setAccountingSession(null);
-    notify('success', '已退出记账');
-  };
-
-  if (!accountingSession) {
-    return (
-      <section className="accounting-page">
-        <form className="unlock-panel" onSubmit={handleUnlockAccounting}>
-          <p className="eyebrow">Private Ledger</p>
-          <h1>记账中心</h1>
-          <p>
-            输入管理口令后，可以查看和维护个人流水、月预算和一个月存钱目标。未登录用户不会看到任何金额数据。
-          </p>
-          <input
-            aria-label="记账口令"
-            onChange={(event) => setAccountingPassword(event.target.value)}
-            placeholder="输入记账口令"
-            type="password"
-            value={accountingPassword}
-          />
-          <button type="submit">进入记账</button>
-        </form>
-      </section>
-    );
-  }
 
   return (
     <section className="accounting-page">
@@ -219,7 +116,7 @@ export function AccountingPage() {
         <div>
           <p className="eyebrow">Private Ledger</p>
           <h1>本月收支和存钱目标</h1>
-          <p>会话已保持到 {new Date(accountingSession.expiresAt).toLocaleDateString('zh-CN')}，数据只从服务端读取。</p>
+          <p>数据通过管理员会话从服务端读取。</p>
         </div>
         <img alt="" className="accounting-hero-art" src={accountingHeroImage} />
         <div className="accounting-actions">
@@ -229,9 +126,6 @@ export function AccountingPage() {
             type="month"
             value={accountingMonth}
           />
-          <button className="ghost accounting-secondary-action" onClick={handleLogoutAccounting} type="button">
-            退出记账
-          </button>
         </div>
       </section>
 

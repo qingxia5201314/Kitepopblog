@@ -7,13 +7,12 @@ type EditorPatch = { content?: string; coverImage?: string };
 type Notify = (type: 'success' | 'error' | 'info', message: string) => void;
 
 interface UseMarkdownEditorOptions {
-  adminToken: string;
   content: string;
   updateForm: (patch: EditorPatch) => void;
   notify: Notify;
 }
 
-export function useMarkdownEditor({ adminToken, content, updateForm, notify }: UseMarkdownEditorOptions) {
+export function useMarkdownEditor({ content, updateForm, notify }: UseMarkdownEditorOptions) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const contentEditorRef = useRef<HTMLTextAreaElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -56,11 +55,10 @@ export function useMarkdownEditor({ adminToken, content, updateForm, notify }: U
 
   const insertImageFile = async (file?: File, selectionStart?: number, selectionEnd?: number) => {
     if (!file) return;
-    if (!adminToken) return notify('error', '请先进入后台再上传图片');
     if (!file.type.startsWith('image/')) return notify('error', '只能上传图片文件');
     setUploadingImage(true);
     try {
-      const image = await uploadHostedImage(file, adminToken);
+      const image = await uploadHostedImage(file);
       insertMarkdownAtEditor(createMarkdownImageBlock(image.originalName, image.path), selectionStart, selectionEnd);
       notify('success', '图片已上传并插入正文');
     } catch (error) {
@@ -73,11 +71,10 @@ export function useMarkdownEditor({ adminToken, content, updateForm, notify }: U
 
   const uploadCoverImageFile = async (file?: File) => {
     if (!file) return;
-    if (!adminToken) return notify('error', '请先进入后台再上传封面');
     if (!file.type.startsWith('image/')) return notify('error', '只能上传图片文件');
     setUploadingImage(true);
     try {
-      const image = await uploadHostedImage(file, adminToken);
+      const image = await uploadHostedImage(file);
       updateForm({ coverImage: image.path });
       notify('success', '封面已上传并填入');
     } catch (error) {

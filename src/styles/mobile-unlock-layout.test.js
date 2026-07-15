@@ -37,12 +37,19 @@ function expectRule(css, selector, declarations) {
 }
 
 describe('shared mobile unlock layout', () => {
-  it('is shared by all four password-gated pages', () => {
+  it('is shared by the account gate around all four management pages', () => {
+    const appSource = readFileSync(resolve(root, 'src/App.tsx'), 'utf8');
+    const gateSource = readFileSync(resolve(root, 'src/components/auth/AdminAccessGate.tsx'), 'utf8');
+    expect(gateSource).toContain('className="unlock-panel"');
+
+    for (const route of ['/admin', '/files', '/images', '/accounting']) {
+      expect(appSource, `${route} must be account-gated`).toMatch(
+        new RegExp(`path="${route}" element=\\{<AdminAccessGate>`)
+      );
+    }
     for (const page of ['AdminPage.tsx', 'FilesPage.tsx', 'ImagesPage.tsx', 'AccountingPage.tsx']) {
       const source = readFileSync(resolve(root, 'src/pages', page), 'utf8');
-      expect(source, `${page} must use the shared unlock panel`).toContain(
-        'className="unlock-panel"'
-      );
+      expect(source, `${page} must not add a second password form`).not.toContain('className="unlock-panel"');
     }
   });
 

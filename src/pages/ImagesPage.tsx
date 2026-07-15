@@ -1,6 +1,5 @@
-import React, { FormEvent, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { useAdminAccess } from '../hooks/useAdminAccess';
 import { useImages } from '../hooks/useImages';
 import { HostedImage, deleteHostedImage, uploadHostedImage } from '../lib/imageApi';
 import { formatBytes } from '../components/shared';
@@ -9,33 +8,17 @@ import { UploadProgressTip } from '../components/UploadProgressTip';
 import { UploadProgress } from '../lib/uploadProgress';
 
 export function ImagesPage() {
-  const { notify, adminToken } = useApp();
-  const { hostedImages, uploadingImage, copiedImageLink, setCopiedImageLink, loadHostedImages } = useImages(adminToken, notify);
-  const { password: imagePassword, setPassword: setImagePassword, unlockAdmin } = useAdminAccess(
-    '已进入图床',
-    '无法连接图床登录接口'
-  );
+  const { notify } = useApp();
+  const { hostedImages, uploadingImage, copiedImageLink, setCopiedImageLink, loadHostedImages } = useImages(notify);
 
   const [imageDragActive, setImageDragActive] = useState(false);
-  const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [uploadTipHidden, setUploadTipHidden] = useState(true);
   const [uploadingImageName, setUploadingImageName] = useState('');
   const imageHostInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    setLocalAdminToken(adminToken);
-  }, [adminToken]);
-
-  const handleUnlockImages = async (event: FormEvent<HTMLFormElement>) => {
-    const session = await unlockAdmin(event);
-    if (!session?.token) return;
-    setLocalAdminToken(session.token);
-    await loadHostedImages(session.token);
-  };
-
   const handleHostedImageUpload = async (file?: File) => {
-    if (!file || !localAdminToken) return;
+    if (!file) return;
     if (!file.type.startsWith('image/')) {
       notify('error', '图床只允许上传图片文件');
       return;
@@ -44,10 +27,10 @@ export function ImagesPage() {
     setUploadProgress({ loaded: 0, total: file.size, percent: 0, speedBytesPerSecond: 0 });
     setUploadTipHidden(false);
     try {
-      const image = await uploadHostedImage(file, localAdminToken, setUploadProgress);
+      const image = await uploadHostedImage(file, setUploadProgress);
       const link = new URL(image.path, window.location.origin).toString();
       setCopiedImageLink(link);
-      await loadHostedImages(localAdminToken);
+      await loadHostedImages();
       const copied = await copyTextToClipboard(link);
       notify('success', copied ? '图片已上传，链接已复制' : '图片已上传，请手动复制链接');
     } catch (error) {
@@ -70,36 +53,16 @@ export function ImagesPage() {
   };
 
   const handleRemoveHostedImage = async (image: HostedImage) => {
-    if (!localAdminToken || !window.confirm(`确认删除 ${image.originalName} 吗？`)) return;
+    if (!window.confirm(`确认删除 ${image.originalName} 吗？`)) return;
     try {
-      await deleteHostedImage(image.id, localAdminToken);
-      await loadHostedImages(localAdminToken);
+      await deleteHostedImage(image.id);
+      await loadHostedImages();
       if (copiedImageLink.includes(image.id)) setCopiedImageLink('');
       notify('success', '图片已删除');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '图片删除失败');
     }
   };
-
-  if (!localAdminToken) {
-    return (
-      <section className="image-host-page">
-        <form className="unlock-panel" onSubmit={handleUnlockImages}>
-          <p className="eyebrow">Private Image Host</p>
-          <h1>图床</h1>
-          <p>输入后台口令后即可上传 PNG、JPG、GIF、WebP 图片，并自动拿到可访问链接。</p>
-          <input
-            aria-label="图床口令"
-            onChange={(event) => setImagePassword(event.target.value)}
-            placeholder="输入后台口令"
-            type="password"
-            value={imagePassword}
-          />
-          <button type="submit">进入图床</button>
-        </form>
-      </section>
-    );
-  }
 
   return (
     <section className="image-host-page">
@@ -119,7 +82,7 @@ export function ImagesPage() {
             <h1>图床</h1>
             <p>上传成功后会立即给出图片链接，可直接粘贴到 Markdown 和网页中使用。</p>
           </div>
-          <button onClick={() => loadHostedImages(localAdminToken)} type="button">
+          <button onClick={() => loadHostedImages()} type="button">
             刷新列表
           </button>
         </div>

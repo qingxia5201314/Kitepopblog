@@ -10,7 +10,6 @@ type FieldErrors = Partial<Record<FieldName, string>>;
 
 interface AboutManagerProps {
   adminPanelOpen: boolean;
-  adminToken: string;
   notify: Notify;
   onTogglePanel: () => void;
 }
@@ -49,7 +48,7 @@ function isValidGithubUrl(value: string) {
   }
 }
 
-export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel }: AboutManagerProps) {
+export function AboutManager({ adminPanelOpen, notify, onTogglePanel }: AboutManagerProps) {
   const [form, setForm] = useState<AboutProfile>(() => emptyAboutProfile());
   const [tagInput, setTagInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -61,8 +60,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   const loadedGenerationRef = useRef(-1);
   const inFlightLoadRef = useRef<{ generation: number; promise: Promise<AboutProfile> } | null>(null);
   const generationRef = useRef(0);
-  const asyncContextRef = useRef({ adminPanelOpen, adminToken });
-  const statusTokenRef = useRef(adminToken);
+  const asyncContextRef = useRef(adminPanelOpen);
   const loadRequestRef = useRef(0);
   const uploadRequestRef = useRef(0);
   const saveRequestRef = useRef(0);
@@ -74,9 +72,9 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   const githubUrlRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
 
-  if (asyncContextRef.current.adminPanelOpen !== adminPanelOpen || asyncContextRef.current.adminToken !== adminToken) {
+  if (asyncContextRef.current !== adminPanelOpen) {
     generationRef.current += 1;
-    asyncContextRef.current = { adminPanelOpen, adminToken };
+    asyncContextRef.current = adminPanelOpen;
   }
   openRef.current = adminPanelOpen;
 
@@ -103,14 +101,8 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
   }, [fieldErrors, markdownTab]);
 
   useEffect(() => {
-    const tokenChanged = statusTokenRef.current !== adminToken;
-    statusTokenRef.current = adminToken;
-    if (tokenChanged) {
-      setUploading(false);
-      setSaving(false);
-    }
-    if (!adminPanelOpen || !adminToken || loadedGenerationRef.current === generationRef.current) {
-      if (!adminPanelOpen || !adminToken) {
+    if (!adminPanelOpen || loadedGenerationRef.current === generationRef.current) {
+      if (!adminPanelOpen) {
         loadRequestRef.current += 1;
         uploadRequestRef.current += 1;
         saveRequestRef.current += 1;
@@ -127,7 +119,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     const existingRequest = inFlightLoadRef.current;
     const promise = existingRequest?.generation === generation
       ? existingRequest.promise
-      : getAdminAboutProfile(adminToken);
+      : getAdminAboutProfile();
     inFlightLoadRef.current = { generation, promise };
     void promise
       .then((profile) => {
@@ -145,7 +137,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
         if (inFlightLoadRef.current?.generation === generation) inFlightLoadRef.current = null;
         if (mountedRef.current && openRef.current && generation === generationRef.current && requestId === loadRequestRef.current) setLoading(false);
       });
-  }, [adminPanelOpen, adminToken, notify]);
+  }, [adminPanelOpen, notify]);
 
   const clearFieldError = (field: FieldName) => {
     setFieldErrors((current) => {
@@ -180,7 +172,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     const generation = generationRef.current;
     setUploading(true);
     try {
-      const image = await uploadHostedImage(file, adminToken);
+      const image = await uploadHostedImage(file);
       if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== uploadRequestRef.current) return;
       setForm((current) => ({ ...current, avatarUrl: image.path }));
       notify('success', '头像上传成功，请保存资料以正式生效');
@@ -221,7 +213,7 @@ export function AboutManager({ adminPanelOpen, adminToken, notify, onTogglePanel
     const generation = generationRef.current;
     setSaving(true);
     try {
-      const saved = await updateAboutProfile(payload, adminToken);
+      const saved = await updateAboutProfile(payload);
       if (!mountedRef.current || !openRef.current || generation !== generationRef.current || requestId !== saveRequestRef.current) return;
       setForm(saved);
       setTagInput(formatTags(saved.identityTags));

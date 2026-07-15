@@ -1,7 +1,6 @@
-import React, { FormEvent, useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { useAdminAccess } from '../hooks/useAdminAccess';
 import { useFiles } from '../hooks/useFiles';
 import {
   FileFolder,
@@ -21,7 +20,7 @@ import { copyTextToClipboard } from '../lib/clipboard';
 
 export function FilesPage() {
   const navigate = useNavigate();
-  const { notify, adminToken } = useApp();
+  const { notify } = useApp();
   const {
     activeFileFolderId,
     fileFolderView,
@@ -30,38 +29,22 @@ export function FilesPage() {
     setGeneratedFileLink,
     loadFiles,
     openFolder
-  } = useFiles(adminToken, notify);
-  const { password: filePassword, setPassword: setFilePassword, unlockAdmin } = useAdminAccess(
-    '已进入文件仓库',
-    '无法连接文件登录接口'
-  );
+  } = useFiles(notify);
 
   const [fileDragActive, setFileDragActive] = useState(false);
-  const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [uploadTipHidden, setUploadTipHidden] = useState(true);
   const [uploadingFileName, setUploadingFileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    setLocalAdminToken(adminToken);
-  }, [adminToken]);
-
-  const handleUnlockFiles = async (event: FormEvent<HTMLFormElement>) => {
-    const session = await unlockAdmin(event);
-    if (!session?.token) return;
-    setLocalAdminToken(session.token);
-    await loadFiles(session.token, activeFileFolderId);
-  };
-
   const handleFileUploadWrapper = async (file?: File) => {
-    if (!file || !localAdminToken) return;
+    if (!file) return;
     setUploadingFileName(file.name);
     setUploadProgress({ loaded: 0, total: file.size, percent: 0, speedBytesPerSecond: 0 });
     setUploadTipHidden(false);
     try {
-      await uploadFile(file, localAdminToken, activeFileFolderId, setUploadProgress);
-      await loadFiles(localAdminToken, activeFileFolderId);
+      await uploadFile(file, activeFileFolderId, setUploadProgress);
+      await loadFiles(activeFileFolderId);
       notify('success', '文件已上传');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件上传失败');
@@ -76,9 +59,8 @@ export function FilesPage() {
   };
 
   const handleCopyFileLink = async (file: UploadedFile) => {
-    if (!localAdminToken) return;
     try {
-      const link = await createFileLink(file.id, localAdminToken);
+      const link = await createFileLink(file.id);
       const absoluteLink = new URL(link.path, window.location.origin).toString();
       setGeneratedFileLink(absoluteLink);
       await copyTextToClipboard(absoluteLink);
@@ -89,14 +71,13 @@ export function FilesPage() {
   };
 
   const handlePreviewFile = async (file: UploadedFile) => {
-    if (!localAdminToken) return;
     if (!file.contentType.startsWith('video/') && !file.contentType.startsWith('audio/')) {
       notify('info', '当前只提供音视频站内预览');
       return;
     }
 
     try {
-      const link = await getFilePreviewLink(file.id, localAdminToken);
+      const link = await getFilePreviewLink(file.id);
       navigate('/files/preview', {
         state: {
           url: new URL(link.path, window.location.origin).toString(),
@@ -110,13 +91,12 @@ export function FilesPage() {
   };
 
   const handleRemoveFile = async (file: UploadedFile) => {
-    if (!localAdminToken) return;
     const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立刻失效。`);
     if (!confirmed) return;
 
     try {
-      await deleteUploadedFile(file.id, localAdminToken);
-      await loadFiles(localAdminToken, activeFileFolderId);
+      await deleteUploadedFile(file.id);
+      await loadFiles(activeFileFolderId);
       setGeneratedFileLink('');
       notify('success', '文件已删除');
     } catch (error) {
@@ -130,13 +110,12 @@ export function FilesPage() {
   };
 
   const handleCreateFolder = async () => {
-    if (!localAdminToken) return;
     const name = window.prompt('文件夹名称');
     if (!name?.trim()) return;
 
     try {
-      await createFileFolder({ name: name.trim(), parentId: activeFileFolderId }, localAdminToken);
-      await loadFiles(localAdminToken, activeFileFolderId);
+      await createFileFolder({ name: name.trim(), parentId: activeFileFolderId });
+      await loadFiles(activeFileFolderId);
       notify('success', '文件夹已创建');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件夹创建失败');
@@ -144,13 +123,12 @@ export function FilesPage() {
   };
 
   const handleRenameFolder = async (folder: FileFolder) => {
-    if (!localAdminToken) return;
     const name = window.prompt('新的文件夹名称', folder.name);
     if (!name?.trim() || name.trim() === folder.name) return;
 
     try {
-      await renameFileFolder(folder.id, name.trim(), localAdminToken);
-      await loadFiles(localAdminToken, activeFileFolderId);
+      await renameFileFolder(folder.id, name.trim());
+      await loadFiles(activeFileFolderId);
       notify('success', '文件夹已重命名');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件夹重命名失败');
@@ -158,38 +136,17 @@ export function FilesPage() {
   };
 
   const handleRemoveFolder = async (folder: FileFolder) => {
-    if (!localAdminToken) return;
     const confirmed = window.confirm(`确认删除空文件夹 ${folder.name} 吗？非空文件夹不会被删除。`);
     if (!confirmed) return;
 
     try {
-      await deleteFileFolder(folder.id, localAdminToken);
-      await loadFiles(localAdminToken, activeFileFolderId);
+      await deleteFileFolder(folder.id);
+      await loadFiles(activeFileFolderId);
       notify('success', '文件夹已删除');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件夹删除失败');
     }
   };
-
-  if (!localAdminToken) {
-    return (
-      <section className="files-page">
-        <form className="unlock-panel" onSubmit={handleUnlockFiles}>
-          <p className="eyebrow">Private Files</p>
-          <h1>文件仓库</h1>
-          <p>输入后台口令后即可上传文件、生成签名链接并管理目录。</p>
-          <input
-            aria-label="文件仓库口令"
-            onChange={(event) => setFilePassword(event.target.value)}
-            placeholder="输入后台口令"
-            type="password"
-            value={filePassword}
-          />
-          <button type="submit">进入文件仓库</button>
-        </form>
-      </section>
-    );
-  }
 
   return (
     <section className="files-page">
@@ -209,7 +166,7 @@ export function FilesPage() {
             <h1>文件仓库</h1>
             <p>上传后的文件默认不公开，只有生成签名链接后才能被外部访问。</p>
           </div>
-          <button onClick={() => loadFiles(localAdminToken, activeFileFolderId)} type="button">
+          <button onClick={() => loadFiles(activeFileFolderId)} type="button">
             刷新列表
           </button>
         </div>

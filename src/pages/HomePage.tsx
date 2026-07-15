@@ -53,7 +53,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { userSession, notify, loginUser, logoutUser, adminUnlocked } = useApp();
+  const { userSession, isAdmin, notify, loginUser, logoutUser } = useApp();
   const { posts: adminPosts } = useBlogData();
   const filterKey = searchParams.toString();
   const filters = useMemo(() => {
@@ -99,7 +99,7 @@ export function HomePage() {
     ? fullDetailPost
     : null;
   const detailPostSlug = detailPostView?.slug;
-  const canEditDetailPost = Boolean(adminUnlocked || userSession?.user.permission === 'admin');
+  const canEditDetailPost = isAdmin;
   const srcPostCount = indexedPosts.filter((post) => post.category === 'src').length;
   const articleHeadings = useMemo(
     () => extractArticleHeadings(detailPostView?.content || ''),
@@ -264,7 +264,7 @@ export function HomePage() {
       }
 
       try {
-        const comment = await createPostComment(detailPostView.slug, commentForm, userSession.token);
+        const comment = await createPostComment(detailPostView.slug, commentForm);
         setPostComments((current) => [comment, ...current]);
         setCommentForm({ content: '' });
         notify('success', '评论已发布');
@@ -296,8 +296,7 @@ export function HomePage() {
         const updated = await updatePostComment(
           detailPostView.slug,
           commentId,
-          { content },
-          userSession.token
+          { content }
         );
         setPostComments(postComments.map((item) => (item.id === updated.id ? updated : item)));
         setEditingCommentId(null);
@@ -315,7 +314,7 @@ export function HomePage() {
       if (!window.confirm('确定删除这条评论吗？')) return;
 
       try {
-        await deletePostComment(detailPostView.slug, commentId, userSession.token);
+        await deletePostComment(detailPostView.slug, commentId);
         setPostComments(postComments.filter((item) => item.id !== commentId));
         if (editingCommentId === commentId) setEditingCommentId(null);
         notify('success', '评论已删除');
@@ -362,7 +361,7 @@ export function HomePage() {
           authMode === 'register'
             ? await registerUserRequest({ username, password, nickname })
             : await loginUserRequest(username, password);
-        if (!session?.token || !session?.expiresAt || !session?.user) {
+        if (!session?.expiresAt || !session?.user) {
           throw new Error('Invalid user session');
         }
         loginUser(session);

@@ -46,13 +46,13 @@ describe('AboutManager', () => {
     document.body.innerHTML = '';
   });
 
-  function render(open = false, token = 'admin-token', strict = false) {
+  function render(open = false, strict = false) {
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
     roots.push(root);
-    const rerender = (nextOpen: boolean, nextToken = token) => act(() => {
-      const manager = <AboutManager adminPanelOpen={nextOpen} adminToken={nextToken} notify={notify} onTogglePanel={vi.fn()} />;
+    const rerender = (nextOpen: boolean) => act(() => {
+      const manager = <AboutManager adminPanelOpen={nextOpen} notify={notify} onTogglePanel={vi.fn()} />;
       root.render(strict ? <StrictMode>{manager}</StrictMode> : manager);
     });
     rerender(open);
@@ -99,7 +99,7 @@ describe('AboutManager', () => {
 
   it('does not duplicate the open-cycle request in StrictMode', async () => {
     getAdminAboutProfile.mockResolvedValue(profile);
-    const { host } = render(true, 'admin-token', true);
+    const { host } = render(true, true);
     await flush();
 
     expect(getAdminAboutProfile).toHaveBeenCalledTimes(1);
@@ -124,19 +124,19 @@ describe('AboutManager', () => {
       .every((button) => !button.disabled)).toBe(true);
   });
 
-  it('clears pending state immediately when the admin token becomes empty', async () => {
+  it('clears pending state immediately when the panel closes', async () => {
     let resolveLoad!: (loaded: typeof profile) => void;
     getAdminAboutProfile.mockReturnValue(new Promise((resolve) => { resolveLoad = resolve; }));
-    const { host, rerender } = render(true, 'old-token');
+    const { host, rerender } = render(true);
     expect(host.querySelector('[role="status"]')?.textContent).toContain('正在加载个人资料');
 
-    rerender(true, '');
+    rerender(false);
 
     expect(Array.from(host.querySelectorAll('[role="status"]')).some((item) => item.textContent?.includes('正在加载个人资料'))).toBe(false);
-    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.textContent).toBe('保存资料');
+    expect(host.querySelector('form')).toBeFalsy();
     resolveLoad(profile);
     await flush();
-    expect(input(host, '名称').value).toBe('');
+    expect(host.querySelector('form')).toBeFalsy();
   });
 
   it('uploads a PNG into the preview without saving the profile', async () => {
@@ -151,7 +151,7 @@ describe('AboutManager', () => {
     act(() => picker.dispatchEvent(new Event('change', { bubbles: true })));
     await flush();
 
-    expect(uploadHostedImage).toHaveBeenCalledWith(file, 'admin-token');
+    expect(uploadHostedImage).toHaveBeenCalledWith(file);
     expect(host.querySelector<HTMLImageElement>('.admin-about-avatar-preview')?.src).toContain('/images/new.png');
     expect(updateAboutProfile).not.toHaveBeenCalled();
   });
@@ -189,7 +189,7 @@ describe('AboutManager', () => {
     expect(updateAboutProfile).toHaveBeenCalledWith({
       avatarUrl: '/old.png', displayName: '新名称', identityTags: ['A', 'B', 'C'], intro: '新简介',
       githubUrl: 'https://github.com/new-user', content: '## 新内容', updatedAt: '2026-07-12T00:00:00.000Z'
-    }, 'admin-token');
+    });
     expect(input(host, '名称').value).toBe('服务端名称');
     expect(input(host, '身份标签').value).toBe('A, B, C');
     expect(notify).toHaveBeenCalledWith('success', '关于我资料已保存');
@@ -375,50 +375,4 @@ describe('AboutManager', () => {
     expect(notify).toHaveBeenLastCalledWith('error', '图片服务失败');
   });
 
-  it('invalidates a late upload when the admin token changes', async () => {
-    let resolveUpload!: (image: { path: string }) => void;
-    getAdminAboutProfile
-      .mockResolvedValueOnce(profile)
-      .mockResolvedValueOnce({ ...profile, avatarUrl: '/new-token.png', displayName: '新会话' });
-    uploadHostedImage.mockReturnValue(new Promise((resolve) => { resolveUpload = resolve; }));
-    const { host, rerender } = render(true, 'old-token');
-    await flush();
-
-    const picker = input(host, '上传头像') as HTMLInputElement;
-    Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['png'], 'avatar.png', { type: 'image/png' })] });
-    act(() => picker.dispatchEvent(new Event('change', { bubbles: true })));
-    rerender(true, 'new-token');
-    await flush();
-    resolveUpload({ path: '/late-old-token.png' });
-    await flush();
-
-    expect(uploadHostedImage).toHaveBeenCalledWith(expect.any(File), 'old-token');
-    expect(input(host, '名称').value).toBe('新会话');
-    expect(host.querySelector<HTMLImageElement>('.admin-about-avatar-preview')?.src).toContain('/new-token.png');
-    expect((input(host, '上传头像') as HTMLInputElement).disabled).toBe(false);
-    expect(notify).not.toHaveBeenCalledWith('success', expect.stringContaining('头像上传成功'));
-  });
-
-  it('invalidates a late save when the admin token changes', async () => {
-    let resolveSave!: (saved: typeof profile) => void;
-    getAdminAboutProfile
-      .mockResolvedValueOnce(profile)
-      .mockResolvedValueOnce({ ...profile, displayName: '新会话资料', content: '新会话内容' });
-    updateAboutProfile.mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
-    const { host, rerender } = render(true, 'old-token');
-    await flush();
-    change(input(host, '名称'), '旧会话编辑');
-    act(() => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
-
-    rerender(true, 'new-token');
-    await flush();
-    resolveSave({ ...profile, displayName: '迟到的旧保存', content: '旧内容' });
-    await flush();
-
-    expect(updateAboutProfile).toHaveBeenCalledWith(expect.objectContaining({ displayName: '旧会话编辑' }), 'old-token');
-    expect(input(host, '名称').value).toBe('新会话资料');
-    expect(input(host, 'Markdown 详细介绍').value).toBe('新会话内容');
-    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
-    expect(notify).not.toHaveBeenCalledWith('success', '关于我资料已保存');
-  });
 });

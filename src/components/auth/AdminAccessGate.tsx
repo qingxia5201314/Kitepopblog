@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useRef, useState } from 'react';
+import { FormEvent, Fragment, ReactNode, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { loginUserRequest } from '../../lib/apiClient';
 
@@ -108,5 +108,5 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return <Fragment key={userSession.user.id}>{children}</Fragment>;
 }

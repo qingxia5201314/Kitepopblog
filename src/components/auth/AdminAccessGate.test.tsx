@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UserSession } from '../../lib/blog';
@@ -36,6 +36,11 @@ const readerSession: UserSession = {
 const adminSession: UserSession = {
   expiresAt: '2099-01-01T00:00:00.000Z',
   user: { ...readerSession.user, id: 'admin-1', username: 'admin', permission: 'admin' }
+};
+
+const secondAdminSession: UserSession = {
+  expiresAt: '2099-01-01T00:00:00.000Z',
+  user: { ...adminSession.user, id: 'admin-2', username: 'second-admin', nickname: 'Second Admin' }
 };
 
 function deferred<T>() {
@@ -160,5 +165,26 @@ describe('AdminAccessGate', () => {
   it('renders protected content for administrators', () => {
     const host = renderGate({ authReady: true, userSession: adminSession, isAdmin: true });
     expect(host.textContent).toContain('protected child');
+  });
+
+  it('remounts protected state when the active administrator identity changes', () => {
+    let nextInstance = 0;
+    function StatefulChild() {
+      const [instance] = useState(() => ++nextInstance);
+      return <output data-instance>{instance}</output>;
+    }
+
+    gateState = { authReady: true, userSession: adminSession, isAdmin: true };
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    act(() => root.render(<AdminAccessGate><StatefulChild /></AdminAccessGate>));
+    expect(host.querySelector('[data-instance]')?.textContent).toBe('1');
+
+    gateState = { authReady: true, userSession: secondAdminSession, isAdmin: true };
+    act(() => root.render(<AdminAccessGate><StatefulChild /></AdminAccessGate>));
+
+    expect(host.querySelector('[data-instance]')?.textContent).toBe('2');
   });
 });

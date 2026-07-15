@@ -5,28 +5,26 @@ import { NotificationType } from '../lib/notification';
 
 type NotifyFn = (type: NotificationType, message: string, durationMs?: number) => void;
 
-export function useImages(adminToken: string, notify: NotifyFn) {
+export function useImages(notify: NotifyFn) {
   const [hostedImages, setHostedImages] = useState<HostedImage[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageDragActive, setImageDragActive] = useState(false);
   const [copiedImageLink, setCopiedImageLink] = useState('');
 
-  const loadHostedImages = useCallback(async (token = adminToken) => {
-    if (!token) return;
+  const loadHostedImages = useCallback(async () => {
     try {
-      setHostedImages(await listHostedImages(token));
+      setHostedImages(await listHostedImages());
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '图床列表加载失败');
     }
-  }, [adminToken, notify]);
+  }, [notify]);
 
   useEffect(() => {
-    if (!adminToken) return;
-    void loadHostedImages(adminToken);
-  }, [adminToken, loadHostedImages]);
+    void loadHostedImages();
+  }, [loadHostedImages]);
 
   const handleHostedImageUpload = async (file?: File) => {
-    if (!file || !adminToken) return;
+    if (!file) return;
     if (!file.type.startsWith('image/')) {
       notify('error', '图床只允许上传图片文件');
       return;
@@ -35,10 +33,10 @@ export function useImages(adminToken: string, notify: NotifyFn) {
     setUploadingImage(true);
     setCopiedImageLink('');
     try {
-      const image = await uploadHostedImage(file, adminToken);
+      const image = await uploadHostedImage(file);
       const link = new URL(image.path, window.location.origin).toString();
       setCopiedImageLink(link);
-      await loadHostedImages(adminToken);
+      await loadHostedImages();
       const copied = await copyTextToClipboard(link);
       notify('success', copied ? '图片已上传，链接已复制' : '图片已上传，请手动复制链接');
     } catch (error) {
@@ -56,10 +54,10 @@ export function useImages(adminToken: string, notify: NotifyFn) {
   };
 
   const remove = async (image: HostedImage) => {
-    if (!adminToken || !window.confirm(`确认删除 ${image.originalName} 吗？`)) return;
+    if (!window.confirm(`确认删除 ${image.originalName} 吗？`)) return;
     try {
-      await deleteHostedImage(image.id, adminToken);
-      await loadHostedImages(adminToken);
+      await deleteHostedImage(image.id);
+      await loadHostedImages();
       if (copiedImageLink.includes(image.id)) setCopiedImageLink('');
       notify('success', '图片已删除');
     } catch (error) {

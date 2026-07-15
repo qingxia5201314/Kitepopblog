@@ -23,27 +23,25 @@ const EMPTY_FILE_FOLDER_VIEW: FileFolderView = {
   files: []
 };
 
-export function useFiles(adminToken: string, notify: NotifyFn) {
+export function useFiles(notify: NotifyFn) {
   const [activeFileFolderId, setActiveFileFolderId] = useState('');
   const [fileFolderView, setFileFolderView] = useState<FileFolderView>(EMPTY_FILE_FOLDER_VIEW);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [fileDragActive, setFileDragActive] = useState(false);
   const [generatedFileLink, setGeneratedFileLink] = useState('');
 
-  const loadFiles = useCallback(async (token = adminToken, folderId = activeFileFolderId) => {
-    if (!token) return;
+  const loadFiles = useCallback(async (folderId = activeFileFolderId) => {
     try {
-      setFileFolderView(await getFileFolderView(token, folderId));
+      setFileFolderView(await getFileFolderView(folderId));
       setActiveFileFolderId(folderId);
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件列表加载失败');
     }
-  }, [activeFileFolderId, adminToken, notify]);
+  }, [activeFileFolderId, notify]);
 
   useEffect(() => {
-    if (!adminToken) return;
-    void loadFiles(adminToken, activeFileFolderId);
-  }, [activeFileFolderId, adminToken, loadFiles]);
+    void loadFiles(activeFileFolderId);
+  }, [activeFileFolderId, loadFiles]);
 
   const openFolder = (folderId = '') => {
     setGeneratedFileLink('');
@@ -51,13 +49,13 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   };
 
   const handleFileUpload = async (file?: File) => {
-    if (!file || !adminToken) return;
+    if (!file) return;
     setUploadingFile(true);
     setGeneratedFileLink('');
 
     try {
-      await uploadFile(file, adminToken, activeFileFolderId);
-      await loadFiles(adminToken, activeFileFolderId);
+      await uploadFile(file, activeFileFolderId);
+      await loadFiles(activeFileFolderId);
       notify('success', '文件已上传');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件上传失败');
@@ -67,9 +65,8 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   };
 
   const copyFileLink = async (file: UploadedFile) => {
-    if (!adminToken) return;
     try {
-      const link = await createFileLink(file.id, adminToken);
+      const link = await createFileLink(file.id);
       const absoluteLink = new URL(link.path, window.location.origin).toString();
       setGeneratedFileLink(absoluteLink);
       const copied = await copyTextToClipboard(absoluteLink);
@@ -80,13 +77,12 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   };
 
   const remove = async (file: UploadedFile) => {
-    if (!adminToken) return;
     const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立即失效。`);
     if (!confirmed) return;
 
     try {
-      await deleteUploadedFile(file.id, adminToken);
-      await loadFiles(adminToken, activeFileFolderId);
+      await deleteUploadedFile(file.id);
+      await loadFiles(activeFileFolderId);
       setGeneratedFileLink('');
       notify('success', '文件已删除');
     } catch (error) {
@@ -95,13 +91,12 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   };
 
   const createFolder = async () => {
-    if (!adminToken) return;
     const name = window.prompt('文件夹名称');
     if (!name?.trim()) return;
 
     try {
-      await createFileFolder({ name: name.trim(), parentId: activeFileFolderId }, adminToken);
-      await loadFiles(adminToken, activeFileFolderId);
+      await createFileFolder({ name: name.trim(), parentId: activeFileFolderId });
+      await loadFiles(activeFileFolderId);
       notify('success', '文件夹已创建');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件夹创建失败');
@@ -109,13 +104,12 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   };
 
   const renameFolder = async (folder: FileFolder) => {
-    if (!adminToken) return;
     const name = window.prompt('新的文件夹名称', folder.name);
     if (!name?.trim() || name.trim() === folder.name) return;
 
     try {
-      await renameFileFolder(folder.id, name.trim(), adminToken);
-      await loadFiles(adminToken, activeFileFolderId);
+      await renameFileFolder(folder.id, name.trim());
+      await loadFiles(activeFileFolderId);
       notify('success', '文件夹已重命名');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件夹重命名失败');
@@ -123,13 +117,12 @@ export function useFiles(adminToken: string, notify: NotifyFn) {
   };
 
   const removeFolder = async (folder: FileFolder) => {
-    if (!adminToken) return;
     const confirmed = window.confirm(`确认删除空文件夹 ${folder.name} 吗？非空文件夹不会被删除。`);
     if (!confirmed) return;
 
     try {
-      await deleteFileFolder(folder.id, adminToken);
-      await loadFiles(adminToken, activeFileFolderId);
+      await deleteFileFolder(folder.id);
+      await loadFiles(activeFileFolderId);
       notify('success', '文件夹已删除');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件夹删除失败');

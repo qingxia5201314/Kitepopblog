@@ -70,7 +70,7 @@ function getAccountingCategoryLabel(category: AccountingCategory, categories: Ac
   return hasDuplicateName ? `${category.name} · ${CATEGORY_TYPE_LABELS[category.type]}` : category.name;
 }
 
-export function useAccounting(accountingToken: string, notify: NotifyFn) {
+export function useAccounting(notify: NotifyFn) {
   const [accountingMonth, setAccountingMonth] = useState(currentMonthInput());
   const [accountingTypeFilter, setAccountingTypeFilter] = useState<AccountingTypeFilter>('all');
   const [accountingCategoryFilter, setAccountingCategoryFilter] = useState<AccountingCategoryFilter>('all');
@@ -133,14 +133,12 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
   };
 
   const loadAccountingData = async (
-    token = accountingToken,
     month = accountingMonth,
     type = accountingTypeFilter,
     category = accountingCategoryFilter
   ) => {
-    if (!token) return;
     try {
-      const data = await getAccountingMonth({ token, month, type, category });
+      const data = await getAccountingMonth({ month, type, category });
       setAccountingData(data);
       syncAccountingSettingsForm(data);
     } catch (error) {
@@ -152,12 +150,9 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
     }
   };
 
-  // Auto-load data when token is available (e.g. restored from localStorage on refresh)
   useEffect(() => {
-    if (accountingToken) {
-      void loadAccountingData(accountingToken);
-    }
-  }, [accountingToken]);
+    void loadAccountingData();
+  }, []);
 
   const updateAccountingForm = (patch: Partial<AccountingEntryDraft>) => {
     setAccountingForm((current) => ({ ...current, ...patch }));
@@ -183,7 +178,6 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
 
   const saveAccountingEntry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!accountingToken) return;
     if (!accountingForm.amountYuan.trim()) {
       notify('error', '请填写金额');
       return;
@@ -195,9 +189,9 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
 
     try {
       if (editingAccountingId) {
-        await updateAccountingEntry(editingAccountingId, accountingForm, accountingToken);
+        await updateAccountingEntry(editingAccountingId, accountingForm);
       } else {
-        await createAccountingEntry(accountingForm, accountingToken);
+        await createAccountingEntry(accountingForm);
       }
       resetAccountingForm();
       await loadAccountingData();
@@ -208,12 +202,11 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
   };
 
   const removeAccountingEntry = async (entry: AccountingEntry) => {
-    if (!accountingToken) return;
     const confirmed = window.confirm(`确认删除这笔 ${formatMoney(entry.amountCents)} 的流水吗？`);
     if (!confirmed) return;
 
     try {
-      await deleteAccountingEntry(entry.id, accountingToken);
+      await deleteAccountingEntry(entry.id);
       await loadAccountingData();
       notify('success', '流水已删除');
       if (editingAccountingId === entry.id) resetAccountingForm();
@@ -223,7 +216,6 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
   };
 
   const addCustomAccountingCategory = async () => {
-    if (!accountingToken) return;
     const name = customAccountingCategoryName.trim();
     if (!name) {
       notify('error', '请先填写分类名称');
@@ -231,7 +223,7 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
     }
 
     try {
-      await createAccountingCategory({ name, type: customAccountingCategoryType }, accountingToken);
+      await createAccountingCategory({ name, type: customAccountingCategoryType });
       await loadAccountingData();
       setCustomAccountingCategoryName('');
       notify('success', '自定义分类已添加');
@@ -241,7 +233,6 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
   };
 
   const saveCustomAccountingCategory = async (id: string) => {
-    if (!accountingToken) return;
     const draft = categoryDrafts[id];
     if (!draft?.name?.trim()) {
       notify('error', '分类名称不能为空');
@@ -249,7 +240,7 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
     }
 
     try {
-      await updateAccountingCategory(id, { name: draft.name.trim(), type: draft.type }, accountingToken);
+      await updateAccountingCategory(id, { name: draft.name.trim(), type: draft.type });
       await loadAccountingData();
       notify('success', '分类已更新');
     } catch (error) {
@@ -258,11 +249,10 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
   };
 
   const removeCustomAccountingCategory = async (id: string) => {
-    if (!accountingToken) return;
     if (!window.confirm('确认删除这个自定义分类吗？')) return;
 
     try {
-      await deleteAccountingCategory(id, accountingToken);
+      await deleteAccountingCategory(id);
       await loadAccountingData();
       notify('success', '分类已删除');
     } catch (error) {
@@ -272,10 +262,9 @@ export function useAccounting(accountingToken: string, notify: NotifyFn) {
 
   const saveAccountingSettings = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!accountingToken) return;
 
     try {
-      await updateAccountingSettings(accountingSettingsForm, accountingToken);
+      await updateAccountingSettings(accountingSettingsForm);
       await loadAccountingData();
       notify('success', '预算和存钱计划已保存');
     } catch (error) {

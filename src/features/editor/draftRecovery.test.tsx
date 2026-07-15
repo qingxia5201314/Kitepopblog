@@ -16,7 +16,6 @@ function Harness({ onBound, initialDraft = emptyDraft }: { onBound: (id: string)
   const [changeVersion, setChangeVersion] = useState(0);
   const autosave = useDraftAutosave({
     enabled: true,
-    token: 'admin-token',
     editingId: null,
     draft,
     changeVersion,
@@ -37,7 +36,7 @@ function SwitchingHarness({ onBound }: { onBound: (id: string) => void }) {
   const [draft, setDraft] = useState(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [changeVersion, setChangeVersion] = useState(0);
-  useDraftAutosave({ enabled: true, token: 'admin-token', editingId, draft, changeVersion, onBoundEditingId: onBound });
+  useDraftAutosave({ enabled: true, editingId, draft, changeVersion, onBoundEditingId: onBound });
   return <div>
     <button onClick={() => { setDraft({ ...emptyDraft, title: '新草稿' }); setChangeVersion(1); }}>write</button>
     <button onClick={() => { setEditingId('post-b'); setDraft({ ...emptyDraft, title: '文章 B' }); setChangeVersion(0); }}>switch</button>
@@ -79,6 +78,21 @@ describe('draft autosave hook', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('/api/admin/article-draft');
     expect(onBound).toHaveBeenCalledWith('draft-post-1');
     expect(container.querySelector('[data-note]')?.textContent).toContain('已自动保存');
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Authorization');
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Bearer');
+  });
+
+  it('keeps pagehide autosave cookie-authenticated without a bearer header', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ draft: null }));
+    await act(async () => root.render(<Harness onBound={vi.fn()} />));
+    await act(async () => container.querySelector('button')?.click());
+
+    await act(async () => window.dispatchEvent(new Event('pagehide')));
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init).toMatchObject({ method: 'PUT', keepalive: true, credentials: 'same-origin' });
+    expect(JSON.stringify(init?.headers)).not.toContain('Authorization');
+    expect(JSON.stringify(init?.headers)).not.toContain('Bearer');
   });
 
   it('does not autosave content that was only loaded into the editor', async () => {

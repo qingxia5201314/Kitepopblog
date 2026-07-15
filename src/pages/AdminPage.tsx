@@ -53,10 +53,8 @@ const EMPTY_ADMIN_USER_FORM = {
 
 export function AdminPage() {
   const [searchParams] = useSearchParams();
-  const { notify, adminToken } = useApp();
+  const { notify } = useApp();
   const { posts, loadPosts } = useBlogData();
-  const [adminUnlocked, setAdminUnlocked] = useState(Boolean(adminToken));
-  const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [tagInput, setTagInput] = useState('');
@@ -70,30 +68,23 @@ export function AdminPage() {
   const [serverDraft, setServerDraft] = useState<ArticleAutosaveDraft | null>(null);
   const [recoveryDraft, setRecoveryDraft] = useState<ArticleAutosaveDraft | null>(null);
 
-  const loadedAdminUsersTokenRef = useRef('');
+  const loadedAdminUsersRef = useRef(false);
   const handledEditQueryRef = useRef('');
 
   const adminPosts = posts.filter((post) => adminStatusFilter === 'all' || post.status === adminStatusFilter);
   const editingPost = editingId ? posts.find((post) => post.id === editingId) ?? null : null;
-  const revisionHistory = useRevisionHistory(editingId, localAdminToken);
+  const revisionHistory = useRevisionHistory(editingId);
   const editPostQuery = searchParams.get('edit');
 
   useEffect(() => {
-    if (!adminToken || adminToken === localAdminToken) return;
-    setLocalAdminToken(adminToken);
-    setAdminUnlocked(true);
-  }, [adminToken, localAdminToken]);
+    if (loadedAdminUsersRef.current) return;
+    loadedAdminUsersRef.current = true;
+    void loadAdminUsers();
+  }, []);
 
   useEffect(() => {
-    if (!adminUnlocked || !localAdminToken || loadedAdminUsersTokenRef.current === localAdminToken) return;
-    loadedAdminUsersTokenRef.current = localAdminToken;
-    void loadAdminUsers(localAdminToken);
-  }, [adminUnlocked, localAdminToken]);
-
-  useEffect(() => {
-    if (!adminUnlocked || !localAdminToken) return;
     let cancelled = false;
-    void getArticleAutosaveDraft(localAdminToken)
+    void getArticleAutosaveDraft()
       .then((draft) => {
         if (!cancelled) setServerDraft(draft);
       })
@@ -103,31 +94,28 @@ export function AdminPage() {
     return () => {
       cancelled = true;
     };
-  }, [adminUnlocked, localAdminToken]);
+  }, []);
 
   const autosaveDraft = useMemo(() => ({ ...form, tags: parseTagInput(tagInput) }), [form, tagInput]);
   const { note: autosaveNote, saveNow: saveDraftNow } = useDraftAutosave({
-    enabled: adminUnlocked,
-    token: localAdminToken,
+    enabled: true,
     editingId,
     draft: autosaveDraft,
     changeVersion: editorChangeVersion,
     onBoundEditingId: (postId) => {
       setEditingId(postId);
       setExpandedAdminPostId(postId);
-      void loadPosts(true, localAdminToken);
+      void loadPosts(true);
     },
     onSaved: setServerDraft
   });
 
-  const loadAdminUsers = async (token = localAdminToken) => {
-    if (!token) return;
+  const loadAdminUsers = async () => {
     try {
-      const users = await listUsers(token);
+      const users = await listUsers();
       setAdminUsers(users);
-      loadedAdminUsersTokenRef.current = token;
     } catch (error) {
-      if (loadedAdminUsersTokenRef.current === token) loadedAdminUsersTokenRef.current = '';
+      loadedAdminUsersRef.current = false;
       notify('error', error instanceof Error ? error.message : '用户列表加载失败');
     }
   };
@@ -143,7 +131,6 @@ export function AdminPage() {
   };
 
   const markdownEditor = useMarkdownEditor({
-    adminToken: localAdminToken,
     content: form.content,
     updateForm,
     notify
@@ -198,7 +185,7 @@ export function AdminPage() {
   };
 
   useEffect(() => {
-    if (!adminUnlocked || !editPostQuery) return;
+    if (!editPostQuery) return;
     const post = posts.find((item) => item.id === editPostQuery || item.slug === editPostQuery);
     if (!post) return;
 
@@ -214,7 +201,7 @@ export function AdminPage() {
       const editorPanel = document.querySelector('.editor-panel') as HTMLElement | null;
       editorPanel?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
     }, 0);
-  }, [adminUnlocked, editPostQuery, editingId, posts]);
+  }, [editPostQuery, editingId, posts]);
 
   const savePost = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -241,11 +228,11 @@ export function AdminPage() {
     };
 
     try {
-      const saved = editingId ? await updatePost(editingId, payload, localAdminToken) : await createPost(payload, localAdminToken);
-      await loadPosts(true, localAdminToken);
+      const saved = editingId ? await updatePost(editingId, payload) : await createPost(payload);
+      await loadPosts(true);
       notify('success', saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
       draftRepository.clear();
-      await clearArticleAutosaveDraft(localAdminToken).catch(() => undefined);
+      await clearArticleAutosaveDraft().catch(() => undefined);
       setServerDraft(null);
       startEdit(saved, false);
     } catch (error) {
@@ -257,8 +244,8 @@ export function AdminPage() {
     const confirmed = window.confirm(`确认删除《${post.title}》吗？此操作不可撤销。`);
     if (!confirmed) return;
     try {
-      await deletePost(post.id, localAdminToken);
-      await loadPosts(true, localAdminToken);
+      await deletePost(post.id);
+      await loadPosts(true);
       notify('success', '文章已删除');
       if (editingId === post.id) startCreate();
     } catch (error) {
@@ -268,8 +255,8 @@ export function AdminPage() {
 
   const updateStatus = async (id: string, status: PostStatus) => {
     try {
-      const updated = await updatePost(id, { status }, localAdminToken);
-      await loadPosts(true, localAdminToken);
+      const updated = await updatePost(id, { status });
+      await loadPosts(true);
       if (updated && editingId === id) startEdit(updated, false);
       notify('success', status === 'published' ? '文章已发布' : status === 'withdrawn' ? '文章已撤回' : '文章状态已更新');
     } catch (error) {
@@ -279,7 +266,7 @@ export function AdminPage() {
 
   const saveAdminUser = async (user: BlogUser) => {
     try {
-      const updated = await updateUser(user.id, user, localAdminToken);
+      const updated = await updateUser(user.id, user);
       setAdminUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       notify('success', '用户资料已更新');
     } catch (error) {
@@ -294,7 +281,7 @@ export function AdminPage() {
       return;
     }
     try {
-      const user = await createUser(adminUserForm, localAdminToken);
+      const user = await createUser(adminUserForm);
       setAdminUsers((current) => [user, ...current]);
       setAdminUserForm(EMPTY_ADMIN_USER_FORM);
       notify('success', '用户已创建');
@@ -306,7 +293,7 @@ export function AdminPage() {
   const removeAdminUser = async (user: BlogUser) => {
     if (!window.confirm(`确认删除用户 ${user.username} 吗？`)) return;
     try {
-      await deleteUser(user.id, localAdminToken);
+      await deleteUser(user.id);
       setAdminUsers((current) => current.filter((item) => item.id !== user.id));
       notify('success', '用户已删除');
     } catch (error) {
@@ -323,7 +310,7 @@ export function AdminPage() {
       {recoveryDraft ? (
         <DraftRecoveryDialog
           onDiscard={() => {
-            void clearArticleAutosaveDraft(localAdminToken);
+            void clearArticleAutosaveDraft();
             draftRepository.clear();
             setRecoveryDraft(null);
             setServerDraft(null);
@@ -364,7 +351,6 @@ export function AdminPage() {
         />
         <AboutManager
           adminPanelOpen={adminPanelOpen.about}
-          adminToken={localAdminToken}
           notify={notify}
           onTogglePanel={() => setAdminPanelOpen((current) => ({ ...current, about: !current.about }))}
         />
@@ -400,18 +386,18 @@ export function AdminPage() {
           <>
             <PublishScheduleControl
               onCancel={async () => {
-                const updated = await cancelSchedule(editingId, localAdminToken);
-                await loadPosts(true, localAdminToken);
+                const updated = await cancelSchedule(editingId);
+                await loadPosts(true);
                 startEdit(updated, false);
               }}
               onRetry={async () => {
-                const updated = await retrySchedule(editingId, localAdminToken);
-                await loadPosts(true, localAdminToken);
+                const updated = await retrySchedule(editingId);
+                await loadPosts(true);
                 startEdit(updated, false);
               }}
               onSchedule={async (scheduledAt) => {
-                const updated = await schedulePost(editingId, scheduledAt, localAdminToken);
-                await loadPosts(true, localAdminToken);
+                const updated = await schedulePost(editingId, scheduledAt);
+                await loadPosts(true);
                 startEdit(updated, false);
               }}
               post={editingPost}
@@ -434,7 +420,7 @@ export function AdminPage() {
                   .catch((error) => notify('error', error instanceof Error ? error.message : '版本删除失败'));
               }}
               onRestore={(revisionId) => void revisionHistory.restore(revisionId).then(async (restored) => {
-                await loadPosts(true, localAdminToken);
+                await loadPosts(true);
                 startEdit(restored, false);
                 await revisionHistory.reload();
                 notify('success', '历史版本已恢复为草稿');

@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { MarkdownContent } from '../components/MarkdownContent';
 import { BlogPost } from '../lib/blog';
 import { getArticlePreview } from '../lib/blogApi';
-import { loadSavedAdminSession } from '../lib/adminSession';
 
 export function ArticlePreviewPage() {
   const { id = '' } = useParams();
@@ -11,13 +10,8 @@ export function ArticlePreviewPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const session = loadSavedAdminSession();
-    if (!session?.token) {
-      setError('预览会话已失效，请返回后台重新登录');
-      return;
-    }
     let cancelled = false;
-    void getArticlePreview(id, session.token)
+    void getArticlePreview(id)
       .then((nextPost) => {
         if (!cancelled) setPost(nextPost);
       })
