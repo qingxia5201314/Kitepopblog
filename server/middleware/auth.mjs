@@ -1,33 +1,29 @@
 import { readSessionCookie } from '../sessionCookie.mjs';
 
 export function requireAdmin(c, next) {
-  const sessions = c.get('sessions');
-  const token = c.req.header('Authorization')?.replace('Bearer ', '') || '';
-  if (!sessions.verify(token)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
+  const user = currentUser(c);
+  if (!user || user.permission !== 'admin') {
+    const status = user ? 403 : 401;
+    const log = c.get('securityLog');
+    if (typeof log === 'function') {
+      try {
+        log({
+          type: 'admin_access_denied',
+          result: user ? 'forbidden' : 'unauthorized',
+          userId: user?.id ?? null,
+          ip: null
+        });
+      } catch {
+        // Authorization must not depend on optional audit logging.
+      }
+    }
+    return c.json({ ok: false, message: user ? 'Forbidden' : 'Unauthorized' }, status);
   }
   return next();
 }
 
 export function isAdmin(c) {
-  const sessions = c.get('sessions');
-  const token = c.req.header('Authorization')?.replace('Bearer ', '') || '';
-  return sessions.verify(token);
-}
-
-export function requireAccounting(c, next) {
-  const accountingSessions = c.get('accountingSessions');
-  const token = c.req.header('Authorization') || '';
-  if (!accountingSessions.verify(token)) {
-    return c.json({ ok: false, message: 'Accounting session expired' }, 401);
-  }
-  return next();
-}
-
-export function getAccountingAuth(c) {
-  const accountingSessions = c.get('accountingSessions');
-  const token = c.req.header('Authorization') || '';
-  return accountingSessions.verify(token);
+  return currentUser(c)?.permission === 'admin';
 }
 
 export async function hydrateAuth(c, next) {

@@ -1,20 +1,16 @@
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  currentUser,
-  getAccountingAuth,
-  hydrateAuth,
-  isAdmin,
-  requireAccounting,
-  requireAdmin,
-  requireUser
-} from './auth.mjs';
+import * as auth from './auth.mjs';
+
+const { currentUser, hydrateAuth, isAdmin, requireAdmin, requireUser } = auth;
 
 const reader = { id: 'reader-1', username: 'reader', nickname: 'Reader', permission: 'reader' };
 const admin = { id: 'admin-1', username: 'admin', nickname: 'Admin', permission: 'admin' };
 
 let verifySession;
 let privateHandler;
+let adminHandler;
+let securityLog;
 let app;
 
 function sessionFor(token) {
@@ -23,11 +19,13 @@ function sessionFor(token) {
   return null;
 }
 
-function createAuthApp(authConfig) {
+function createAuthApp(authConfig, options = {}) {
+  const log = Object.hasOwn(options, 'log') ? options.log : securityLog;
   const authApp = new Hono();
   authApp.onError((error, c) => c.text(error.message, 500));
   authApp.use('*', async (c, next) => {
     if (authConfig !== undefined) c.set('authConfig', authConfig);
+    if (log !== undefined) c.set('securityLog', log);
     c.set('userStore', { verifySession });
     await next();
   });
@@ -40,12 +38,16 @@ function createAuthApp(authConfig) {
     })
   );
   authApp.get('/private', requireUser, privateHandler);
+  authApp.get('/admin', requireAdmin, adminHandler);
+  authApp.get('/is-admin', (c) => c.json({ isAdmin: isAdmin(c) }));
   return authApp;
 }
 
 beforeEach(() => {
   verifySession = vi.fn(sessionFor);
   privateHandler = vi.fn((c) => c.json({ ok: true, user: currentUser(c) }));
+  adminHandler = vi.fn((c) => c.json({ ok: true, user: currentUser(c) }));
+  securityLog = vi.fn();
   app = createAuthApp({ secureCookies: false });
 });
 
@@ -164,11 +166,60 @@ describe('requireUser', () => {
   });
 });
 
+describe('requireAdmin', () => {
+  it.each([
+    ['anonymous', undefined, 401, 'unauthorized', null],
+    ['reader', 'reader-token', 403, 'forbidden', reader.id]
+  ])('denies %s requests and emits one safe audit event', async (_role, token, status, result, userId) => {
+    const response = await app.request('/admin', {
+      headers: token ? { Cookie: `kitepop_dev_session=${token}` } : undefined
+    });
+
+    expect(response.status).toBe(status);
+    expect(adminHandler).not.toHaveBeenCalled();
+    expect(securityLog).toHaveBeenCalledOnce();
+    expect(securityLog).toHaveBeenCalledWith({
+      type: 'admin_access_denied',
+      result,
+      userId,
+      ip: null
+    });
+  });
+
+  it('allows administrators without emitting a denial event', async () => {
+    const response = await app.request('/admin', {
+      headers: { Cookie: 'kitepop_dev_session=admin-token' }
+    });
+
+    expect(response.status).toBe(200);
+    expect(adminHandler).toHaveBeenCalledOnce();
+    expect(securityLog).not.toHaveBeenCalled();
+  });
+
+  it('does not fail when the optional security logger is missing', async () => {
+    const response = await createAuthApp({ secureCookies: false }, { log: undefined }).request('/admin');
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('isAdmin', () => {
+  it.each([
+    ['anonymous', undefined, false],
+    ['reader', 'reader-token', false],
+    ['admin', 'admin-token', true]
+  ])('uses only currentUser permission for %s requests', async (_role, token, expected) => {
+    const response = await app.request('/is-admin', {
+      headers: token ? { Cookie: `kitepop_dev_session=${token}` } : undefined
+    });
+
+    expect(await response.json()).toEqual({ isAdmin: expected });
+  });
+});
+
 describe('legacy auth compatibility', () => {
-  it('continues to export the legacy middleware helpers', () => {
-    expect(requireAdmin).toBeTypeOf('function');
-    expect(isAdmin).toBeTypeOf('function');
-    expect(requireAccounting).toBeTypeOf('function');
-    expect(getAccountingAuth).toBeTypeOf('function');
+  it('does not export legacy password-session helpers', () => {
+    expect(auth).not.toHaveProperty('requireAccounting');
+    expect(auth).not.toHaveProperty('getAccountingAuth');
   });
 });

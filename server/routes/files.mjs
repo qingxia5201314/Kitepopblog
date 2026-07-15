@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { isAdmin } from '../middleware/auth.mjs';
+import { requireAdmin } from '../middleware/auth.mjs';
 import { createPartialContentHeaders, createRawFileHeaders } from '../fileDownloadHeaders.mjs';
 import { parseMultipartFile } from '../utils/multipart.mjs';
 
@@ -91,11 +91,7 @@ app.get('/raw/:id', async (c) => {
   });
 });
 
-app.get('/', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.get('/', requireAdmin, (c) => {
   const fileService = c.get('fileService');
   const folderId = c.req.query('folderId') || '';
 
@@ -109,11 +105,7 @@ app.get('/', (c) => {
   }
 });
 
-app.post('/', async (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.post('/', requireAdmin, async (c) => {
   const fileService = c.get('fileService');
   const fileUploadLimitBytes = getFileUploadLimitBytes();
 
@@ -136,33 +128,21 @@ app.post('/', async (c) => {
   }
 });
 
-app.post('/:id/link', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.post('/:id/link', requireAdmin, (c) => {
   const fileService = c.get('fileService');
   const id = c.req.param('id');
   const link = fileService.createAccessLink(id);
   return c.json(link ? { link } : { ok: false, message: 'File not found' }, link ? 200 : 404);
 });
 
-app.post('/:id/preview-link', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.post('/:id/preview-link', requireAdmin, (c) => {
   const fileService = c.get('fileService');
   const id = c.req.param('id');
   const link = fileService.createPreviewLink(id);
   return c.json(link ? { link } : { ok: false, message: 'File not found' }, link ? 200 : 404);
 });
 
-app.delete('/:id', async (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.delete('/:id', requireAdmin, async (c) => {
   const fileService = c.get('fileService');
   const id = c.req.param('id');
   const removed = await fileService.removeFile(id);

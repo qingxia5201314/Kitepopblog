@@ -1,10 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { Hono } from 'hono';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createAdminSessions } from '../adminSession.mjs';
 import { apiNotFound } from '../middleware/apiNotFound.mjs';
 import { adminRoutes } from './admin.mjs';
 import { aboutRoutes } from './about.mjs';
+
+const reader = { id: 'reader-1', username: 'reader', permission: 'reader' };
+const admin = { id: 'admin-1', username: 'admin', permission: 'admin' };
 
 const profile = {
   avatarUrl: '/avatar.png',
@@ -18,20 +20,34 @@ const profile = {
 
 let app;
 let aboutStore;
-let sessions;
-let token;
+let authSession;
+let securityLog;
+let userStore;
 
 beforeEach(() => {
   aboutStore = {
     get: vi.fn(() => profile),
     save: vi.fn((input) => ({ ...input, updatedAt: profile.updatedAt })),
   };
-  sessions = createAdminSessions();
-  token = sessions.issue();
+  authSession = null;
+  securityLog = vi.fn();
+  userStore = {
+    listUsers: vi.fn(() => [reader, admin]),
+    createUser: vi.fn(async (draft) => ({
+      id: 'reader-2',
+      username: draft.username,
+      nickname: draft.username,
+      permission: draft.permission,
+    })),
+    updateUser: vi.fn((id, patch) => ({ ...reader, id, ...patch })),
+    removeUser: vi.fn(() => true),
+  };
   app = new Hono();
   app.use('*', async (c, next) => {
     c.set('aboutStore', aboutStore);
-    c.set('sessions', sessions);
+    c.set('authSession', authSession);
+    c.set('securityLog', securityLog);
+    c.set('userStore', userStore);
     await next();
   });
   app.route('/api/about', aboutRoutes);
@@ -48,28 +64,32 @@ describe('about routes', () => {
     expect(await response.json()).toEqual({ profile });
   });
 
-  it('rejects unauthenticated admin reads and writes', async () => {
+  it.each([
+    ['anonymous', null, 401],
+    ['reader', { user: reader }, 403]
+  ])('rejects %s admin reads and writes', async (_role, session, status) => {
+    authSession = session;
     const getResponse = await app.request('/api/admin/about');
     const putResponse = await app.request('/api/admin/about', { method: 'PUT', body: JSON.stringify(profile) });
 
-    expect(getResponse.status).toBe(401);
-    expect(putResponse.status).toBe(401);
+    expect(getResponse.status).toBe(status);
+    expect(putResponse.status).toBe(status);
   });
 
   it('returns the profile to an authenticated admin', async () => {
-    const response = await app.request('/api/admin/about', {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    authSession = { user: admin };
+    const response = await app.request('/api/admin/about');
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ profile });
   });
 
   it('saves and returns an authenticated admin update', async () => {
+    authSession = { user: admin };
     const input = { ...profile, displayName: 'Updated', updatedAt: '' };
     const response = await app.request('/api/admin/about', {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
 
@@ -79,9 +99,10 @@ describe('about routes', () => {
   });
 
   it('returns a stable 400 response for malformed JSON without leaking a native TypeError', async () => {
+    authSession = { user: admin };
     const response = await app.request('/api/admin/about', {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: '{',
     });
     const body = await response.json();
@@ -92,13 +113,14 @@ describe('about routes', () => {
   });
 
   it('returns the profile validation message as a 400 response', async () => {
+    authSession = { user: admin };
     aboutStore.save.mockImplementation(() => {
       throw new Error('请填写名称');
     });
 
     const response = await app.request('/api/admin/about', {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ displayName: '' }),
     });
 
@@ -107,18 +129,167 @@ describe('about routes', () => {
   });
 
   it('returns a stable 500 response when profile persistence fails', async () => {
+    authSession = { user: admin };
     aboutStore.save.mockImplementation(() => {
       throw new Error('SQLITE_IOERR: disk I/O error at C:\\secret\\blog.sqlite');
     });
 
     const response = await app.request('/api/admin/about', {
       method: 'PUT',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(profile),
     });
 
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({ ok: false, message: 'About save failed' });
+  });
+
+  it.each([
+    ['POST', '/api/admin/login'],
+    ['GET', '/api/admin/session']
+  ])('returns 404 for removed legacy endpoint %s %s', async (method, path) => {
+    const response = await app.request(path, { method });
+
+    expect(response.status).toBe(404);
+  });
+});
+
+describe('admin user routes', () => {
+  beforeEach(() => {
+    authSession = { user: admin };
+  });
+
+  it.each([
+    ['anonymous', null, 401],
+    ['reader', { user: reader }, 403]
+  ])('rejects %s user management', async (_role, session, status) => {
+    authSession = session;
+
+    const response = await app.request('/api/admin/users');
+
+    expect(response.status).toBe(status);
+  });
+
+  it('awaits asynchronous user creation', async () => {
+    const response = await app.request('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'new_reader', password: 'secret1', permission: 'reader' }),
+    });
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      user: { id: 'reader-2', username: 'new_reader', nickname: 'new_reader', permission: 'reader' },
+    });
+  });
+
+  it('logs only an actual permission change with safe target fields', async () => {
+    userStore.updateUser.mockReturnValue({ ...reader, permission: 'admin' });
+
+    const response = await app.request(`/api/admin/users/${reader.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Changed', permission: 'admin', password: 'must-not-log' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(securityLog).toHaveBeenCalledOnce();
+    expect(securityLog).toHaveBeenCalledWith({
+      type: 'permission_change',
+      userId: admin.id,
+      result: `target=${reader.id};permission=admin`,
+    });
+  });
+
+  it('does not log when permission is unchanged', async () => {
+    userStore.updateUser.mockReturnValue({ ...reader, nickname: 'Changed' });
+
+    const response = await app.request(`/api/admin/users/${reader.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: 'Changed', permission: 'reader' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(securityLog).not.toHaveBeenCalled();
+  });
+
+  it('logs a successful deletion without request body or credentials', async () => {
+    const response = await app.request(`/api/admin/users/${reader.id}`, { method: 'DELETE' });
+
+    expect(response.status).toBe(200);
+    expect(securityLog).toHaveBeenCalledWith({
+      type: 'user_delete',
+      userId: admin.id,
+      result: `target=${reader.id}`,
+    });
+  });
+
+  it.each([
+    ['PUT', { permission: 'admin' }, 200],
+    ['DELETE', undefined, 200]
+  ])('keeps a successful %s result when optional audit logging fails', async (method, body, status) => {
+    userStore.updateUser.mockReturnValue({ ...reader, permission: 'admin' });
+    securityLog.mockImplementation(() => {
+      throw new Error('audit sink unavailable');
+    });
+
+    const response = await app.request(`/api/admin/users/${reader.id}`, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    expect(response.status).toBe(status);
+    expect(securityLog).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['PUT', { permission: 'reader' }],
+    ['DELETE', undefined]
+  ])('returns 409 for LAST_ADMIN during %s', async (method, body) => {
+    const failure = Object.assign(new Error('last admin'), { code: 'LAST_ADMIN' });
+    if (method === 'PUT') userStore.updateUser.mockImplementation(() => { throw failure; });
+    else userStore.removeUser.mockImplementation(() => { throw failure; });
+
+    const response = await app.request(`/api/admin/users/${admin.id}`, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    expect(response.status).toBe(409);
+  });
+
+  it.each([
+    ['PUT', undefined],
+    ['DELETE', false]
+  ])('returns 404 when %s targets a missing user', async (method, result) => {
+    if (method === 'PUT') userStore.updateUser.mockReturnValue(result);
+    else userStore.removeUser.mockReturnValue(result);
+
+    const response = await app.request('/api/admin/users/missing', {
+      method,
+      headers: method === 'PUT' ? { 'Content-Type': 'application/json' } : undefined,
+      body: method === 'PUT' ? JSON.stringify({ nickname: 'Missing' }) : undefined,
+    });
+
+    expect(response.status).toBe(404);
+    expect(securityLog).not.toHaveBeenCalled();
+  });
+
+  it.each(['POST', 'PUT'])('returns 400 for %s validation failures', async (method) => {
+    const failure = new Error('Invalid permission');
+    if (method === 'POST') userStore.createUser.mockRejectedValue(failure);
+    else userStore.updateUser.mockImplementation(() => { throw failure; });
+
+    const response = await app.request(method === 'POST' ? '/api/admin/users' : `/api/admin/users/${reader.id}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission: 'owner' }),
+    });
+
+    expect(response.status).toBe(400);
   });
 });
 

@@ -1,37 +1,25 @@
 import { Hono } from 'hono';
-import { verifyAdminPassword } from '../auth.mjs';
 import { normalizeAboutProfile } from '../aboutModel.mjs';
-import { isAdmin, requireAdmin } from '../middleware/auth.mjs';
+import { currentUser, requireAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
 
-app.post('/login', async (c) => {
-  const adminPassword = c.get('adminPassword');
-
-  if (!adminPassword) {
-    return c.json({ ok: false, message: '服务端未配置 ADMIN_PASSWORD' }, 503);
-  }
-
+function securityLog(c, event) {
+  const log = c.get('securityLog');
+  if (typeof log !== 'function') return;
   try {
-    const body = await c.req.json();
-    const ok = verifyAdminPassword(String(body.password || ''), adminPassword);
-    if (!ok) {
-      return c.json({ ok }, 401);
-    }
-    const sessions = c.get('sessions');
-    const session = sessions.issue();
-    return c.json(typeof session === 'string' ? { ok, token: session } : { ok, ...session });
+    log(event);
   } catch {
-    return c.json({ ok: false, message: 'Invalid request body' }, 400);
+    // A completed user mutation must not be reported as failed because optional auditing is unavailable.
   }
-});
+}
 
-app.get('/session', (c) => {
-  const sessions = c.get('sessions');
-  const token = c.req.header('Authorization') || '';
-  const ok = sessions.verify(token);
-  return c.json({ ok }, ok ? 200 : 401);
-});
+function userMutationFailure(c, error, fallback) {
+  return c.json(
+    { ok: false, message: error?.message || fallback },
+    error?.code === 'LAST_ADMIN' ? 409 : 400
+  );
+}
 
 app.get('/about', requireAdmin, (c) => {
   return c.json({ profile: c.get('aboutStore').get() });
@@ -96,7 +84,7 @@ app.put('/posts/:id/schedule', requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
     const post = c.get('scheduledPublishService').schedule(c.req.param('id'), body.scheduledAt, {
-      editorUserId: 'admin'
+      editorUserId: currentUser(c).id
     });
     return c.json({ post });
   } catch (error) {
@@ -106,7 +94,11 @@ app.put('/posts/:id/schedule', requireAdmin, async (c) => {
 
 app.delete('/posts/:id/schedule', requireAdmin, (c) => {
   try {
-    return c.json({ post: c.get('scheduledPublishService').cancel(c.req.param('id'), { editorUserId: 'admin' }) });
+    return c.json({
+      post: c.get('scheduledPublishService').cancel(c.req.param('id'), {
+        editorUserId: currentUser(c).id
+      })
+    });
   } catch (error) {
     return c.json({ ok: false, message: error?.message || 'Schedule cancellation failed' }, 400);
   }
@@ -130,7 +122,7 @@ app.post('/users', requireAdmin, async (c) => {
   const userStore = c.get('userStore');
   try {
     const body = await c.req.json();
-    return c.json({ user: userStore.createUser(body) }, 201);
+    return c.json({ user: await userStore.createUser(body) }, 201);
   } catch (error) {
     return c.json({ ok: false, message: error?.message || 'User create failed' }, 400);
   }
@@ -141,18 +133,37 @@ app.put('/users/:id', requireAdmin, async (c) => {
   const id = c.req.param('id');
   try {
     const body = await c.req.json();
+    const previousUser = userStore.listUsers().find((user) => user.id === id);
     const user = userStore.updateUser(id, body);
+    if (user && previousUser && user.permission !== previousUser.permission) {
+      securityLog(c, {
+        type: 'permission_change',
+        userId: currentUser(c).id,
+        result: `target=${user.id};permission=${user.permission}`
+      });
+    }
     return c.json(user ? { user } : { ok: false, message: 'User not found' }, user ? 200 : 404);
   } catch (error) {
-    return c.json({ ok: false, message: error?.message || 'User update failed' }, 400);
+    return userMutationFailure(c, error, 'User update failed');
   }
 });
 
 app.delete('/users/:id', requireAdmin, (c) => {
   const userStore = c.get('userStore');
   const id = c.req.param('id');
-  const removed = userStore.removeUser(id);
-  return c.json(removed ? { ok: true } : { ok: false, message: 'User not found' }, removed ? 200 : 404);
+  try {
+    const removed = userStore.removeUser(id);
+    if (removed) {
+      securityLog(c, {
+        type: 'user_delete',
+        userId: currentUser(c).id,
+        result: `target=${id}`
+      });
+    }
+    return c.json(removed ? { ok: true } : { ok: false, message: 'User not found' }, removed ? 200 : 404);
+  } catch (error) {
+    return userMutationFailure(c, error, 'User delete failed');
+  }
 });
 
 export const adminRoutes = app;

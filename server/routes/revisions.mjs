@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { requireAdmin } from '../middleware/auth.mjs';
+import { currentUser, requireAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
 app.use('*', requireAdmin);
@@ -36,7 +36,7 @@ app.get('/:postId/revisions/:revisionId/compare', (c) => {
 app.post('/:postId/revisions/:revisionId/restore', (c) => {
   try {
     const post = c.get('postRevisionService').restore(c.req.param('postId'), c.req.param('revisionId'), {
-      editorUserId: 'admin'
+      editorUserId: currentUser(c).id
     });
     return c.json({ post });
   } catch (error) {

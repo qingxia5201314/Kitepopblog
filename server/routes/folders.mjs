@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { isAdmin } from '../middleware/auth.mjs';
+import { requireAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
 
@@ -13,11 +13,7 @@ function publicFolder(folder) {
   } : null;
 }
 
-app.post('/', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.post('/', requireAdmin, (c) => {
   const fileStore = c.get('fileStore');
 
   return c.req.json().then((body) => {
@@ -35,11 +31,7 @@ app.post('/', (c) => {
   });
 });
 
-app.put('/:id', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.put('/:id', requireAdmin, (c) => {
   const fileStore = c.get('fileStore');
   const id = c.req.param('id');
 
@@ -55,11 +47,7 @@ app.put('/:id', (c) => {
   });
 });
 
-app.delete('/:id', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.delete('/:id', requireAdmin, (c) => {
   const fileStore = c.get('fileStore');
   const id = c.req.param('id');
 

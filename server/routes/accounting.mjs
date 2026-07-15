@@ -1,34 +1,13 @@
 import { Hono } from 'hono';
-import { verifyAdminPassword } from '../auth.mjs';
-import { requireAccounting, getAccountingAuth } from '../middleware/auth.mjs';
+import { requireAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
 
-app.post('/login', async (c) => {
-  const adminPassword = c.get('adminPassword');
+app.all('/login', (c) => c.notFound());
+app.all('/session', (c) => c.notFound());
+app.use('*', requireAdmin);
 
-  if (!adminPassword) {
-    return c.json({ ok: false, message: '服务端未配置 ADMIN_PASSWORD' }, 503);
-  }
-
-  try {
-    const body = await c.req.json();
-    const ok = verifyAdminPassword(String(body.password || ''), adminPassword);
-    if (!ok) {
-      return c.json({ ok: false, message: '记账口令不正确' }, 401);
-    }
-    const accountingSessions = c.get('accountingSessions');
-    return c.json({ ok: true, ...accountingSessions.issue() });
-  } catch {
-    return c.json({ ok: false, message: 'Invalid request body' }, 400);
-  }
-});
-
-app.get('/session', requireAccounting, (c) => {
-  return c.json({ ok: true });
-});
-
-app.get('/month', requireAccounting, (c) => {
+app.get('/month', (c) => {
   const accountingStore = c.get('accountingStore');
   return c.json(accountingStore.getMonthData({
     month: c.req.query('month') || undefined,
@@ -37,7 +16,7 @@ app.get('/month', requireAccounting, (c) => {
   }));
 });
 
-app.post('/entries', requireAccounting, async (c) => {
+app.post('/entries', async (c) => {
   const accountingStore = c.get('accountingStore');
   try {
     const body = await c.req.json();
@@ -47,7 +26,7 @@ app.post('/entries', requireAccounting, async (c) => {
   }
 });
 
-app.put('/entries/:id', requireAccounting, async (c) => {
+app.put('/entries/:id', async (c) => {
   const accountingStore = c.get('accountingStore');
   const id = c.req.param('id');
   try {
@@ -59,14 +38,14 @@ app.put('/entries/:id', requireAccounting, async (c) => {
   }
 });
 
-app.delete('/entries/:id', requireAccounting, (c) => {
+app.delete('/entries/:id', (c) => {
   const accountingStore = c.get('accountingStore');
   const id = c.req.param('id');
   const removed = accountingStore.removeEntry(id);
   return c.json(removed ? { ok: true } : { ok: false, message: 'Entry not found' }, removed ? 200 : 404);
 });
 
-app.post('/categories', requireAccounting, async (c) => {
+app.post('/categories', async (c) => {
   const accountingStore = c.get('accountingStore');
   try {
     const body = await c.req.json();
@@ -76,7 +55,7 @@ app.post('/categories', requireAccounting, async (c) => {
   }
 });
 
-app.put('/categories/:id', requireAccounting, async (c) => {
+app.put('/categories/:id', async (c) => {
   const accountingStore = c.get('accountingStore');
   const id = c.req.param('id');
   try {
@@ -88,7 +67,7 @@ app.put('/categories/:id', requireAccounting, async (c) => {
   }
 });
 
-app.delete('/categories/:id', requireAccounting, (c) => {
+app.delete('/categories/:id', (c) => {
   const accountingStore = c.get('accountingStore');
   const id = c.req.param('id');
   try {
@@ -99,7 +78,7 @@ app.delete('/categories/:id', requireAccounting, (c) => {
   }
 });
 
-app.put('/settings', requireAccounting, async (c) => {
+app.put('/settings', async (c) => {
   const accountingStore = c.get('accountingStore');
   try {
     const body = await c.req.json();

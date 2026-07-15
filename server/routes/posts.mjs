@@ -1,13 +1,16 @@
 import { Hono } from 'hono';
 import { PUBLIC_DYNAMIC_CACHE } from '../httpCache.mjs';
-import { isAdmin } from '../middleware/auth.mjs';
+import { currentUser, isAdmin, requireAdmin } from '../middleware/auth.mjs';
 
 const app = new Hono();
 
+app.use('/', (c, next) => {
+  return c.req.query('includeDrafts') === '1' ? requireAdmin(c, next) : next();
+});
+
 app.get('/', (c) => {
   const postService = c.get('postService');
-  const admin = isAdmin(c);
-  const includeDrafts = c.req.query('includeDrafts') === '1' && admin;
+  const includeDrafts = c.req.query('includeDrafts') === '1';
   const summaryOnly = c.req.query('summary') === '1' && !includeDrafts;
   const searchParams = new URL(c.req.url).searchParams;
   const paginatedPublicQuery =
@@ -36,15 +39,12 @@ app.get('/', (c) => {
   });
 });
 
-app.post('/', async (c) => {
+app.post('/', requireAdmin, async (c) => {
   const postService = c.get('postService');
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
 
   try {
     const body = await c.req.json();
-    return c.json({ post: postService.createPost(body, { editorUserId: 'admin' }) }, 201);
+    return c.json({ post: postService.createPost(body, { editorUserId: currentUser(c).id }) }, 201);
   } catch {
     return c.json({ ok: false, message: 'Invalid request body' }, 400);
   }
@@ -61,27 +61,21 @@ app.get('/:id', (c) => {
   return c.json({ post });
 });
 
-app.put('/:id', async (c) => {
+app.put('/:id', requireAdmin, async (c) => {
   const postService = c.get('postService');
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
 
   const id = c.req.param('id');
   try {
     const body = await c.req.json();
-    const post = postService.updatePost(id, body, { editorUserId: 'admin' });
+    const post = postService.updatePost(id, body, { editorUserId: currentUser(c).id });
     return c.json(post ? { post } : { ok: false, message: 'Post not found' }, post ? 200 : 404);
   } catch {
     return c.json({ ok: false, message: 'Invalid request body' }, 400);
   }
 });
 
-app.delete('/:id', (c) => {
+app.delete('/:id', requireAdmin, (c) => {
   const postService = c.get('postService');
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
 
   const id = c.req.param('id');
   const removed = postService.removePost(id);
@@ -97,9 +91,8 @@ app.get('/:postId/comments', (c) => {
 
 app.post('/:postId/comments', async (c) => {
   const postService = c.get('postService');
-  const userStore = c.get('userStore');
   const postId = c.req.param('postId');
-  const user = userStore.verify(c.req.header('Authorization') || '');
+  const user = currentUser(c);
   if (!user) {
     return c.json({ ok: false, message: '请先登录后再评论' }, 401);
   }
@@ -115,10 +108,9 @@ app.post('/:postId/comments', async (c) => {
 
 app.put('/:postId/comments/:commentId', async (c) => {
   const postService = c.get('postService');
-  const userStore = c.get('userStore');
   const postId = c.req.param('postId');
   const commentId = c.req.param('commentId');
-  const user = userStore.verify(c.req.header('Authorization') || '');
+  const user = currentUser(c);
   if (!user) {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }
@@ -134,10 +126,9 @@ app.put('/:postId/comments/:commentId', async (c) => {
 
 app.delete('/:postId/comments/:commentId', (c) => {
   const postService = c.get('postService');
-  const userStore = c.get('userStore');
   const postId = c.req.param('postId');
   const commentId = c.req.param('commentId');
-  const user = userStore.verify(c.req.header('Authorization') || '');
+  const user = currentUser(c);
   if (!user) {
     return c.json({ ok: false, message: 'Unauthorized' }, 401);
   }

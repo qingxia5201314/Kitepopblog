@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { readFile } from 'node:fs/promises';
-import { isAdmin } from '../middleware/auth.mjs';
+import { requireAdmin } from '../middleware/auth.mjs';
 import { createRawFileHeaders } from '../fileDownloadHeaders.mjs';
 import { parseMultipartFile } from '../utils/multipart.mjs';
 
@@ -53,20 +53,12 @@ app.get('/raw/:id', serveRawImage);
 app.on('HEAD', '/raw/:id', serveRawImage);
 
 // Admin only routes
-app.get('/', (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.get('/', requireAdmin, (c) => {
   const imageService = c.get('imageService');
   return c.json({ images: imageService.listImages().map(publicImage) });
 });
 
-app.post('/', async (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.post('/', requireAdmin, async (c) => {
   const imageService = c.get('imageService');
   const imageUploadLimitBytes = Number(process.env.IMAGE_UPLOAD_LIMIT || 0);
 
@@ -87,11 +79,7 @@ app.post('/', async (c) => {
   }
 });
 
-app.delete('/:id', async (c) => {
-  if (!isAdmin(c)) {
-    return c.json({ ok: false, message: 'Unauthorized' }, 401);
-  }
-
+app.delete('/:id', requireAdmin, async (c) => {
   const imageService = c.get('imageService');
   const id = c.req.param('id');
   const removed = await imageService.removeImage(id);
