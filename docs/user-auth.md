@@ -15,13 +15,13 @@ The frontend calls `/api/users/me` during startup and keeps only the returned us
 
 Administrator identity is determined at request time by `users.permission = 'admin'`. No username is hard-coded. A valid administrator session is required for backend content mutations and draft access, accounting, image management, file and folder management, About management, revisions, scheduling, previews, and user management. Public article/About reads, public image reads, valid file capability links, registration, login, and reader-owned comment operations keep their narrower public or user rules.
 
-The last administrator cannot be deleted or demoted. Permission changes and user deletion revoke the affected user's sessions. Before production deployment, query the real database selected by the service's `POST_DB_PATH` and require exactly one result from:
+The last administrator cannot be deleted or demoted. Permission changes and user deletion revoke the affected user's sessions. Before this authentication migration's first production deployment, query the real database selected by the service's `POST_DB_PATH` and require exactly one result from:
 
 ```sql
 SELECT id, username, nickname FROM users WHERE permission = 'admin';
 ```
 
-Do not select an account by a remembered username and do not create an administrator automatically when this precondition fails.
+Do not select an account by a remembered username and do not create an administrator automatically when this first-migration precondition fails. After the migration marker exists, production startup requires at least one administrator and supports additional administrators created through user management.
 
 ## Production Cookie and Origin Rules
 
