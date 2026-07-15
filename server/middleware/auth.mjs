@@ -1,32 +1,5 @@
-import { getConnInfo } from '@hono/node-server/conninfo';
+import { requestIp } from '../requestIp.mjs';
 import { readSessionCookie } from '../sessionCookie.mjs';
-
-function peerAddress(c) {
-  try {
-    const address = getConnInfo(c)?.remote?.address;
-    return typeof address === 'string' && address.trim() ? address.trim() : 'direct';
-  } catch {
-    return 'direct';
-  }
-}
-
-function isLoopbackAddress(address) {
-  const normalized = address.toLowerCase();
-  return (
-    normalized === '::1' ||
-    normalized.startsWith('127.') ||
-    normalized.startsWith('::ffff:127.')
-  );
-}
-
-function requestIp(c) {
-  const peer = peerAddress(c);
-  if (c.get('authConfig')?.trustProxy === true && isLoopbackAddress(peer)) {
-    const forwarded = String(c.req.header('x-real-ip') ?? '').trim();
-    if (forwarded) return forwarded;
-  }
-  return peer;
-}
 
 export function requireAdmin(c, next) {
   const user = currentUser(c);

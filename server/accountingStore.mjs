@@ -28,12 +28,6 @@ function selectRows(db, sql, params = []) {
 
 function initSchema(db) {
   db.run(`
-    CREATE TABLE IF NOT EXISTS accounting_sessions (
-      token_hash TEXT PRIMARY KEY,
-      created_at TEXT NOT NULL,
-      expires_at TEXT NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS accounting_entries (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
@@ -221,30 +215,6 @@ export function createAccountingStore({ database }) {
   }
 
   return {
-    createSession({ tokenHash, createdAt, expiresAt }) {
-      db.run('INSERT OR REPLACE INTO accounting_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)', [
-        tokenHash,
-        createdAt,
-        expiresAt
-      ]);
-      database.persist();
-    },
-
-    getSession(tokenHash) {
-      return selectRows(db, 'SELECT token_hash AS tokenHash, created_at AS createdAt, expires_at AS expiresAt FROM accounting_sessions WHERE token_hash = ?', [
-        tokenHash
-      ])[0];
-    },
-
-    removeExpiredSessions(nowIso) {
-      db.run('DELETE FROM accounting_sessions WHERE expires_at <= ?', [nowIso]);
-      database.persist();
-    },
-
-    debugListSessions() {
-      return selectRows(db, 'SELECT token_hash AS tokenHash, created_at AS createdAt, expires_at AS expiresAt FROM accounting_sessions');
-    },
-
     listCategories,
 
     createCategory(draft) {

@@ -194,7 +194,7 @@ describe('requireAdmin', () => {
       type: 'admin_access_denied',
       result: 'unauthorized',
       userId: '',
-      ip: 'direct'
+      ip: 'unknown'
     }]);
   });
 

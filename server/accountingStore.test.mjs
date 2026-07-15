@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createSqliteDatabase } from './sqliteDatabase.mjs';
 import { createAccountingStore } from './accountingStore.mjs';
-import { createAccountingSessions } from './accountingSession.mjs';
 
 let tempDir;
+let database;
 let store;
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'kitepop-accounting-'));
-  const database = await createSqliteDatabase({ dbPath: join(tempDir, 'blog.sqlite') });
+  database = await createSqliteDatabase({ dbPath: join(tempDir, 'blog.sqlite') });
   store = createAccountingStore({ database });
 });
 
@@ -20,6 +20,14 @@ afterEach(async () => {
 });
 
 describe('accounting store', () => {
+  it('does not create or expose legacy accounting sessions', () => {
+    expect(database.db.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'accounting_sessions'")).toEqual([]);
+    expect(store).not.toHaveProperty('createSession');
+    expect(store).not.toHaveProperty('getSession');
+    expect(store).not.toHaveProperty('removeExpiredSessions');
+    expect(store).not.toHaveProperty('debugListSessions');
+  });
+
   it('creates entries and calculates monthly summary from sqlite data', () => {
     const food = store.createEntry({
       type: 'expense',
@@ -348,23 +356,5 @@ describe('accounting store', () => {
 
     expect(store.removeEntry(entry.id)).toBe(true);
     expect(store.getMonthData({ month: '2026-06' }).entries).toHaveLength(0);
-  });
-});
-
-describe('accounting sessions', () => {
-  it('keeps accounting login for thirty days and stores only token hashes', () => {
-    const sessions = createAccountingSessions({ store, now: () => new Date('2026-06-13T00:00:00.000Z') });
-    const session = sessions.issue();
-
-    expect(session.token).toHaveLength(43);
-    expect(store.debugListSessions()[0].tokenHash).not.toBe(session.token);
-    expect(sessions.verify(`Bearer ${session.token}`)).toBe(true);
-
-    const expiredSessions = createAccountingSessions({
-      store,
-      now: () => new Date('2026-07-14T00:00:01.000Z')
-    });
-
-    expect(expiredSessions.verify(`Bearer ${session.token}`)).toBe(false);
   });
 });

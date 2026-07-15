@@ -4,12 +4,13 @@ import { Hono } from 'hono';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createSqliteDatabase } from './sqliteDatabase.mjs';
-import { createAdminSessionStore, createAdminSessions } from './adminSession.mjs';
-import { createAccountingSessions } from './accountingSession.mjs';
 import { createAccountingStore } from './accountingStore.mjs';
 import { createPostStore } from './postStore.mjs';
 import { createRevisionStore } from './revisionStore.mjs';
 import { createUserStore } from './userStore.mjs';
+import { runAdminAuthMigration } from './migrations/adminAuthMigration.mjs';
+import { createLoginRateLimiter } from './loginRateLimit.mjs';
+import { writeSecurityEvent } from './securityLog.mjs';
 import { createAboutStore } from './aboutStore.mjs';
 import { createFileStore } from './fileStore.mjs';
 import { createImageStore } from './imageStore.mjs';
@@ -32,13 +33,23 @@ import { aboutRoutes } from './routes/about.mjs';
 import { renderRobots, renderRss, renderSeoPage, renderSitemap } from './seo.mjs';
 import { PUBLIC_DYNAMIC_CACHE, PUBLIC_FEED_CACHE } from './httpCache.mjs';
 import { apiNotFound } from './middleware/apiNotFound.mjs';
+import { hydrateAuth } from './middleware/auth.mjs';
+import { createOriginGuard } from './middleware/origin.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
-const adminPassword = process.env.ADMIN_PASSWORD || '';
 const postDbPath = process.env.POST_DB_PATH || './data/blog.sqlite';
 const uploadDir = resolve(process.env.UPLOAD_DIR || './data/uploads');
 const imageDir = resolve(process.env.IMAGE_DIR || './data/images');
+const production = process.env.NODE_ENV === 'production';
+const siteUrl = String(process.env.SITE_URL || '');
+const authConfig = {
+  secureCookies: process.env.NODE_ENV === 'production',
+  siteUrl: String(process.env.SITE_URL || ''),
+  trustProxy: process.env.TRUST_PROXY === '1'
+};
+const loginRateLimiter = createLoginRateLimiter();
+const originGuard = createOriginGuard({ production, siteUrl });
 
 function requestSiteUrl(c) {
   const configured = String(process.env.SITE_URL || '').trim().replace(/\/$/, '');
@@ -55,8 +66,11 @@ async function readIndexHtml() {
 
 // Initialize stores
 const database = await createSqliteDatabase({ dbPath: postDbPath });
-const adminSessionStore = createAdminSessionStore({ database });
-const sessions = createAdminSessions({ store: adminSessionStore });
+const userStore = createUserStore({ database });
+runAdminAuthMigration({
+  database,
+  requireSingleAdmin: process.env.NODE_ENV === 'production'
+});
 const store = await createPostStore({ database });
 const revisionStore = createRevisionStore({ database });
 const postRevisionService = createPostRevisionService({ database, postStore: store, revisionStore });
@@ -66,10 +80,8 @@ const scheduledPublishService = createScheduledPublishService({
   revisionService: postRevisionService
 });
 const draftService = createDraftService({ postStore: store });
-const userStore = createUserStore({ database });
 const aboutStore = createAboutStore({ database });
 const accountingStore = createAccountingStore({ database });
-const accountingSessions = createAccountingSessions({ store: accountingStore });
 const fileStore = createFileStore({ database, uploadDir });
 const imageStore = createImageStore({ database, imageDir });
 const postService = createPostService({ store, revisionService: postRevisionService });
@@ -96,22 +108,29 @@ app.use('*', async (c, next) => {
 
 // Inject dependencies into context
 app.use('*', async (c, next) => {
-  c.set('sessions', sessions);
   c.set('store', store);
   c.set('postService', postService);
   c.set('postRevisionService', postRevisionService);
   c.set('scheduledPublishService', scheduledPublishService);
   c.set('draftService', draftService);
   c.set('userStore', userStore);
+  c.set('authConfig', authConfig);
+  c.set('loginRateLimiter', loginRateLimiter);
+  c.set('securityLog', writeSecurityEvent);
   c.set('aboutStore', aboutStore);
   c.set('accountingStore', accountingStore);
-  c.set('accountingSessions', accountingSessions);
   c.set('fileStore', fileStore);
   c.set('fileService', fileService);
   c.set('imageStore', imageStore);
   c.set('imageService', imageService);
-  c.set('adminPassword', adminPassword);
   await next();
+});
+
+app.use('/api/*', originGuard);
+app.use('/api/*', hydrateAuth);
+app.use('/api/*', async (c, next) => {
+  await next();
+  if (c.get('authSession')) c.header('Cache-Control', 'private, no-store');
 });
 
 // API routes

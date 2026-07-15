@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { getConnInfo } from '@hono/node-server/conninfo';
+import { requestIp } from '../requestIp.mjs';
 import { clearSessionCookie, writeSessionCookie } from '../sessionCookie.mjs';
 
 const CREDENTIALS_MESSAGE = '用户名或密码错误';
@@ -19,33 +19,6 @@ const app = new Hono();
 
 function normalizedUsername(value) {
   return String(value ?? '').trim().toLowerCase();
-}
-
-function peerAddress(c) {
-  try {
-    const address = getConnInfo(c)?.remote?.address;
-    return typeof address === 'string' && address.trim() ? address.trim() : 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
-function isLoopbackAddress(address) {
-  const normalized = address.toLowerCase();
-  return (
-    normalized === '::1' ||
-    normalized.startsWith('127.') ||
-    normalized.startsWith('::ffff:127.')
-  );
-}
-
-function requestIp(c) {
-  const peer = peerAddress(c);
-  if (c.get('authConfig')?.trustProxy === true && isLoopbackAddress(peer)) {
-    const forwarded = String(c.req.header('x-real-ip') ?? '').trim();
-    if (forwarded) return forwarded;
-  }
-  return peer;
 }
 
 function isJsonObject(body) {
