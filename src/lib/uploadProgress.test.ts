@@ -14,6 +14,7 @@ class FakeXMLHttpRequest {
   status = 0;
   upload = new FakeUploadTarget();
   url = '';
+  withCredentials = false;
   onabort: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onload: (() => void) | null = null;
@@ -54,7 +55,6 @@ describe('upload progress helper', () => {
 
     const resultPromise = uploadFormDataWithProgress<{ file: { id: string } }>({
       formData,
-      headers: { Authorization: 'Bearer admin-token' },
       onProgress,
       url: '/api/files'
     });
@@ -69,7 +69,9 @@ describe('upload progress helper', () => {
     await expect(resultPromise).resolves.toEqual({ file: { id: 'file-1' } });
     expect(xhr.method).toBe('POST');
     expect(xhr.url).toBe('/api/files');
-    expect(xhr.requestHeaders.Authorization).toBe('Bearer admin-token');
+    expect(xhr.withCredentials).toBe(true);
+    expect(JSON.stringify(xhr.requestHeaders)).not.toContain('Authorization');
+    expect(JSON.stringify(xhr.requestHeaders)).not.toContain('Bearer');
     expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
       loaded: 512,
       total: 1024,

@@ -58,6 +58,10 @@ export async function restoreUserSessionRequest(): Promise<UserSession | null> {
   return parseSessionResponse(response);
 }
 
+export async function getCurrentUserRequest(): Promise<UserSession> {
+  return parseSessionResponse(await apiFetch('/api/users/me'));
+}
+
 export async function logoutUserRequest(): Promise<void> {
   const response = await apiFetch('/api/users/logout', { method: 'POST' });
   if (!response.ok) throw new Error('Logout request failed');

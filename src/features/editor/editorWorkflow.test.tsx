@@ -3,7 +3,15 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RevisionPanel } from './components/RevisionPanel';
 import { PublishScheduleControl } from './components/PublishScheduleControl';
-import { deleteRevision } from './api/editorWorkflowApi';
+import {
+  cancelSchedule,
+  compareRevision,
+  deleteRevision,
+  listRevisions,
+  restoreRevision,
+  retrySchedule,
+  schedulePost
+} from './api/editorWorkflowApi';
 
 describe('editor workflow components', () => {
   let host: HTMLDivElement;
@@ -47,14 +55,60 @@ describe('editor workflow components', () => {
 });
 
 describe('editor workflow API', () => {
-  it('sends an authenticated DELETE request for a removable revision', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ ok: true }));
+  afterEach(() => vi.restoreAllMocks());
 
-    await deleteRevision('post-1', 'revision-1', 'admin-token');
+  it('uses same-origin cookies for revision and scheduling requests', async () => {
+    const post = {
+      id: 'post-1', slug: 'post-1', title: 'Post', summary: '', category: 'notes', tags: [], content: '',
+      status: 'draft', createdAt: '', updatedAt: '', cover: 'notes', coverImage: ''
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(Response.json({
+      ok: true,
+      post,
+      revisions: [],
+      current: post,
+      revision: null,
+      changes: []
+    })));
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/admin/posts/post-1/revisions/revision-1', {
-      method: 'DELETE',
-      headers: { Authorization: 'Bearer admin-token' }
+    await listRevisions('post-1');
+    await compareRevision('post-1', 'revision-1');
+    await restoreRevision('post-1', 'revision-1');
+    await deleteRevision('post-1', 'revision-1');
+    await schedulePost('post-1', '2026-07-15T10:00:00.000Z');
+    await cancelSchedule('post-1');
+    await retrySchedule('post-1');
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/posts/post-1/revisions', {
+      credentials: 'same-origin'
     });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/posts/post-1/revisions/revision-1/compare', {
+      credentials: 'same-origin'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/admin/posts/post-1/revisions/revision-1/restore', {
+      method: 'POST',
+      credentials: 'same-origin'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/admin/posts/post-1/revisions/revision-1', {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/admin/posts/post-1/schedule', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scheduledAt: '2026-07-15T10:00:00.000Z' })
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/admin/posts/post-1/schedule', {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(7, '/api/admin/posts/post-1/schedule/retry', {
+      method: 'POST',
+      credentials: 'same-origin'
+    });
+
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Authorization');
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Bearer');
   });
 });

@@ -1,4 +1,5 @@
 import { AboutProfile } from './about';
+import { apiFetch } from './apiClient';
 
 const RESPONSE_ERROR = '个人资料响应格式异常，请稍后重试';
 const NETWORK_ERROR = '无法连接个人资料服务，请检查网络后重试';
@@ -43,7 +44,7 @@ async function parseProfileResponse(response: Response): Promise<AboutProfile> {
 
 async function requestProfile(input: RequestInfo | URL, init?: RequestInit): Promise<AboutProfile> {
   try {
-    return await parseProfileResponse(await fetch(input, init));
+    return await parseProfileResponse(await apiFetch(input, init));
   } catch (error) {
     if (error instanceof TypeError) throw new Error(NETWORK_ERROR);
     throw error;
@@ -54,17 +55,16 @@ export function getAboutProfile(signal?: AbortSignal): Promise<AboutProfile> {
   return requestProfile('/api/about', signal ? { cache: 'no-cache', signal } : { cache: 'no-cache' });
 }
 
-export function getAdminAboutProfile(token: string): Promise<AboutProfile> {
+export function getAdminAboutProfile(): Promise<AboutProfile> {
   return requestProfile('/api/admin/about', {
-    cache: 'no-cache',
-    headers: { Authorization: `Bearer ${token}` }
+    cache: 'no-cache'
   });
 }
 
-export function updateAboutProfile(profile: AboutProfile, token: string): Promise<AboutProfile> {
+export function updateAboutProfile(profile: AboutProfile): Promise<AboutProfile> {
   return requestProfile('/api/admin/about', {
     method: 'PUT',
-    headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(profile)
   });
 }

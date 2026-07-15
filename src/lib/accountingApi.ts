@@ -1,13 +1,5 @@
 import { AccountingCategory, AccountingEntry, AccountingEntryDraft, AccountingMonthData, AccountingSettingsDraft } from './accounting';
-
-export interface AccountingLoginResult {
-  token: string;
-  expiresAt: string;
-}
-
-function authHeaders(token?: string): HeadersInit {
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
+import { apiFetch } from './apiClient';
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json();
@@ -17,23 +9,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export async function loginAccounting(password: string): Promise<AccountingLoginResult> {
-  return parseResponse<AccountingLoginResult>(
-    await fetch('/api/accounting/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ password })
-    })
-  );
-}
-
 export async function getAccountingMonth({
-  token,
   month,
   type,
   category
 }: {
-  token: string;
   month: string;
   type?: string;
   category?: string;
@@ -42,17 +22,15 @@ export async function getAccountingMonth({
   if (type && type !== 'all') params.set('type', type);
   if (category && category !== 'all') params.set('category', category);
   return parseResponse<AccountingMonthData>(
-    await fetch(`/api/accounting/month?${params.toString()}`, {
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/accounting/month?${params.toString()}`)
   );
 }
 
-export async function createAccountingEntry(draft: AccountingEntryDraft, token: string): Promise<AccountingEntry> {
+export async function createAccountingEntry(draft: AccountingEntryDraft): Promise<AccountingEntry> {
   const payload = await parseResponse<{ entry: AccountingEntry }>(
-    await fetch('/api/accounting/entries', {
+    await apiFetch('/api/accounting/entries', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
     })
   );
@@ -60,13 +38,12 @@ export async function createAccountingEntry(draft: AccountingEntryDraft, token: 
 }
 
 export async function createAccountingCategory(
-  draft: { name: string; type: AccountingCategory['type'] },
-  token: string
+  draft: { name: string; type: AccountingCategory['type'] }
 ): Promise<AccountingCategory> {
   const payload = await parseResponse<{ category: AccountingCategory }>(
-    await fetch('/api/accounting/categories', {
+    await apiFetch('/api/accounting/categories', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
     })
   );
@@ -75,60 +52,49 @@ export async function createAccountingCategory(
 
 export async function updateAccountingCategory(
   id: string,
-  patch: { name?: string; type?: AccountingCategory['type'] },
-  token: string
+  patch: { name?: string; type?: AccountingCategory['type'] }
 ): Promise<AccountingCategory> {
   const payload = await parseResponse<{ category: AccountingCategory }>(
-    await fetch(`/api/accounting/categories/${encodeURIComponent(id)}`, {
+    await apiFetch(`/api/accounting/categories/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     })
   );
   return payload.category;
 }
 
-export async function deleteAccountingCategory(id: string, token: string): Promise<void> {
+export async function deleteAccountingCategory(id: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/accounting/categories/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/accounting/categories/${encodeURIComponent(id)}`, { method: 'DELETE' })
   );
 }
 
 export async function updateAccountingEntry(
   id: string,
-  patch: Partial<AccountingEntryDraft>,
-  token: string
+  patch: Partial<AccountingEntryDraft>
 ): Promise<AccountingEntry> {
   const payload = await parseResponse<{ entry: AccountingEntry }>(
-    await fetch(`/api/accounting/entries/${encodeURIComponent(id)}`, {
+    await apiFetch(`/api/accounting/entries/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     })
   );
   return payload.entry;
 }
 
-export async function deleteAccountingEntry(id: string, token: string): Promise<void> {
+export async function deleteAccountingEntry(id: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/accounting/entries/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/accounting/entries/${encodeURIComponent(id)}`, { method: 'DELETE' })
   );
 }
 
-export async function updateAccountingSettings(
-  settings: AccountingSettingsDraft,
-  token: string
-): Promise<AccountingMonthData> {
+export async function updateAccountingSettings(settings: AccountingSettingsDraft): Promise<AccountingMonthData> {
   return parseResponse<AccountingMonthData>(
-    await fetch('/api/accounting/settings', {
+    await apiFetch('/api/accounting/settings', {
       method: 'PUT',
-      headers: { 'content-type': 'application/json', ...authHeaders(token) },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(settings)
     })
   );

@@ -9,7 +9,6 @@ export type UploadProgressHandler = (progress: UploadProgress) => void;
 
 interface UploadFormDataOptions {
   formData: FormData;
-  headers?: Record<string, string>;
   method?: string;
   onProgress?: UploadProgressHandler;
   url: string;
@@ -26,7 +25,6 @@ function parseUploadResponse<T>(xhr: XMLHttpRequest): T {
 
 export function uploadFormDataWithProgress<T>({
   formData,
-  headers = {},
   method = 'POST',
   onProgress,
   url
@@ -36,7 +34,7 @@ export function uploadFormDataWithProgress<T>({
     const startedAt = Date.now();
 
     xhr.open(method, url);
-    Object.entries(headers).forEach(([name, value]) => xhr.setRequestHeader(name, value));
+    xhr.withCredentials = true;
 
     xhr.upload.onprogress = (event) => {
       if (!event.lengthComputable || !onProgress) return;

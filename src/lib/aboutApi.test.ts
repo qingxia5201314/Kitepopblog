@@ -19,7 +19,9 @@ describe('about api client', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(getAboutProfile()).resolves.toEqual(profile);
-    expect(fetchMock).toHaveBeenCalledWith('/api/about', { cache: 'no-cache' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/about', { cache: 'no-cache', credentials: 'same-origin' });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Authorization');
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Bearer');
   });
 
   it('passes an optional abort signal to public profile requests', async () => {
@@ -31,26 +33,30 @@ describe('about api client', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/about', {
       cache: 'no-cache',
+      credentials: 'same-origin',
       signal: controller.signal
     });
   });
 
-  it('uses bearer authentication for admin reads and JSON updates', async () => {
+  it('uses same-origin cookies for admin reads and JSON updates', async () => {
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ profile })));
     vi.stubGlobal('fetch', fetchMock);
 
-    await getAdminAboutProfile('admin-token');
-    await updateAboutProfile(profile, 'admin-token');
+    await getAdminAboutProfile();
+    await updateAboutProfile(profile);
 
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/about', {
       cache: 'no-cache',
-      headers: { Authorization: 'Bearer admin-token' }
+      credentials: 'same-origin'
     });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/about', {
       method: 'PUT',
-      headers: { Authorization: 'Bearer admin-token', 'content-type': 'application/json' },
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(profile)
     });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Authorization');
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Bearer');
   });
 
   it('surfaces a stable Chinese message from non-ok responses', async () => {

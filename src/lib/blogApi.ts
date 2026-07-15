@@ -8,15 +8,13 @@ import {
   PostStatus,
   UserSession
 } from './blog';
+import { apiFetch, getCurrentUserRequest, loginUserRequest } from './apiClient';
+
+export { logoutUserRequest } from './apiClient';
 
 interface ListPostOptions {
   includeDrafts?: boolean;
   summary?: boolean;
-  token?: string;
-}
-
-function authHeaders(token?: string): HeadersInit {
-  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -33,32 +31,25 @@ export async function listPosts(options: ListPostOptions = {}): Promise<BlogPost
   if (options.summary && !options.includeDrafts) params.set('summary', '1');
   const query = params.toString() ? `?${params}` : '';
   const payload = await parseResponse<{ posts: BlogPost[] }>(
-    await fetch(`/api/posts${query}`, {
-      headers: authHeaders(options.token)
-    })
+    await apiFetch(`/api/posts${query}`)
   );
 
   return payload.posts;
 }
 
-export async function getPost(idOrSlug: string, token?: string): Promise<BlogPost> {
+export async function getPost(idOrSlug: string): Promise<BlogPost> {
   const payload = await parseResponse<{ post: BlogPost }>(
-    await fetch(`/api/posts/${encodeURIComponent(idOrSlug)}`, {
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/posts/${encodeURIComponent(idOrSlug)}`)
   );
 
   return payload.post;
 }
 
-export async function createPost(draft: BlogPostDraft, token: string): Promise<BlogPost> {
+export async function createPost(draft: BlogPostDraft): Promise<BlogPost> {
   const payload = await parseResponse<{ post: BlogPost }>(
-    await fetch('/api/posts', {
+    await apiFetch('/api/posts', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
     })
   );
@@ -68,16 +59,12 @@ export async function createPost(draft: BlogPostDraft, token: string): Promise<B
 
 export async function updatePost(
   id: string,
-  patch: Partial<BlogPostDraft> | { status: PostStatus },
-  token: string
+  patch: Partial<BlogPostDraft> | { status: PostStatus }
 ): Promise<BlogPost> {
   const payload = await parseResponse<{ post: BlogPost }>(
-    await fetch(`/api/posts/${encodeURIComponent(id)}`, {
+    await apiFetch(`/api/posts/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     })
   );
@@ -85,36 +72,27 @@ export async function updatePost(
   return payload.post;
 }
 
-export async function deletePost(id: string, token: string): Promise<void> {
+export async function deletePost(id: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/posts/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/posts/${encodeURIComponent(id)}`, { method: 'DELETE' })
   );
 }
 
-export async function getArticleAutosaveDraft(token: string): Promise<ArticleAutosaveDraft | null> {
+export async function getArticleAutosaveDraft(): Promise<ArticleAutosaveDraft | null> {
   const payload = await parseResponse<{ draft: ArticleAutosaveDraft | null }>(
-    await fetch('/api/admin/article-draft', {
-      headers: authHeaders(token)
-    })
+    await apiFetch('/api/admin/article-draft')
   );
 
   return payload.draft;
 }
 
 export async function saveArticleAutosaveDraft(
-  draft: Omit<ArticleAutosaveDraft, 'updatedAt'>,
-  token: string
+  draft: Omit<ArticleAutosaveDraft, 'updatedAt'>
 ): Promise<ArticleAutosaveDraft> {
   const payload = await parseResponse<{ draft: ArticleAutosaveDraft }>(
-    await fetch('/api/admin/article-draft', {
+    await apiFetch('/api/admin/article-draft', {
       method: 'PUT',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
     })
   );
@@ -122,40 +100,32 @@ export async function saveArticleAutosaveDraft(
   return payload.draft;
 }
 
-export async function clearArticleAutosaveDraft(token: string): Promise<void> {
+export async function clearArticleAutosaveDraft(): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch('/api/admin/article-draft', {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch('/api/admin/article-draft', { method: 'DELETE' })
   );
 }
 
-export async function getArticlePreview(id: string, token: string): Promise<BlogPost> {
+export async function getArticlePreview(id: string): Promise<BlogPost> {
   const payload = await parseResponse<{ post: BlogPost }>(
-    await fetch(`/api/admin/article-preview/${encodeURIComponent(id)}`, {
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/admin/article-preview/${encodeURIComponent(id)}`)
   );
   return payload.post;
 }
 
 export async function listPostComments(postIdOrSlug: string): Promise<PostComment[]> {
   const payload = await parseResponse<{ comments: PostComment[] }>(
-    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`)
+    await apiFetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`)
   );
 
   return payload.comments;
 }
 
-export async function createPostComment(postIdOrSlug: string, draft: PostCommentDraft, token: string): Promise<PostComment> {
+export async function createPostComment(postIdOrSlug: string, draft: PostCommentDraft): Promise<PostComment> {
   const payload = await parseResponse<{ comment: PostComment }>(
-    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`, {
+    await apiFetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
     })
   );
@@ -166,16 +136,12 @@ export async function createPostComment(postIdOrSlug: string, draft: PostComment
 export async function updatePostComment(
   postIdOrSlug: string,
   commentId: string,
-  patch: PostCommentDraft,
-  token: string
+  patch: PostCommentDraft
 ): Promise<PostComment> {
   const payload = await parseResponse<{ comment: PostComment }>(
-    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments/${encodeURIComponent(commentId)}`, {
+    await apiFetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments/${encodeURIComponent(commentId)}`, {
       method: 'PUT',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     })
   );
@@ -183,11 +149,10 @@ export async function updatePostComment(
   return payload.comment;
 }
 
-export async function deletePostComment(postIdOrSlug: string, commentId: string, token: string): Promise<void> {
+export async function deletePostComment(postIdOrSlug: string, commentId: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments/${encodeURIComponent(commentId)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
+    await apiFetch(`/api/posts/${encodeURIComponent(postIdOrSlug)}/comments/${encodeURIComponent(commentId)}`, {
+      method: 'DELETE'
     })
   );
 }
@@ -198,7 +163,7 @@ export async function registerUser(draft: {
   nickname: string;
 }): Promise<UserSession> {
   return parseResponse<UserSession>(
-    await fetch('/api/users/register', {
+    await apiFetch('/api/users/register', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
@@ -207,44 +172,27 @@ export async function registerUser(draft: {
 }
 
 export async function loginUser(username: string, password: string): Promise<UserSession> {
-  return parseResponse<UserSession>(
-    await fetch('/api/users/login', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    })
-  );
+  return loginUserRequest(username, password);
 }
 
-export async function getCurrentUser(token: string): Promise<BlogUser> {
-  const payload = await parseResponse<{ user: BlogUser }>(
-    await fetch('/api/users/me', {
-      headers: authHeaders(token)
-    })
-  );
-  return payload.user;
+export async function getCurrentUser(): Promise<UserSession> {
+  return getCurrentUserRequest();
 }
 
-export async function listUsers(token: string): Promise<BlogUser[]> {
+export async function listUsers(): Promise<BlogUser[]> {
   const payload = await parseResponse<{ users: BlogUser[] }>(
-    await fetch('/api/admin/users', {
-      headers: authHeaders(token)
-    })
+    await apiFetch('/api/admin/users')
   );
   return payload.users;
 }
 
 export async function createUser(
-  draft: { username: string; password: string; nickname: string; permission: BlogUser['permission'] },
-  token: string
+  draft: { username: string; password: string; nickname: string; permission: BlogUser['permission'] }
 ): Promise<BlogUser> {
   const payload = await parseResponse<{ user: BlogUser }>(
-    await fetch('/api/admin/users', {
+    await apiFetch('/api/admin/users', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(draft)
     })
   );
@@ -253,27 +201,20 @@ export async function createUser(
 
 export async function updateUser(
   id: string,
-  patch: Partial<Pick<BlogUser, 'nickname' | 'permission'>>,
-  token: string
+  patch: Partial<Pick<BlogUser, 'nickname' | 'permission'>>
 ): Promise<BlogUser> {
   const payload = await parseResponse<{ user: BlogUser }>(
-    await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+    await apiFetch(`/api/admin/users/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: {
-        'content-type': 'application/json',
-        ...authHeaders(token)
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch)
     })
   );
   return payload.user;
 }
 
-export async function deleteUser(id: string, token: string): Promise<void> {
+export async function deleteUser(id: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' })
   );
 }

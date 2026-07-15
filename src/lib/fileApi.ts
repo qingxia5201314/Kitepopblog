@@ -1,3 +1,4 @@
+import { apiFetch } from './apiClient';
 import { UploadProgressHandler, uploadFormDataWithProgress } from './uploadProgress';
 
 export interface UploadedFile {
@@ -29,10 +30,6 @@ export interface FileFolderView {
   files: UploadedFile[];
 }
 
-function authHeaders(token: string): HeadersInit {
-  return { Authorization: `Bearer ${token}` };
-}
-
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = await response.json();
   if (!response.ok) {
@@ -41,24 +38,20 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
-export async function listUploadedFiles(token: string): Promise<UploadedFile[]> {
-  return (await getFileFolderView(token)).files;
+export async function listUploadedFiles(): Promise<UploadedFile[]> {
+  return (await getFileFolderView()).files;
 }
 
-export async function getFileFolderView(token: string, folderId = ''): Promise<FileFolderView> {
+export async function getFileFolderView(folderId = ''): Promise<FileFolderView> {
   const search = new URLSearchParams();
   if (folderId) search.set('folderId', folderId);
-  const payload = await parseResponse<FileFolderView>(
-    await fetch(`/api/files${search.toString() ? `?${search}` : ''}`, {
-      headers: authHeaders(token)
-    })
+  return parseResponse<FileFolderView>(
+    await apiFetch(`/api/files${search.toString() ? `?${search}` : ''}`)
   );
-  return payload;
 }
 
 export async function uploadFile(
   file: File,
-  token: string,
   folderId = '',
   onProgress?: UploadProgressHandler
 ): Promise<UploadedFile> {
@@ -68,84 +61,64 @@ export async function uploadFile(
   if (onProgress) {
     const payload = await uploadFormDataWithProgress<{ file: UploadedFile }>({
       formData,
-      headers: authHeaders(token) as Record<string, string>,
       onProgress,
       url: '/api/files'
     });
     return payload.file;
   }
   const payload = await parseResponse<{ file: UploadedFile }>(
-    await fetch('/api/files', {
+    await apiFetch('/api/files', {
       method: 'POST',
-      headers: authHeaders(token),
       body: formData
     })
   );
   return payload.file;
 }
 
-export async function createFileFolder(input: { name: string; parentId?: string }, token: string): Promise<FileFolder> {
+export async function createFileFolder(input: { name: string; parentId?: string }): Promise<FileFolder> {
   const payload = await parseResponse<{ folder: FileFolder }>(
-    await fetch('/api/file-folders', {
+    await apiFetch('/api/file-folders', {
       method: 'POST',
-      headers: {
-        ...authHeaders(token),
-        'content-type': 'application/json'
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input)
     })
   );
   return payload.folder;
 }
 
-export async function renameFileFolder(id: string, name: string, token: string): Promise<FileFolder> {
+export async function renameFileFolder(id: string, name: string): Promise<FileFolder> {
   const payload = await parseResponse<{ folder: FileFolder }>(
-    await fetch(`/api/file-folders/${encodeURIComponent(id)}`, {
+    await apiFetch(`/api/file-folders/${encodeURIComponent(id)}`, {
       method: 'PUT',
-      headers: {
-        ...authHeaders(token),
-        'content-type': 'application/json'
-      },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name })
     })
   );
   return payload.folder;
 }
 
-export async function deleteFileFolder(id: string, token: string): Promise<void> {
+export async function deleteFileFolder(id: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/file-folders/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/file-folders/${encodeURIComponent(id)}`, { method: 'DELETE' })
   );
 }
 
-export async function createFileLink(id: string, token: string): Promise<FileLink> {
+export async function createFileLink(id: string): Promise<FileLink> {
   const payload = await parseResponse<{ link: FileLink }>(
-    await fetch(`/api/files/${encodeURIComponent(id)}/link`, {
-      method: 'POST',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/files/${encodeURIComponent(id)}/link`, { method: 'POST' })
   );
   return payload.link;
 }
 
-export async function getFilePreviewLink(id: string, token: string): Promise<FileLink> {
+export async function getFilePreviewLink(id: string): Promise<FileLink> {
   const payload = await parseResponse<{ link: FileLink }>(
-    await fetch(`/api/files/${encodeURIComponent(id)}/preview-link`, {
-      method: 'POST',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/files/${encodeURIComponent(id)}/preview-link`, { method: 'POST' })
   );
   return payload.link;
 }
 
-export async function deleteUploadedFile(id: string, token: string): Promise<void> {
+export async function deleteUploadedFile(id: string): Promise<void> {
   await parseResponse<{ ok: boolean }>(
-    await fetch(`/api/files/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(token)
-    })
+    await apiFetch(`/api/files/${encodeURIComponent(id)}`, { method: 'DELETE' })
   );
 }

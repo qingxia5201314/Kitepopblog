@@ -6,34 +6,45 @@ vi.mock('./uploadProgress', () => ({
   uploadFormDataWithProgress: vi.fn()
 }));
 
+const hostedImage = {
+  id: 'img-1',
+  originalName: 'pasted.png',
+  contentType: 'image/png',
+  sizeBytes: 3,
+  uploadedAt: '2026-06-26T00:00:00.000Z',
+  path: '/api/images/raw/img-1'
+};
+
 describe('image api client', () => {
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
 
-  it('uses admin bearer tokens for image operations', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(Response.json({ images: [] }))
-      .mockResolvedValueOnce(Response.json({ image: { id: 'img-1', path: '/api/images/raw/img-1' } }))
-      .mockResolvedValueOnce(Response.json({ ok: true }));
+  it('uses same-origin cookies for image operations', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({
+      images: [],
+      image: hostedImage,
+      ok: true
+    })));
     vi.stubGlobal('fetch', fetchMock);
 
-    await listHostedImages('admin-token');
-    await uploadHostedImage(new File(['png'], 'pasted.png', { type: 'image/png' }), 'admin-token');
-    await deleteHostedImage('img-1', 'admin-token');
+    await listHostedImages();
+    await uploadHostedImage(new File(['png'], 'pasted.png', { type: 'image/png' }));
+    await deleteHostedImage('img-1');
 
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/images', {
-      headers: { Authorization: 'Bearer admin-token' }
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/images', expect.objectContaining({
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/images', { credentials: 'same-origin' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/images', {
       method: 'POST',
-      headers: { Authorization: 'Bearer admin-token' }
-    }));
+      credentials: 'same-origin',
+      body: expect.any(FormData)
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/images/img-1', {
       method: 'DELETE',
-      headers: { Authorization: 'Bearer admin-token' }
+      credentials: 'same-origin'
     });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Authorization');
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Bearer');
   });
 
   it('turns html error pages into readable upload errors', async () => {
@@ -46,35 +57,28 @@ describe('image api client', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(
-      uploadHostedImage(new File(['png'], 'pasted.png', { type: 'image/png' }), 'admin-token')
+      uploadHostedImage(new File(['png'], 'pasted.png', { type: 'image/png' }))
     ).rejects.toThrow('图片上传失败：服务器返回了 HTML 页面（HTTP 413）');
   });
 
-  it('uses the progress uploader for image uploads when progress is requested', async () => {
-    vi.mocked(uploadFormDataWithProgress).mockResolvedValue({
-      image: {
-        id: 'img-1',
-        originalName: 'pasted.png',
-        contentType: 'image/png',
-        sizeBytes: 3,
-        uploadedAt: '2026-06-26T00:00:00.000Z',
-        path: '/api/images/raw/img-1'
-      }
-    });
+  it('uses the cookie-authenticated progress uploader without auth headers', async () => {
+    vi.mocked(uploadFormDataWithProgress).mockResolvedValue({ image: hostedImage });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ image: hostedImage })));
     const onProgress = vi.fn();
 
     const image = await uploadHostedImage(
       new File(['png'], 'pasted.png', { type: 'image/png' }),
-      'admin-token',
       onProgress
     );
 
     expect(image.id).toBe('img-1');
     expect(uploadFormDataWithProgress).toHaveBeenCalledWith(expect.objectContaining({
-      headers: { Authorization: 'Bearer admin-token' },
       onProgress,
       url: '/api/images'
     }));
+    expect(vi.mocked(uploadFormDataWithProgress).mock.calls[0][0]).not.toHaveProperty('headers');
     expect(vi.mocked(uploadFormDataWithProgress).mock.calls[0][0].formData.get('file')).toBeInstanceOf(File);
+    expect(JSON.stringify(vi.mocked(uploadFormDataWithProgress).mock.calls)).not.toContain('Authorization');
+    expect(JSON.stringify(vi.mocked(uploadFormDataWithProgress).mock.calls)).not.toContain('Bearer');
   });
 });
