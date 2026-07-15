@@ -479,7 +479,7 @@ describe('App layout shells', () => {
     const root = createRoot(host);
     roots.push(root);
     root.render(<App />);
-    await waitFor(() => host.querySelector('.topbar nav'));
+    await waitFor(() => host.querySelector('.topbar nav a.active[aria-current="page"]'));
 
     const activeNav = host.querySelector('.topbar nav a.active');
     expect(activeNav?.getAttribute('aria-current')).toBe('page');
@@ -659,7 +659,7 @@ describe('App layout shells', () => {
     roots.push(root);
     root.render(<App />);
 
-    expect(await waitFor(() => host.querySelector('.admin-layout'))).toBeTruthy();
+    expect(await waitFor(() => host.querySelector('.admin-content-group'))).toBeTruthy();
     expect(host.querySelector('.admin-content-group .panel-heading h2')?.textContent).toBe('内容管理');
     const expandContentButton = host.querySelector('.admin-content-group .panel-heading button') as HTMLButtonElement | null;
     expect(expandContentButton?.textContent).toBe('展开');
