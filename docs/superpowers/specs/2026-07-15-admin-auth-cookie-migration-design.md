@@ -144,7 +144,7 @@
 
 应用启动只调用 `/api/users/me` 恢复用户身份。`AppContext` 只保存当前用户和会话状态，不保存 token。
 
-所有旧 `Authorization: Bearer` 请求改为同源 Cookie 请求。前端删除 `kitepop-admin-session` 和 `kitepop-user-session` 的读写逻辑，并在新版本首次加载时清理这两个旧键。
+所有旧 `Authorization: Bearer` 请求改为同源 Cookie 请求。前端删除 `kitepop-admin-session`、`kitepop-user-session` 和 `kitepop-accounting-session` 的读写逻辑，并在新版本首次加载时清理这三个旧键。
 
 访问后台、记账、图床或文件管理时：
 
@@ -220,7 +220,7 @@ API 不回显 token、Cookie、hash、数据库路径或内部鉴权错误。错
 - 启动时通过 `/api/users/me` 恢复身份。
 - 未登录、普通用户和管理员三种管理页面状态正确。
 - `401` 和 `403` 使用不同处理逻辑。
-- 请求不再发送 Bearer token，也不再创建旧 `localStorage` session。
+- 请求不再发送 Bearer token，也不再创建三个旧 `localStorage` session。
 - 管理员可在后台、记账、图床和文件管理间直接切换。
 
 ## VPS 验收
