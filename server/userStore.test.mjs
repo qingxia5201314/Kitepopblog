@@ -8,11 +8,13 @@ import { createUserStore } from './userStore.mjs';
 
 let currentTime;
 let database;
+let databases;
+let dbPath;
 let tempDir;
 let store;
 
-function queryOne(sql, params = []) {
-  const statement = database.db.prepare(sql);
+function queryOne(sql, params = [], source = database) {
+  const statement = source.db.prepare(sql);
   try {
     statement.bind(params);
     return statement.step() ? statement.getAsObject() : undefined;
@@ -56,12 +58,16 @@ function expectLastAdminError(callback) {
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'kitepop-users-'));
-  database = await createSqliteDatabase({ dbPath: join(tempDir, 'blog.sqlite') });
+  dbPath = join(tempDir, 'blog.sqlite');
+  databases = [];
+  database = await createSqliteDatabase({ dbPath });
+  databases.push(database);
   currentTime = new Date('2026-06-14T00:00:00.000Z');
   store = createUserStore({ database, now: () => new Date(currentTime) });
 });
 
 afterEach(async () => {
+  for (const openedDatabase of databases) openedDatabase.db.close();
   await rm(tempDir, { force: true, recursive: true });
 });
 
@@ -81,6 +87,23 @@ describe('user store', () => {
     expect(row.password_hash).toMatch(/^scrypt\$v1\$/);
   });
 
+  it('atomically registers only one session for concurrent duplicate usernames', async () => {
+    const attempts = await Promise.allSettled([
+      store.register({ username: 'same_user', password: 'secret123', nickname: 'First' }),
+      store.register({ username: 'same_user', password: 'secret123', nickname: 'Second' }),
+    ]);
+    const fulfilled = attempts.filter((attempt) => attempt.status === 'fulfilled');
+    const rejected = attempts.filter((attempt) => attempt.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toMatchObject({ message: '用户名已存在' });
+    expect(queryOne('SELECT COUNT(*) AS count FROM users WHERE lower(username) = lower(?)', ['same_user']).count).toBe(
+      1,
+    );
+    expect(queryOne('SELECT COUNT(*) AS count FROM user_sessions').count).toBe(1);
+  });
+
   it('creates users asynchronously with scrypt password hashes', async () => {
     const pending = store.createUser({
       username: 'admin_made',
@@ -96,6 +119,23 @@ describe('user store', () => {
     expect(created.permission).toBe('admin');
     expect(row).toMatchObject({ role: 'admin', permission: 'admin' });
     expect(row.password_hash).toMatch(/^scrypt\$v1\$/);
+  });
+
+  it('atomically creates only one user for concurrent duplicate usernames', async () => {
+    const attempts = await Promise.allSettled([
+      store.createUser({ username: 'same_user', password: 'secret123', nickname: 'First', permission: 'reader' }),
+      store.createUser({ username: 'same_user', password: 'secret123', nickname: 'Second', permission: 'admin' }),
+    ]);
+    const fulfilled = attempts.filter((attempt) => attempt.status === 'fulfilled');
+    const rejected = attempts.filter((attempt) => attempt.status === 'rejected');
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toMatchObject({ message: '用户名已存在' });
+    expect(queryOne('SELECT COUNT(*) AS count FROM users WHERE lower(username) = lower(?)', ['same_user']).count).toBe(
+      1,
+    );
+    expect(queryOne('SELECT COUNT(*) AS count FROM user_sessions').count).toBe(0);
   });
 
   it('stores only a hash of each raw session token and verifies the raw token', async () => {
@@ -121,6 +161,24 @@ describe('user store', () => {
     expect(queryOne('SELECT token_hash FROM user_sessions WHERE user_id = ?', [session.user.id])).toBeUndefined();
   });
 
+  it('rejects and deletes sessions with malformed expiry timestamps', async () => {
+    const session = await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
+    database.db.run('UPDATE user_sessions SET expires_at = ? WHERE user_id = ?', ['not-a-date', session.user.id]);
+    database.persist();
+
+    expect(store.verifySession(session.token)).toBeNull();
+    expect(queryOne('SELECT token_hash FROM user_sessions WHERE user_id = ?', [session.user.id])).toBeUndefined();
+  });
+
+  it('rejects and deletes orphaned sessions', async () => {
+    const session = await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
+    database.db.run('DELETE FROM users WHERE id = ?', [session.user.id]);
+    database.persist();
+
+    expect(store.verifySession(session.token)).toBeNull();
+    expect(queryOne('SELECT token_hash FROM user_sessions WHERE user_id = ?', [session.user.id])).toBeUndefined();
+  });
+
   it('revokes the current session or all sessions for one user', async () => {
     const first = await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
     const second = await store.login({ username: 'reader01', password: 'secret123' });
@@ -142,6 +200,21 @@ describe('user store', () => {
     await expect(store.login({ username: 'reader01', password: 'wrong-password' })).rejects.toThrow('用户名或密码错误');
   });
 
+  it('rejects login when the user is deleted while password verification is pending', async () => {
+    const created = await store.createUser({
+      username: 'reader01',
+      password: 'secret123',
+      nickname: 'Reader',
+      permission: 'reader',
+    });
+
+    const pending = store.login({ username: created.username, password: 'secret123' });
+    expect(store.removeUser(created.id)).toBe(true);
+
+    await expect(pending).rejects.toThrow('用户名或密码错误');
+    expect(queryOne('SELECT token_hash FROM user_sessions WHERE user_id = ?', [created.id])).toBeUndefined();
+  });
+
   it('rehashes a valid legacy password before issuing its session', async () => {
     const legacy = insertLegacyUser();
 
@@ -151,6 +224,22 @@ describe('user store', () => {
     expect(row.password_hash).toMatch(/^scrypt\$v1\$/);
     expect(row.password_hash).not.toBe(legacy.stored);
     expect(store.verifySession(session.token)?.user.id).toBe(legacy.id);
+  });
+
+  it('persists a legacy password upgrade and its session for a reopened database', async () => {
+    const legacy = insertLegacyUser();
+    const session = await store.login({ username: legacy.username, password: 'secret123' });
+
+    const reopenedDatabase = await createSqliteDatabase({ dbPath });
+    databases.push(reopenedDatabase);
+    const reopenedStore = createUserStore({
+      database: reopenedDatabase,
+      now: () => new Date(currentTime),
+    });
+    const reopenedUser = queryOne('SELECT password_hash FROM users WHERE id = ?', [legacy.id], reopenedDatabase);
+
+    expect(reopenedUser.password_hash).toMatch(/^scrypt\$v1\$/);
+    expect(reopenedStore.verifySession(session.token)).toEqual({ user: session.user, expiresAt: session.expiresAt });
   });
 
   it('does not rehash a legacy password after a failed login', async () => {

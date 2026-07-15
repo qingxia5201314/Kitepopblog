@@ -61,7 +61,7 @@ export function createUserStore({ database, now = () => new Date() }) {
     return rows(db, 'SELECT * FROM users WHERE id = ?', [id]).map(rowToUser)[0];
   }
 
-  function issueSession(user) {
+  function issueSession(user, { persist = true } = {}) {
     const token = randomBytes(32).toString('base64url');
     const createdOn = now();
     const createdAt = createdOn.toISOString();
@@ -72,11 +72,11 @@ export function createUserStore({ database, now = () => new Date() }) {
       createdAt,
       expiresAt
     ]);
-    database.persist();
+    if (persist) database.persist();
     return { token, expiresAt, user };
   }
 
-  async function insertUser({ username, password, nickname, permission = 'reader' }) {
+  async function insertUser({ username, password, nickname, permission = 'reader' }, { createSession = false } = {}) {
     const cleanUsername = String(username || '').trim();
     const cleanPassword = String(password || '');
     if (!/^[A-Za-z0-9_]{3,24}$/.test(cleanUsername)) throw new Error('用户名需为 3-24 位字母、数字或下划线');
@@ -93,13 +93,22 @@ export function createUserStore({ database, now = () => new Date() }) {
       createdAt: time,
       updatedAt: time
     };
-    db.run(
-      `INSERT INTO users (id, username, password_hash, nickname, role, permission, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [user.id, user.username, passwordHash, user.nickname, user.permission, user.permission, user.createdAt, user.updatedAt]
-    );
-    database.persist();
-    return user;
+    try {
+      return database.transaction(() => {
+        if (getByUsername(cleanUsername)) throw usernameExistsError();
+        db.run(
+          `INSERT INTO users (id, username, password_hash, nickname, role, permission, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [user.id, user.username, passwordHash, user.nickname, user.permission, user.permission, user.createdAt, user.updatedAt]
+        );
+        const result = createSession ? issueSession(user, { persist: false }) : user;
+        database.persist();
+        return result;
+      });
+    } catch (error) {
+      if (isUsernameUniqueError(error)) throw usernameExistsError();
+      throw error;
+    }
   }
 
   return {
@@ -108,8 +117,7 @@ export function createUserStore({ database, now = () => new Date() }) {
     },
 
     async register({ username, password, nickname }) {
-      const user = await insertUser({ username, password, nickname, permission: 'reader' });
-      return issueSession(user);
+      return insertUser({ username, password, nickname, permission: 'reader' }, { createSession: true });
     },
 
     async createUser(draft) {
@@ -117,19 +125,21 @@ export function createUserStore({ database, now = () => new Date() }) {
     },
 
     async login({ username, password }) {
-      const row = getByUsername(String(username || '').trim());
-      if (!row) throw new Error('用户名或密码错误');
+      const cleanUsername = String(username || '').trim();
+      const cleanPassword = String(password || '');
+      const row = getByUsername(cleanUsername);
+      if (!row) throw credentialsError();
 
-      const verification = await verifyPassword(String(password || ''), row.password_hash);
-      if (!verification.valid) throw new Error('用户名或密码错误');
+      const verification = await verifyPassword(cleanPassword, row.password_hash);
+      if (!verification.valid) throw credentialsError();
 
-      const user = rowToUser(row);
-      if (!verification.needsRehash) return issueSession(user);
-
-      const passwordHash = await hashPassword(String(password || ''));
+      const passwordHash = verification.needsRehash ? await hashPassword(cleanPassword) : null;
       return database.transaction(() => {
-        db.run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, row.id]);
-        return issueSession(user);
+        const current = getByUsername(cleanUsername);
+        if (!current || current.id !== row.id || current.password_hash !== row.password_hash) throw credentialsError();
+
+        if (passwordHash) db.run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, current.id]);
+        return issueSession(rowToUser(current));
       });
     },
 
@@ -138,14 +148,20 @@ export function createUserStore({ database, now = () => new Date() }) {
       const tokenHash = hashToken(rawToken);
       const session = rows(db, 'SELECT * FROM user_sessions WHERE token_hash = ?', [tokenHash])[0];
       if (!session) return null;
-      if (Date.parse(session.expires_at) <= now().getTime()) {
+      const expiresAt = Date.parse(session.expires_at);
+      if (!Number.isFinite(expiresAt) || expiresAt <= now().getTime()) {
         db.run('DELETE FROM user_sessions WHERE token_hash = ?', [tokenHash]);
         database.persist();
         return null;
       }
 
       const user = getById(session.user_id);
-      return user ? { user, expiresAt: session.expires_at } : null;
+      if (!user) {
+        db.run('DELETE FROM user_sessions WHERE token_hash = ?', [tokenHash]);
+        database.persist();
+        return null;
+      }
+      return { user, expiresAt: session.expires_at };
     },
 
     revokeSession(rawToken) {
@@ -217,4 +233,16 @@ function lastAdminError() {
   error.code = 'LAST_ADMIN';
   error.status = 409;
   return error;
+}
+
+function credentialsError() {
+  return new Error('用户名或密码错误');
+}
+
+function usernameExistsError() {
+  return new Error('用户名已存在');
+}
+
+function isUsernameUniqueError(error) {
+  return error instanceof Error && error.message.includes('UNIQUE constraint failed: users.username');
 }
