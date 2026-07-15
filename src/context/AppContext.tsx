@@ -57,6 +57,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mountedRef.current = true;
     const restoreRevision = identityRevisionRef.current;
     const handleAuthExpired = () => {
+      if (logoutPromiseRef.current) return;
+
       const revision = identityRevisionRef.current;
       if (authRevalidationRef.current?.revision === revision) return;
 

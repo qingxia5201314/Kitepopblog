@@ -174,6 +174,29 @@ describe('AppProvider auth lifecycle', () => {
     expect(app.userSession).toEqual(adminSession);
   });
 
+  it('ignores auth-expired events while logout is pending so an old session cannot win', async () => {
+    const logout = deferred<void>();
+    apiMocks.restoreUserSessionRequest
+      .mockResolvedValueOnce(readerSession)
+      .mockResolvedValueOnce(readerSession);
+    apiMocks.logoutUserRequest.mockReturnValueOnce(logout.promise);
+    await renderProvider();
+
+    let pendingLogout!: Promise<void>;
+    act(() => {
+      pendingLogout = app.logoutUser();
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event('kitepop:auth-expired'));
+      await Promise.resolve();
+    });
+    await act(async () => logout.resolve());
+    await expect(pendingLogout).resolves.toBeUndefined();
+
+    expect(app.userSession).toBeNull();
+    expect(apiMocks.restoreUserSessionRequest).toHaveBeenCalledOnce();
+  });
+
   it('clears the initiating identity after a failed logout and allows a later retry', async () => {
     apiMocks.restoreUserSessionRequest.mockResolvedValueOnce(readerSession);
     apiMocks.logoutUserRequest.mockRejectedValueOnce(new Error('network unavailable'));
