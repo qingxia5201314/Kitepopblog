@@ -10,6 +10,10 @@ function readOne(db, sql, params = []) {
   }
 }
 
+function tableExists(db, name) {
+  return Boolean(readOne(db, "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = ?", [name]));
+}
+
 export function runAdminAuthMigration({ database, now = () => new Date(), requireSingleAdmin = false }) {
   const { db } = database;
   return database.transaction(() => {
@@ -21,6 +25,9 @@ export function runAdminAuthMigration({ database, now = () => new Date(), requir
     `);
 
     const alreadyApplied = readOne(db, 'SELECT 1 AS applied FROM schema_migrations WHERE name = ?', [MIGRATION_NAME]);
+    if (alreadyApplied && (tableExists(db, 'admin_sessions') || tableExists(db, 'accounting_sessions'))) {
+      throw new Error('Legacy auth tables detected after the admin auth migration');
+    }
     const adminCount = Number(readOne(db, "SELECT COUNT(*) AS count FROM users WHERE permission = 'admin'").count);
     if (alreadyApplied) return { applied: false, adminCount };
     if (requireSingleAdmin && adminCount !== 1) {

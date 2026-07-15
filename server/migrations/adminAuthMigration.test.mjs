@@ -108,7 +108,7 @@ describe('admin auth migration', () => {
     expect(tableType('accounting_sessions', reopenedDatabase)).toBeUndefined();
   });
 
-  it('does not touch sessions or legacy tables after the migration is recorded', () => {
+  it('fails closed when a legacy auth table reappears after the migration is recorded', () => {
     insertUser({ id: 'admin-1', permission: 'admin' });
     seedLegacyAuthState();
     runAdminAuthMigration({ database, now: () => new Date(MIGRATION_TIME), requireSingleAdmin: true });
@@ -116,10 +116,9 @@ describe('admin auth migration', () => {
     insertUser({ id: 'admin-2', permission: 'admin' });
     seedLegacyAuthState();
 
-    expect(runAdminAuthMigration({ database, requireSingleAdmin: true })).toEqual({
-      applied: false,
-      adminCount: 2,
-    });
+    expect(() => runAdminAuthMigration({ database, requireSingleAdmin: true })).toThrow(
+      'Legacy auth tables detected after the admin auth migration',
+    );
     expect(queryOne('SELECT COUNT(*) AS count FROM user_sessions').count).toBe(1);
     expect(queryOne('SELECT token FROM admin_sessions')).toEqual({ token: 'legacy-admin' });
     expect(queryOne('SELECT token FROM accounting_sessions')).toEqual({ token: 'legacy-accounting' });

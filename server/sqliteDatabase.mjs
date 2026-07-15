@@ -7,6 +7,7 @@ export async function createSqliteDatabase({ dbPath = './data/blog.sqlite' } = {
   const db = existsSync(dbPath) ? new SQL.Database(readFileSync(dbPath)) : new SQL.Database();
   let transactionDepth = 0;
   let persistPending = false;
+  let closed = false;
 
   function writeDatabase() {
     mkdirSync(dirname(dbPath), { recursive: true });
@@ -15,6 +16,11 @@ export async function createSqliteDatabase({ dbPath = './data/blog.sqlite' } = {
 
   return {
     db,
+    close() {
+      if (closed) return;
+      closed = true;
+      db.close();
+    },
     persist() {
       if (transactionDepth > 0) {
         persistPending = true;

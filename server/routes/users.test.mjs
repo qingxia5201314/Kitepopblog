@@ -116,6 +116,63 @@ describe('users routes', () => {
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
     expect(setCookie).not.toContain('Secure');
+    expect(events).toEqual([
+      {
+        type: 'registration_success',
+        result: 'success',
+        userId: body.user.id,
+        username: 'reader_01',
+        ip: 'unknown',
+      },
+    ]);
+  });
+
+  it('keeps successful registration, login, and logout responses when security logging throws', async () => {
+    const securityLog = vi.fn(() => {
+      throw new Error('security logger unavailable');
+    });
+    const app = createFixture({ securityLog });
+
+    const registration = await app.request(
+      ...jsonRequest('/api/users/register', {
+        username: 'reader01',
+        password: 'registration-secret',
+        nickname: 'Reader',
+      }),
+    );
+    const login = await app.request(
+      ...jsonRequest('/api/users/login', { username: 'reader01', password: 'registration-secret' }),
+    );
+    const logout = await app.request('http://localhost/api/users/logout', {
+      method: 'POST',
+      headers: { Cookie: cookiePair(login) },
+    });
+
+    expect(registration.status).toBe(201);
+    expect(login.status).toBe(200);
+    expect(logout.status).toBe(200);
+    expect(await logout.json()).toEqual({ ok: true });
+    expect(securityLog.mock.calls.map(([event]) => event.type)).toEqual([
+      'registration_success',
+      'login_success',
+      'logout',
+    ]);
+  });
+
+  it('preserves the original credential failure when security logging throws', async () => {
+    await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
+    const app = createFixture({
+      securityLog: () => {
+        throw new Error('security logger unavailable');
+      },
+    });
+
+    const response = await app.request(
+      ...jsonRequest('/api/users/login', { username: 'reader01', password: 'wrong-password' }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ ok: false, message: CREDENTIALS_MESSAGE });
   });
 
   it('returns 400 for malformed registration JSON and invalid registration input', async () => {

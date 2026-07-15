@@ -36,15 +36,21 @@ import { apiNotFound } from './middleware/apiNotFound.mjs';
 import { hydrateAuth } from './middleware/auth.mjs';
 import { createOriginGuard } from './middleware/origin.mjs';
 
+const supportedNodeEnvironments = new Set(['development', 'test', 'production']);
+const nodeEnvironment = process.env.NODE_ENV;
+if (!supportedNodeEnvironments.has(nodeEnvironment)) {
+  throw new Error('NODE_ENV must be one of: development, test, production');
+}
+
 const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '127.0.0.1';
 const postDbPath = process.env.POST_DB_PATH || './data/blog.sqlite';
 const uploadDir = resolve(process.env.UPLOAD_DIR || './data/uploads');
 const imageDir = resolve(process.env.IMAGE_DIR || './data/images');
-const production = process.env.NODE_ENV === 'production';
+const production = nodeEnvironment === 'production';
 const siteUrl = String(process.env.SITE_URL || '');
 const authConfig = {
-  secureCookies: process.env.NODE_ENV === 'production',
+  secureCookies: production,
   siteUrl: String(process.env.SITE_URL || ''),
   trustProxy: process.env.TRUST_PROXY === '1'
 };
@@ -64,12 +70,61 @@ async function readIndexHtml() {
   return readFile('./dist/index.html', 'utf8');
 }
 
+function queryOne(db, sql, params = []) {
+  const statement = db.prepare(sql);
+  try {
+    statement.bind(params);
+    return statement.step() ? statement.getAsObject() : undefined;
+  } finally {
+    statement.free();
+  }
+}
+
+function productionAdminCount(database) {
+  const usersTable = queryOne(
+    database.db,
+    "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'users'",
+  );
+  if (!usersTable) return 0;
+  return Number(queryOne(database.db, "SELECT COUNT(*) AS count FROM users WHERE permission = 'admin'").count);
+}
+
+let database;
+let scheduler;
+let server;
+let cleanupPromise;
+
+function cleanup() {
+  if (cleanupPromise) return cleanupPromise;
+  cleanupPromise = (async () => {
+    scheduler?.stop();
+    if (server) {
+      await new Promise((resolveClose) => {
+        try {
+          server.close(() => resolveClose());
+        } catch {
+          resolveClose();
+        }
+      });
+    }
+    database?.close();
+  })();
+  return cleanupPromise;
+}
+
 // Initialize stores
-const database = await createSqliteDatabase({ dbPath: postDbPath });
+try {
+database = await createSqliteDatabase({ dbPath: postDbPath });
+if (production) {
+  const adminCount = productionAdminCount(database);
+  if (adminCount !== 1) {
+    throw new Error(`Admin auth migration requires exactly one admin; found ${adminCount}`);
+  }
+}
 const userStore = createUserStore({ database });
 runAdminAuthMigration({
   database,
-  requireSingleAdmin: process.env.NODE_ENV === 'production'
+  requireSingleAdmin: production
 });
 const store = await createPostStore({ database });
 const revisionStore = createRevisionStore({ database });
@@ -180,9 +235,37 @@ app.get('/', async (c) => {
 });
 app.get('*', serveStatic({ root: './dist', rewriteRequestPath: () => '/index.html' }));
 
-startScheduledPublishing({ service: scheduledPublishService });
-
-serve({ fetch: app.fetch, port, hostname: host }, async () => {
-  const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
-  console.log(`${packageJson.name} server listening on http://${host}:${port}`);
+server = serve({ fetch: app.fetch, port, hostname: host });
+await new Promise((resolveListening, rejectListening) => {
+  server.once('listening', resolveListening);
+  server.once('error', rejectListening);
 });
+
+scheduler = startScheduledPublishing({ service: scheduledPublishService });
+const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
+const address = server.address();
+const listeningPort = typeof address === 'object' && address ? address.port : port;
+
+const shutdown = async () => {
+  await cleanup();
+  if (process.connected) process.disconnect();
+  process.exitCode = 0;
+};
+process.once('SIGTERM', shutdown);
+process.once('SIGINT', shutdown);
+if (typeof process.send === 'function') {
+  process.on('message', (message) => {
+    if (message?.type === 'shutdown') shutdown();
+  });
+}
+server.on('error', async (error) => {
+  console.error(`Server error: ${error?.message || error}`);
+  process.exitCode = 1;
+  await cleanup();
+});
+console.log(`${packageJson.name} server listening on http://${host}:${listeningPort}`);
+} catch (error) {
+  await cleanup();
+  console.error(`Server startup failed: ${error?.message || error}`);
+  process.exitCode = 1;
+}

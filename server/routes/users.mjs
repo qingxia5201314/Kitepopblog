@@ -43,7 +43,12 @@ function hasOverlongCredentials(body, { nickname = false } = {}) {
 
 function securityLog(c, event) {
   const log = c.get('securityLog');
-  if (typeof log === 'function') log(event);
+  if (typeof log !== 'function') return;
+  try {
+    log(event);
+  } catch {
+    // Authentication behavior must not depend on audit log availability.
+  }
 }
 
 async function revokeSessionBestEffort(c, token) {
@@ -104,7 +109,15 @@ app.post('/register', async (c) => {
     ({ token } = registration);
     const { user, expiresAt } = registration;
     writeSessionCookie(c, token);
-    return c.json({ ok: true, user, expiresAt }, 201);
+    const response = c.json({ ok: true, user, expiresAt }, 201);
+    securityLog(c, {
+      type: 'registration_success',
+      result: 'success',
+      userId: user.id,
+      username,
+      ip,
+    });
+    return response;
   } catch (error) {
     await revokeSessionBestEffort(c, token);
     if (REGISTRATION_BUSINESS_ERRORS.has(error?.message)) {

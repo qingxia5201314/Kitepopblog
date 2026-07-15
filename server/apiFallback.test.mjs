@@ -24,17 +24,19 @@ describe('API fallback', () => {
 describe('server auth wiring', () => {
   it('initializes users before the migration and all remaining stores', async () => {
     const source = await readFile('server/index.mjs', 'utf8');
-    const database = source.indexOf('const database = await createSqliteDatabase');
+    const database = source.indexOf('database = await createSqliteDatabase');
+    const preflight = source.indexOf('const adminCount = productionAdminCount(database)');
     const userStore = source.indexOf('const userStore = createUserStore({ database })');
     const migration = source.indexOf('runAdminAuthMigration({');
     const postStore = source.indexOf('const store = await createPostStore({ database })');
 
     expect(source).toContain("import { runAdminAuthMigration } from './migrations/adminAuthMigration.mjs'");
     expect(database).toBeGreaterThanOrEqual(0);
-    expect(userStore).toBeGreaterThan(database);
+    expect(preflight).toBeGreaterThan(database);
+    expect(userStore).toBeGreaterThan(preflight);
     expect(migration).toBeGreaterThan(userStore);
     expect(postStore).toBeGreaterThan(migration);
-    expect(source).toContain("requireSingleAdmin: process.env.NODE_ENV === 'production'");
+    expect(source).toContain('requireSingleAdmin: production');
   });
 
   it('injects unified auth dependencies before origin, hydration, and API routes', async () => {
@@ -48,7 +50,7 @@ describe('server auth wiring', () => {
     expect(source).toContain("import { createOriginGuard } from './middleware/origin.mjs'");
     expect(source).toContain("import { hydrateAuth } from './middleware/auth.mjs'");
     expect(source).toContain("import { writeSecurityEvent } from './securityLog.mjs'");
-    expect(source).toMatch(/const authConfig = \{[\s\S]*secureCookies: process\.env\.NODE_ENV === 'production',[\s\S]*siteUrl: String\(process\.env\.SITE_URL \|\| ''\),[\s\S]*trustProxy: process\.env\.TRUST_PROXY === '1'[\s\S]*\}/);
+    expect(source).toMatch(/const authConfig = \{[\s\S]*secureCookies: production,[\s\S]*siteUrl: String\(process\.env\.SITE_URL \|\| ''\),[\s\S]*trustProxy: process\.env\.TRUST_PROXY === '1'[\s\S]*\}/);
     expect(source).toContain('const loginRateLimiter = createLoginRateLimiter()');
     expect(source).toContain('const originGuard = createOriginGuard({ production, siteUrl })');
     expect(source).toContain("c.set('loginRateLimiter', loginRateLimiter)");
@@ -128,5 +130,31 @@ describe('production environment wiring', () => {
     expect(source).toContain('proxy_set_header X-Real-IP $remote_addr;');
     expect(source).toContain('proxy_set_header X-Forwarded-Proto https;');
     expect(source).toContain('proxy_set_header X-Forwarded-Host $host;');
+  });
+
+  it('keeps the security headers inside the assets location that overrides add_header inheritance', async () => {
+    const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
+    const marker = 'location ^~ /assets/ {';
+    const start = source.indexOf(marker);
+    expect(start).toBeGreaterThanOrEqual(0);
+
+    let depth = 0;
+    let end = -1;
+    for (let index = source.indexOf('{', start); index < source.length; index += 1) {
+      if (source[index] === '{') depth += 1;
+      if (source[index] === '}') depth -= 1;
+      if (depth === 0) {
+        end = index;
+        break;
+      }
+    }
+    const assetsLocation = source.slice(start, end + 1);
+
+    expect(assetsLocation).toContain('add_header X-Content-Type-Options nosniff always;');
+    expect(assetsLocation).toContain('add_header Referrer-Policy strict-origin-when-cross-origin always;');
+    expect(assetsLocation).toContain('add_header X-Frame-Options DENY always;');
+    expect(assetsLocation).toContain(
+      'add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;',
+    );
   });
 });
