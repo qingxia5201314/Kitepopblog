@@ -55,17 +55,35 @@ describe('createOriginGuard', () => {
     }
   );
 
-  it('compares normalized production origins and ignores URL paths', async () => {
-    const response = await createApp({
-      production: true,
-      siteUrl: 'https://BLOG.example:443/admin?from=config'
-    }).request('https://unrelated.internal/write', {
-      method: 'POST',
-      headers: { Origin: 'https://blog.example/request/path' }
-    });
+  it.each(['https://blog.example', 'https://blog.example/'])(
+    'uses only the normalized production SITE_URL origin for Origin %s',
+    async (origin) => {
+      const response = await createApp({
+        production: true,
+        siteUrl: 'https://BLOG.example:443/admin?from=config'
+      }).request('https://unrelated.internal/write', {
+        method: 'POST',
+        headers: { Origin: origin }
+      });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, method: 'POST' });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ ok: true, method: 'POST' });
+    }
+  );
+
+  it.each([
+    'https://blog.example/admin',
+    'https://blog.example?from=header',
+    'https://blog.example#fragment',
+    'https://admin:secret@blog.example'
+  ])('rejects malformed production Origin %j', async (origin) => {
+    const response = await createApp({ production: true, siteUrl: 'https://blog.example' }).request(
+      'https://blog.example/write',
+      { method: 'POST', headers: { Origin: origin } }
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ ok: false, message: 'Forbidden' });
   });
 
   it('allows a missing Origin outside production even when SITE_URL is invalid', async () => {
@@ -80,10 +98,25 @@ describe('createOriginGuard', () => {
   it('accepts a normalized Origin matching the current request origin outside production', async () => {
     const response = await createApp({ production: false }).request('http://LOCALHOST:80/write', {
       method: 'PATCH',
-      headers: { Origin: 'http://localhost/some/path' }
+      headers: { Origin: 'http://localhost' }
     });
 
     expect(response.status).toBe(200);
+  });
+
+  it.each([
+    'http://localhost:4173/admin',
+    'http://localhost:4173?from=header',
+    'http://localhost:4173#fragment',
+    'http://admin:secret@localhost:4173'
+  ])('rejects malformed development Origin %j', async (origin) => {
+    const response = await createApp({ production: false }).request('http://localhost:4173/write', {
+      method: 'POST',
+      headers: { Origin: origin }
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ ok: false, message: 'Forbidden' });
   });
 
   it.each(['null', 'not a URL', 'http://localhost:4174'])(
