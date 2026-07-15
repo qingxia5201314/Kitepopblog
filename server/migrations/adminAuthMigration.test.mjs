@@ -49,6 +49,19 @@ function tableType(name, source = database) {
   return queryOne('SELECT type FROM sqlite_master WHERE name = ?', [name], source)?.type;
 }
 
+async function reopenDatabase() {
+  database.db.close();
+  databases = databases.filter((openedDatabase) => openedDatabase !== database);
+  database = await createSqliteDatabase({ dbPath });
+  databases.push(database);
+}
+
+function expectLegacyAuthState() {
+  expect(queryOne('SELECT COUNT(*) AS count FROM user_sessions').count).toBe(1);
+  expect(queryOne('SELECT token FROM admin_sessions')).toEqual({ token: 'legacy-admin' });
+  expect(queryOne('SELECT token FROM accounting_sessions')).toEqual({ token: 'legacy-accounting' });
+}
+
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'kitepop-admin-auth-migration-'));
   dbPath = join(tempDir, 'blog.sqlite');
@@ -114,7 +127,7 @@ describe('admin auth migration', () => {
 
   it.each([0, 2])(
     'requires exactly one admin when strict validation finds %i',
-    (adminCount) => {
+    async (adminCount) => {
       for (let index = 1; index <= adminCount; index += 1) {
         insertUser({ id: `admin-${index}`, permission: 'admin' });
       }
@@ -123,10 +136,14 @@ describe('admin auth migration', () => {
       expect(() => runAdminAuthMigration({ database, requireSingleAdmin: true })).toThrow(
         `Admin auth migration requires exactly one admin; found ${adminCount}`,
       );
-      expect(queryOne('SELECT COUNT(*) AS count FROM user_sessions').count).toBe(1);
-      expect(queryOne('SELECT token FROM admin_sessions')).toEqual({ token: 'legacy-admin' });
-      expect(queryOne('SELECT token FROM accounting_sessions')).toEqual({ token: 'legacy-accounting' });
-      expect(queryOne('SELECT name FROM schema_migrations WHERE name = ?', [MIGRATION_NAME])).toBeUndefined();
+      expectLegacyAuthState();
+      expect(tableType('schema_migrations')).toBeUndefined();
+
+      database.persist();
+      await reopenDatabase();
+
+      expectLegacyAuthState();
+      expect(tableType('schema_migrations')).toBeUndefined();
     },
   );
 
@@ -145,7 +162,7 @@ describe('admin auth migration', () => {
     });
   });
 
-  it('rolls back all destructive changes when recording the migration fails', () => {
+  it('rolls back all destructive changes when recording the migration fails', async () => {
     insertUser({ id: 'admin-1', permission: 'admin' });
     seedLegacyAuthState();
     database.db.run(`
@@ -160,9 +177,13 @@ describe('admin auth migration', () => {
       runAdminAuthMigration({ database, now: () => new Date(MIGRATION_TIME), requireSingleAdmin: true }),
     ).toThrow(/CHECK constraint failed/);
 
-    expect(queryOne('SELECT COUNT(*) AS count FROM user_sessions').count).toBe(1);
-    expect(queryOne('SELECT token FROM admin_sessions')).toEqual({ token: 'legacy-admin' });
-    expect(queryOne('SELECT token FROM accounting_sessions')).toEqual({ token: 'legacy-accounting' });
+    expectLegacyAuthState();
+    expect(queryOne('SELECT name FROM schema_migrations WHERE name = ?', [MIGRATION_NAME])).toBeUndefined();
+
+    await reopenDatabase();
+
+    expectLegacyAuthState();
+    expect(tableType('schema_migrations')).toBe('table');
     expect(queryOne('SELECT name FROM schema_migrations WHERE name = ?', [MIGRATION_NAME])).toBeUndefined();
   });
 });
