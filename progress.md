@@ -976,5 +976,34 @@
 
 ### Remaining limitations
 - SQLite LIKE search is appropriate for the current data size; migrate `postQueryService` to SQLite FTS when the article corpus grows substantially.
-- The browser preview route requires the existing administrator bearer session stored by the current application. Secure HttpOnly cookie migration remains a separate authentication project.
+- The former browser-preview Bearer-session limitation was resolved by the 2026-07-15 unified HttpOnly Cookie authentication migration.
 - Content cleanup still needs manual review for duplicate-title summaries, generic `image.png` alt text, public password examples, `host:post` typos, and empty SRC-category calls to action.
+
+## 2026-07-15 - Task: Document and verify unified administrator authentication
+
+### What was done
+
+- Updated the user-auth contract for the single site-account identity, opaque HttpOnly Cookie sessions, `/api/users/login`, `/register`, `/me`, and `/logout`.
+- Documented the `permission = 'admin'` boundary across backend content, accounting, images, files, About, drafts, revisions, scheduling, previews, and user management.
+- Removed obsolete documentation for shared backend/accounting passwords and browser Bearer authorization. `ADMIN_PASSWORD`, `admin_sessions`, and `accounting_sessions` are retired; the three legacy localStorage keys remain only for one-time deletion.
+- Added `docs/admin-auth-deployment.md` with a stopped-service read-only administrator precondition, real `POST_DB_PATH` resolution, timestamped paired application/database backups, SHA-256 verification, matching frontend/backend deployment, production environment and Nginx gates, credential-redacted role/Cookie/Origin checks, and paired rollback.
+- Kept administrator selection database-driven. Deployment requires exactly one result from `SELECT id,username,nickname FROM users WHERE permission='admin';` and never assumes a username.
+- Recorded the existing project deployment names `/opt/kitepop-blog`, `/var/www/myblog`, and `kitepop-blog.service`; the untracked service environment file, active Nginx site, backup root, and release SHA are explicit guarded placeholders.
+- Did not connect to or deploy the VPS in this task.
+
+### Verification
+
+- `npm test -- --run`: passed, 87 test files and 652 tests.
+- `npm run build`: passed; TypeScript and Vite completed the production build.
+- Removed-auth residue scan: production runtime has no shared-password, Bearer, `adminToken`, or `accountingToken` authorization. Remaining matches are the admin-auth migration dropping old tables, `AppContext` deleting legacy localStorage keys once, negative assertions/probes in tests, and explanatory documentation.
+- `git diff --check` and the staged `git diff --cached --check`: passed, including the new deployment runbook.
+- Deployment-runbook syntax: all 7 Bash blocks passed `bash -n` with Git Bash, and both inline Node ESM scripts passed `node --input-type=module --check -`.
+- Three-role smoke used a generated temporary directory/database, created reader/admin passwords through `createUserStore` and the real scrypt path, closed the seed database, and started the real `server/index.mjs` with production settings, `PORT=0`, and temporary upload/image directories.
+- Smoke status matrix: anonymous About `401`; reader login `200` then About `403`; administrator login `200` then About `200`; cross-site administrator PUT `403`; same-site administrator PUT `200`; `/api/users/me` without a Cookie `401`; old Bearer only `401`; logout `200`; replayed Cookie `401`.
+- The production login Cookie name and attributes matched `__Host-kitepop_session`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and `Max-Age=2592000`; neither the Cookie value nor generated passwords were printed.
+- The smoke child shut down with code 0 and no `UV_HANDLE_CLOSING`; its database reopened successfully and the temporary directory was deleted.
+
+### Deployment status
+
+- Local implementation, documentation, automated gates, and smoke verification are complete.
+- VPS deployment and production database migration were not executed in this task. Use the paired backup/deploy/rollback runbook before any production start.

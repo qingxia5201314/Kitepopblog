@@ -1,162 +1,180 @@
-# Hono Backend Refactoring - Complete
+# Hono Backend Refactoring and Unified Authentication
 
 ## Overview
-Successfully refactored the blog backend from raw Node.js HTTP server (~808 lines with manual regex routing) to Hono framework with modular route architecture.
+The blog backend uses Hono with modular routes and shared store/service boundaries. As of 2026-07-15, site accounts and database-backed HttpOnly Cookie sessions are also the only interactive authentication path for reader and administrator workflows.
 
 ## Changes Made
 
-### 1. Renamed Legacy Code
-- `server/index.mjs` → `server/index.legacy.mjs` (preserved for reference)
-
-### 2. Created New Modular Architecture
+### 1. Modular Architecture
 
 #### Main Entry Point
-- **`server/index.mjs`** (3.1 KB)
-  - Initializes all stores (database, sessions, post, user, accounting, file, image)
+- **`server/index.mjs`**
+  - Initializes the shared database, user sessions, and domain stores/services
+  - Runs the idempotent administrator-auth migration before listening
+  - Hydrates one Cookie-backed identity and enforces the production Origin boundary
   - Sets up Hono app with dependency injection via context
   - Routes all API endpoints to their respective handlers
   - Serves static files with SPA fallback
 
-#### Route Handlers (9 files)
-- **`server/routes/admin.mjs`** - Admin login, session, user CRUD
+#### Route Handlers
+- **`server/routes/admin.mjs`** - About, drafts, previews, scheduling, and user CRUD for administrators
 - **`server/routes/posts.mjs`** - Blog posts and comments (list, create, update, delete)
-- **`server/routes/users.mjs`** - User registration, login, profile
-- **`server/routes/accounting.mjs`** - Accounting login, entries, categories, settings
-- **`server/routes/files.mjs`** - File management and raw download with token auth
+- **`server/routes/users.mjs`** - User registration, login, logout, and current identity
+- **`server/routes/accounting.mjs`** - Administrator-only entries, categories, and settings
+- **`server/routes/files.mjs`** - Administrator file management and capability-link downloads
 - **`server/routes/folders.mjs`** - File folder CRUD
 - **`server/routes/images.mjs`** - Image upload, listing, and public download
 
 #### Middleware
-- **`server/middleware/auth.mjs`** - Auth helpers (requireAdmin, isAdmin, requireAccounting, getAccountingAuth)
-- **`server/middleware/static.mjs`** - Static file serving configuration
+- **`server/middleware/auth.mjs`** - Cookie identity hydration plus `requireUser` and `requireAdmin`
+- **`server/middleware/origin.mjs`** - Exact-origin validation for unsafe API methods
+- **`server/middleware/static.mjs`** - Static file serving helpers
 
 #### Utilities
 - **`server/utils/multipart.mjs`** - Multipart form data parser (preserved from legacy code)
 
-### 3. API Behavior Preserved
+### 2. Current API Behavior
 
-All endpoints maintain identical request/response contracts:
+The authentication contract intentionally replaces the former shared-password and browser-token APIs.
 
 **Admin**
-- `POST /api/admin/login` - Issue admin session
-- `GET /api/admin/session` - Verify admin session
-- `GET/POST/PUT/DELETE /api/admin/users/:id` - User management
+- `GET/PUT /api/admin/about` - Manage About content (`admin` only)
+- `GET/PUT/DELETE /api/admin/article-draft` - Manage editor drafts (`admin` only)
+- `/api/admin/posts/:id/revisions` and `/api/admin/posts/:id/schedule` - Revision and scheduling workflows (`admin` only)
+- `GET/POST /api/admin/users` and `PUT/DELETE /api/admin/users/:id` - User management (`admin` only)
 
 **Posts**
 - `GET /api/posts` - List posts (with ?includeDrafts=1 for admin)
-- `POST/PUT/DELETE /api/posts/:id` - Create/update/delete (admin only)
+- `POST /api/posts` and `PUT/DELETE /api/posts/:id` - Create/update/delete (admin only)
 - `GET /api/posts/:id/comments` - List comments
 - `POST /api/posts/:id/comments` - Create comment (user auth required)
 - `PUT/DELETE /api/posts/:id/comments/:commentId` - Update/delete comment (user auth)
 
 **Users**
-- `POST /api/users/register` - Register new user
-- `POST /api/users/login` - User login
-- `GET /api/users/me` - Current user profile
+- `POST /api/users/register` - Register a reader and set an HttpOnly session Cookie; never return a token
+- `POST /api/users/login` - Log in and set an HttpOnly session Cookie; never return a token
+- `GET /api/users/me` - Restore the current identity from the Cookie
+- `POST /api/users/logout` - Revoke the current server-side session and clear the Cookie
 
 **Accounting**
-- `POST /api/accounting/login` - Accounting session
-- `GET /api/accounting/session` - Verify session
-- `GET /api/accounting/month` - Monthly data with filters
-- `POST/PUT/DELETE /api/accounting/entries/:id` - Entry CRUD
-- `POST/PUT/DELETE /api/accounting/categories/:id` - Category CRUD
+- `GET /api/accounting/month` - Monthly data with filters (`admin` only)
+- `POST /api/accounting/entries` and `PUT/DELETE /api/accounting/entries/:id` - Entry CRUD (`admin` only)
+- `POST /api/accounting/categories` and `PUT/DELETE /api/accounting/categories/:id` - Category CRUD (`admin` only)
 - `PUT /api/accounting/settings` - Update settings
 
 **Files**
-- `GET /api/files` - List folder contents
-- `POST /api/files` - Upload file (multipart)
-- `GET /api/files/raw/:id` - Download with token auth
-- `POST /api/files/:id/link` - Generate access link
-- `DELETE /api/files/:id` - Delete file
-- `POST/PUT/DELETE /api/file-folders/:id` - Folder management
+- `GET /api/files` - List folder contents (`admin` only)
+- `POST /api/files` - Upload file (`admin` only)
+- `GET /api/files/raw/:id?token=...` - Download through a resource-specific capability link
+- `POST /api/files/:id/link` - Generate an access link (`admin` only)
+- `DELETE /api/files/:id` - Delete file (`admin` only)
+- `POST/PUT/DELETE /api/file-folders/:id` - Folder management (`admin` only)
 
 **Images**
-- `GET /api/images` - List images
-- `POST /api/images` - Upload image (multipart)
+- `GET /api/images` - List images (`admin` only)
+- `POST /api/images` - Upload image (`admin` only)
 - `GET /api/images/raw/:id` - Public image download
-- `DELETE /api/images/:id` - Delete image
+- `DELETE /api/images/:id` - Delete image (`admin` only)
 
-### 4. Store Layer
-All existing stores remain unchanged and work identically:
+### 3. Store and Security Layer
+Current persistent and authentication units include:
 - `sqliteDatabase.mjs`
 - `postStore.mjs`
 - `userStore.mjs`
 - `accountingStore.mjs`
-- `accountingSession.mjs`
-- `adminSession.mjs`
 - `fileStore.mjs`
 - `imageStore.mjs`
-- `auth.mjs`
 - `fileDownloadHeaders.mjs`
+- `passwords.mjs`
+- `sessionCookie.mjs`
+- `migrations/adminAuthMigration.mjs`
 
-### 5. Key Features Maintained
+### 4. Key Features
 
 ✓ Body size limits:
-  - JSON requests: 1 MB (configurable via REQUEST_BODY_LIMIT)
-  - File uploads: 50 MB (configurable via FILE_UPLOAD_LIMIT)
-  - Image uploads: 0 MB (disabled by default, configurable via IMAGE_UPLOAD_LIMIT)
+  - Login and registration JSON: 16 KiB
+  - File uploads: configurable through `FILE_UPLOAD_LIMIT`; `0` means no application-level byte limit
+  - Image uploads: configurable through `IMAGE_UPLOAD_LIMIT`; `0` means no application-level byte limit
 
 ✓ Authentication:
-  - Admin sessions with Bearer token
-  - User auth for comments
-  - Accounting sessions (separate from admin)
-  - File token-based access links
+  - One opaque SQLite-backed session for readers and administrators
+  - `permission = 'admin'` for backend, accounting, image, file, About, draft, revision, scheduling, and user-management APIs
+  - Production Cookie: `__Host-kitepop_session; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
+  - Absolute 30-day expiry, server-side logout revocation, and live permission checks
+  - Exact production Origin validation for unsafe methods
+  - Resource-specific file capability links remain separate from account authentication
+
+✓ Retired authentication:
+  - `ADMIN_PASSWORD`, shared backend/accounting passwords, browser Bearer auth, `admin_sessions`, and `accounting_sessions` are removed
+  - Legacy localStorage session keys are deleted once for migration only and never authorize a request
+  - Existing administrators are discovered by database permission; no username is hard-coded
 
 ✓ Static file serving:
   - SPA fallback (serves index.html for non-existent routes)
   - Assets directory support
 
-✓ Response formats:
-  - All responses use same JSON structure
-  - Error handling with consistent status codes
+✓ Response handling:
+  - Authentication and management responses use explicit `401`, `403`, `409`, and `429` status boundaries
+  - Authenticated responses are private and not cached
   - Multipart form parsing for file uploads
 
 ## File Structure
 
 ```
 server/
-├── index.mjs                 (NEW - Hono app entry)
-├── index.legacy.mjs          (OLD - preserved reference)
-├── routes/                   (NEW - route handlers)
+├── index.mjs                 (Hono app entry)
+├── routes/                   (route handlers)
 │   ├── admin.mjs
 │   ├── posts.mjs
 │   ├── users.mjs
 │   ├── accounting.mjs
 │   ├── files.mjs
 │   ├── folders.mjs
-│   └── images.mjs
-├── middleware/               (NEW - middleware)
+│   ├── images.mjs
+│   ├── about.mjs
+│   └── revisions.mjs
+├── middleware/               (authentication, Origin, and static middleware)
 │   ├── auth.mjs
+│   ├── origin.mjs
 │   └── static.mjs
-├── utils/                    (NEW - utilities)
+├── migrations/
+│   └── adminAuthMigration.mjs
+├── passwords.mjs
+├── sessionCookie.mjs
+├── utils/                    (utilities)
 │   └── multipart.mjs
-└── [existing stores unchanged]
+└── [domain stores and services]
 ```
 
 ## Verification
 
-✓ All files pass syntax check with `node --check`
-✓ All route modules import successfully
-✓ Auth middleware functions validated
-✓ Multipart parser preserved and functional
-✓ Directory structure created successfully
+The unified-auth implementation is complete in the repository. Fresh local verification on 2026-07-15 produced:
+
+- `npm test -- --run`: 87 test files and 652 tests passed.
+- `npm run build`: TypeScript and the Vite production build passed.
+- Removed-auth residue review: no shared-password, Bearer, `adminToken`, or `accountingToken` authorization remains in production runtime code. Remaining strings are migration cleanup, one-time frontend localStorage cleanup, negative tests, and documentation.
+- Temporary production-server smoke: anonymous `401`, reader `403`, administrator `200`, cross-site write `403`, same-site write `200`, no-Cookie `/me` `401`, old Bearer-only request `401`, and logout Cookie replay `401`. The child exited with code 0, emitted no `UV_HANDLE_CLOSING`, and released the temporary database for reopen and deletion.
+
+No production database or VPS was used for these checks.
 
 ## Next Steps
 
-1. Test API endpoints with the Hono server running
-2. Verify database connections work correctly
-3. Run integration tests against new implementation
-4. Compare response shapes between legacy and new implementations
-5. Deploy to staging environment for full validation
+1. Follow `docs/admin-auth-deployment.md` and stop the service before touching the production database.
+2. Resolve the service's real `POST_DB_PATH` and require exactly one row from `SELECT id, username, nickname FROM users WHERE permission = 'admin';`.
+3. Create and hash a paired application/database backup before the new process can run migrations.
+4. Deploy matching frontend and backend code, then run the documented Cookie, Origin, role, retired-token, and logout checks.
 
-## Environment Variables (unchanged)
+The VPS deployment has not been executed as part of the local authentication implementation task.
+
+## Environment Variables
 
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 127.0.0.1)
-- `ADMIN_PASSWORD` - Admin password for sessions
+- `NODE_ENV=production` - Required for the production Cookie and startup preconditions
+- `SITE_URL=https://dreamhunter2333.com` - Required exact production origin
+- `TRUST_PROXY=1` - Trust the checked-in local Nginx proxy for forwarded client information
 - `POST_DB_PATH` - SQLite database path (default: ./data/blog.sqlite)
 - `UPLOAD_DIR` - File upload directory (default: ./data/uploads)
 - `IMAGE_DIR` - Image directory (default: ./data/images)
-- `REQUEST_BODY_LIMIT` - JSON body size limit in bytes (default: 1MB)
-- `FILE_UPLOAD_LIMIT` - File upload limit in bytes (default: 50MB)
-- `IMAGE_UPLOAD_LIMIT` - Image upload limit in bytes (default: 0)
+- `FILE_UPLOAD_LIMIT` - File upload limit in bytes (`0` means no application-level byte limit)
+- `IMAGE_UPLOAD_LIMIT` - Image upload limit in bytes (`0` means no application-level byte limit)
