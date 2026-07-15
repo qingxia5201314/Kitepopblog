@@ -138,6 +138,7 @@ describe('production environment wiring', () => {
 
   it('redirects the HTTPS www host to the canonical origin before proxying writes', async () => {
     const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
+    const runbook = await readFile('docs/admin-auth-deployment.md', 'utf8');
     const httpsBlocks = source
       .split(/(?=^server \{)/m)
       .filter((block) => block.includes('listen 443 ssl http2;'));
@@ -149,6 +150,9 @@ describe('production environment wiring', () => {
     expect(wwwBlock).toContain('return 301 https://dreamhunter2333.com$request_uri;');
     expect(wwwBlock).not.toContain('proxy_pass');
     expect(apexBlock).toContain('proxy_pass http://127.0.0.1:3000;');
+    expect(runbook).toContain(
+      'test "$WWW_REDIRECT" = "301 https://dreamhunter2333.com$WWW_PROBE_PATH"',
+    );
   });
 
   it('checks inline authentication environment conflicts before stopping production', async () => {

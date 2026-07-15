@@ -990,7 +990,7 @@
 - Kept administrator selection database-driven. Deployment requires exactly one result from `SELECT id,username,nickname FROM users WHERE permission='admin';` and never assumes a username.
 - Recorded the existing project deployment names `/opt/kitepop-blog`, `/var/www/myblog`, and `kitepop-blog.service`; the untracked service environment file, active Nginx site, backup root, and release SHA are explicit guarded placeholders.
 - Corrected the production restart precondition so the first migration still requires exactly one administrator, while an already-migrated database requires at least one and can retain additional administrators created through the supported user-management flow.
-- Split the production TLS hosts so `www.dreamhunter2333.com` redirects to the canonical apex origin before proxying, and moved inline systemd authentication-environment conflict detection ahead of service shutdown.
+- Split the production TLS hosts so `www.dreamhunter2333.com` redirects to the canonical apex origin before proxying, added a live canonical-redirect deployment probe, and moved inline systemd authentication-environment conflict detection ahead of service shutdown.
 - Did not connect to or deploy the VPS in this task.
 
 ### Verification

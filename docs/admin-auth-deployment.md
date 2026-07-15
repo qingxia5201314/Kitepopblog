@@ -183,6 +183,10 @@ sudo rsync -a --delete "$APP_DIR/dist/" "$STATIC_ROOT/"
 sudo install -m 0644 "$APP_DIR/deploy/nginx-kitepop.conf" "$NGINX_SITE"
 sudo nginx -t
 sudo systemctl reload nginx
+WWW_PROBE_PATH='/api/users/me?canonical-probe=1'
+WWW_REDIRECT="$(curl --silent --show-error --output /dev/null --write-out '%{http_code} %{redirect_url}' \
+  "https://www.dreamhunter2333.com$WWW_PROBE_PATH")"
+test "$WWW_REDIRECT" = "301 https://dreamhunter2333.com$WWW_PROBE_PATH"
 sudo systemctl daemon-reload
 LOG_SINCE="$(date --iso-8601=seconds)"
 sudo systemctl restart "$SERVICE"
