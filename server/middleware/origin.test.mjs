@@ -2,6 +2,15 @@ import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { createOriginGuard } from './origin.mjs';
 
+const MALFORMED_SERIALIZED_ORIGINS = [
+  'https:blog.example',
+  'https:/blog.example',
+  'https:\\\\blog.example',
+  'https://blog.example/.',
+  'https://blog.example/a/..',
+  'https://blog.example/%2e'
+];
+
 function createApp(options) {
   const app = new Hono();
   app.use('*', createOriginGuard(options));
@@ -72,6 +81,18 @@ describe('createOriginGuard', () => {
   );
 
   it.each([
+    ['HTTP://[::1]:4173/', 'http://[::1]:4173/admin?from=config'],
+    ['https://blog.example:8443', 'https://blog.example:8443/admin?from=config']
+  ])('accepts serialized production Origin %s with an explicit port', async (origin, siteUrl) => {
+    const response = await createApp({ production: true, siteUrl }).request(
+      'https://unrelated.internal/write',
+      { method: 'POST', headers: { Origin: origin } }
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
     'https://blog.example/admin',
     'https://blog.example?from=header',
     'https://blog.example#fragment',
@@ -85,6 +106,19 @@ describe('createOriginGuard', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ ok: false, message: 'Forbidden' });
   });
+
+  it.each(MALFORMED_SERIALIZED_ORIGINS)(
+    'rejects malformed serialized production Origin %j',
+    async (origin) => {
+      const response = await createApp({ production: true, siteUrl: 'https://blog.example' }).request(
+        'https://blog.example/write',
+        { method: 'POST', headers: { Origin: origin } }
+      );
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ ok: false, message: 'Forbidden' });
+    }
+  );
 
   it('allows a missing Origin outside production even when SITE_URL is invalid', async () => {
     const response = await createApp({ production: false, siteUrl: 'not a URL' }).request(
@@ -105,6 +139,18 @@ describe('createOriginGuard', () => {
   });
 
   it.each([
+    ['HTTP://[::1]:4173/', 'http://[::1]:4173/write'],
+    ['https://blog.example:8443', 'https://blog.example:8443/write']
+  ])('accepts serialized development Origin %s with an explicit port', async (origin, requestUrl) => {
+    const response = await createApp({ production: false }).request(requestUrl, {
+      method: 'PATCH',
+      headers: { Origin: origin }
+    });
+
+    expect(response.status).toBe(200);
+  });
+
+  it.each([
     'http://localhost:4173/admin',
     'http://localhost:4173?from=header',
     'http://localhost:4173#fragment',
@@ -118,6 +164,19 @@ describe('createOriginGuard', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ ok: false, message: 'Forbidden' });
   });
+
+  it.each(MALFORMED_SERIALIZED_ORIGINS)(
+    'rejects malformed serialized development Origin %j',
+    async (origin) => {
+      const response = await createApp({ production: false }).request('https://blog.example/write', {
+        method: 'POST',
+        headers: { Origin: origin }
+      });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ ok: false, message: 'Forbidden' });
+    }
+  );
 
   it.each(['null', 'not a URL', 'http://localhost:4174'])(
     'rejects development Origin %j when the request is on another origin',

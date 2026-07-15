@@ -1,6 +1,16 @@
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const SERIALIZED_HTTP_ORIGIN = /^https?:\/\/[^/?#]+\/?$/i;
 
 function normalizedHttpOrigin(value, { strict = false } = {}) {
+  if (
+    strict &&
+    (typeof value !== 'string' ||
+      /[\s\\@]/.test(value) ||
+      !SERIALIZED_HTTP_ORIGIN.test(value))
+  ) {
+    return null;
+  }
+
   try {
     const url = new URL(value);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
