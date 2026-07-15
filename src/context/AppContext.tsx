@@ -41,6 +41,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
   const identityRevisionRef = useRef(0);
   const mountedRef = useRef(true);
+  const authRevalidationRef = useRef<{ revision: number; promise: Promise<void> } | null>(null);
+  const logoutPromiseRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (!notification) return;
@@ -55,8 +57,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mountedRef.current = true;
     const restoreRevision = identityRevisionRef.current;
     const handleAuthExpired = () => {
-      identityRevisionRef.current += 1;
-      if (!cancelled) setUserSession(null);
+      const revision = identityRevisionRef.current;
+      if (authRevalidationRef.current?.revision === revision) return;
+
+      const promise = restoreUserSessionRequest()
+        .then((session) => {
+          if (!cancelled && identityRevisionRef.current === revision) {
+            identityRevisionRef.current = revision + 1;
+            setUserSession(session);
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (authRevalidationRef.current?.promise === promise) {
+            authRevalidationRef.current = null;
+          }
+        });
+      authRevalidationRef.current = { revision, promise };
     };
 
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
@@ -78,6 +95,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
       mountedRef.current = false;
+      authRevalidationRef.current = null;
       window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
     };
   }, []);
@@ -105,13 +123,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUserSession(session);
   }, []);
 
-  const logoutUser = useCallback(async () => {
-    identityRevisionRef.current += 1;
-    try {
-      await logoutUserRequest();
-    } finally {
-      if (mountedRef.current) setUserSession(null);
-    }
+  const logoutUser = useCallback(() => {
+    if (logoutPromiseRef.current) return logoutPromiseRef.current;
+
+    const logoutRevision = identityRevisionRef.current + 1;
+    identityRevisionRef.current = logoutRevision;
+    const promise = logoutUserRequest().finally(() => {
+      if (mountedRef.current && identityRevisionRef.current === logoutRevision) {
+        setUserSession(null);
+      }
+      if (logoutPromiseRef.current === promise) {
+        logoutPromiseRef.current = null;
+      }
+    });
+    logoutPromiseRef.current = promise;
+    return promise;
   }, []);
 
   const value = useMemo<AppContextType>(

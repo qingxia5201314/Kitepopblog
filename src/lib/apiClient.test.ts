@@ -83,6 +83,19 @@ describe('apiFetch', () => {
     await expect(restoreUserSessionRequest()).resolves.toBeNull();
   });
 
+  it('does not broadcast auth expiry while silently restoring an anonymous cookie', async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ ok: false }, { status: 401 }));
+    const listener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+
+    try {
+      await expect(restoreUserSessionRequest()).resolves.toBeNull();
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+    }
+  });
+
   it('logs out through the cookie session endpoint', async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ ok: true }));
 

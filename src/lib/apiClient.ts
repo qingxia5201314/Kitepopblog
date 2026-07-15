@@ -2,10 +2,20 @@ import type { BlogUser, UserSession } from './blog';
 
 export const AUTH_EXPIRED_EVENT = 'kitepop:auth-expired';
 
-export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+async function sameOriginRequest(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  broadcastAuthExpiry = true
+): Promise<Response> {
   const response = await fetch(input, { ...init, credentials: 'same-origin' });
-  if (response.status === 401) window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  if (broadcastAuthExpiry && response.status === 401) {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
   return response;
+}
+
+export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return sameOriginRequest(input, init);
 }
 
 function isBlogUser(value: unknown): value is BlogUser {
@@ -43,7 +53,7 @@ export async function loginUserRequest(username: string, password: string): Prom
 }
 
 export async function restoreUserSessionRequest(): Promise<UserSession | null> {
-  const response = await apiFetch('/api/users/me');
+  const response = await sameOriginRequest('/api/users/me', {}, false);
   if (response.status === 401) return null;
   return parseSessionResponse(response);
 }

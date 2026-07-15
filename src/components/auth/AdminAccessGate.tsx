@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useState } from 'react';
+import { FormEvent, ReactNode, useRef, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { loginUserRequest } from '../../lib/apiClient';
 
@@ -8,6 +8,9 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [logoutPending, setLogoutPending] = useState(false);
+  const [logoutErrorMessage, setLogoutErrorMessage] = useState('');
+  const logoutPendingRef = useRef(false);
 
   const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -15,6 +18,7 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
 
     setSubmitting(true);
     setErrorMessage('');
+    setLogoutErrorMessage('');
     try {
       const session = await loginUserRequest(username, password);
       loginUser(session);
@@ -23,6 +27,22 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
     } finally {
       setPassword('');
       setSubmitting(false);
+    }
+  };
+
+  const submitLogout = async () => {
+    if (logoutPendingRef.current) return;
+
+    logoutPendingRef.current = true;
+    setLogoutPending(true);
+    setLogoutErrorMessage('');
+    try {
+      await logoutUser();
+    } catch {
+      setLogoutErrorMessage('退出登录失败，请重试');
+    } finally {
+      logoutPendingRef.current = false;
+      setLogoutPending(false);
     }
   };
 
@@ -65,6 +85,7 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
             />
           </label>
           {errorMessage ? <p role="alert">{errorMessage}</p> : null}
+          {logoutErrorMessage ? <p role="alert">{logoutErrorMessage}</p> : null}
           <button disabled={submitting} type="submit">
             {submitting ? '登录中...' : '登录'}
           </button>
@@ -78,8 +99,9 @@ export function AdminAccessGate({ children }: { children: ReactNode }) {
       <section className="admin-layout">
         <div className="unlock-panel">
           <h1>当前账号没有管理员权限</h1>
-          <button onClick={() => void logoutUser().catch(() => undefined)} type="button">
-            退出登录
+          {logoutErrorMessage ? <p role="alert">{logoutErrorMessage}</p> : null}
+          <button disabled={logoutPending} onClick={() => void submitLogout()} type="button">
+            {logoutPending ? '退出中...' : '退出登录'}
           </button>
         </div>
       </section>

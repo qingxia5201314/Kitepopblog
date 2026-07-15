@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { UserSession } from '../../lib/blog';
 import { AdminAccessGate } from './AdminAccessGate';
 
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
 const loginUser = vi.fn();
 const logoutUser = vi.fn<() => Promise<void>>(async () => undefined);
 const { loginUserRequest } = vi.hoisted(() => ({ loginUserRequest: vi.fn() }));
@@ -35,6 +37,16 @@ const adminSession: UserSession = {
   expiresAt: '2099-01-01T00:00:00.000Z',
   user: { ...readerSession.user, id: 'admin-1', username: 'admin', permission: 'admin' }
 };
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}
 
 describe('AdminAccessGate', () => {
   const roots: Root[] = [];
@@ -113,17 +125,36 @@ describe('AdminAccessGate', () => {
     expect(logoutUser).toHaveBeenCalledOnce();
   });
 
-  it('does not leak a rejected logout request from the click handler', () => {
-    const catchRequestError = vi.fn();
-    logoutUser.mockReturnValueOnce({ catch: catchRequestError } as unknown as Promise<void>);
+  it('disables reader logout while pending and does not submit it twice', async () => {
+    const logout = deferred<void>();
+    logoutUser.mockReturnValueOnce(logout.promise);
     const host = renderGate({ authReady: true, userSession: readerSession, isAdmin: false });
+    const button = Array.from(host.querySelectorAll('button')).find((item) => item.textContent === '退出登录')!;
 
     act(() => {
+      button.click();
+      button.click();
+    });
+    expect(logoutUser).toHaveBeenCalledOnce();
+    expect(button.disabled).toBe(true);
+
+    act(() => button.click());
+    expect(logoutUser).toHaveBeenCalledOnce();
+
+    await act(async () => logout.resolve());
+    expect(button.disabled).toBe(false);
+  });
+
+  it('consumes a rejected reader logout and displays a generic error', async () => {
+    logoutUser.mockRejectedValueOnce(new Error('network unavailable'));
+    const host = renderGate({ authReady: true, userSession: readerSession, isAdmin: false });
+
+    await act(async () => {
       Array.from(host.querySelectorAll('button')).find((button) => button.textContent === '退出登录')?.click();
     });
 
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('退出登录失败，请重试');
     expect(logoutUser).toHaveBeenCalledOnce();
-    expect(catchRequestError).toHaveBeenCalledOnce();
   });
 
   it('renders protected content for administrators', () => {

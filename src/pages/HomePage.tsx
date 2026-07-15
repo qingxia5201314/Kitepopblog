@@ -683,7 +683,11 @@ export function HomePage() {
               <strong>{userSession.user.nickname}</strong>
               <span>{userSession.user.permission === 'admin' ? '团长' : '团员'}</span>
             </div>
-            <button className="ghost" onClick={logoutUser} type="button">
+            <button
+              className="ghost"
+              onClick={() => void logoutUser().catch(() => notify('error', '退出登录失败'))}
+              type="button"
+            >
               退出登录
             </button>
           </>

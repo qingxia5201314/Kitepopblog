@@ -808,6 +808,42 @@ describe('App layout shells', () => {
     expect(host.querySelector('.comment-panel h3')?.textContent).toContain('1');
   });
 
+  it('reports a failed Home logout without leaking the rejected request', async () => {
+    const session = {
+      expiresAt: '2099-01-01T00:00:00.000Z',
+      user: {
+        id: 'reader-1',
+        username: 'reader',
+        nickname: 'Reader',
+        permission: 'reader',
+        createdAt: '2026-07-15T00:00:00.000Z',
+        updatedAt: '2026-07-15T00:00:00.000Z'
+      }
+    };
+    const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/users/me') return Response.json({ ok: true, ...session });
+      if (url === '/api/users/logout') throw new Error('network unavailable');
+      return fetchMock(input);
+    });
+    vi.stubGlobal('fetch', pageFetchMock);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<App />);
+
+    const logoutButton = (await waitFor(() =>
+      Array.from(host.querySelectorAll<HTMLButtonElement>('.user-auth-card button'))
+        .find((button) => button.textContent === '退出登录') ?? null
+    )) as HTMLButtonElement | null;
+    logoutButton?.click();
+
+    const alert = await waitFor(() => host.querySelector('[role="alert"]'));
+    expect(alert?.textContent).toContain('退出登录失败');
+    expect(pageFetchMock.mock.calls.filter(([input]) => String(input) === '/api/users/logout')).toHaveLength(1);
+  });
+
   it('logs in public users from the home auth form and keeps the session', async () => {
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
