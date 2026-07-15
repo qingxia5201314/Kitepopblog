@@ -33,6 +33,22 @@ function nodeEnv(remoteAddress) {
       };
 }
 
+function rejectingSecurityLogger(events, promises) {
+  return (event) => {
+    events.push(event);
+    const promise = new (class extends Promise {
+      rejectionHandled = false;
+
+      then(onFulfilled, onRejected) {
+        if (typeof onRejected === 'function') this.rejectionHandled = true;
+        return super.then(onFulfilled, onRejected);
+      }
+    })((_, reject) => reject(new Error('security logger unavailable')));
+    promises.push(promise);
+    return promise;
+  };
+}
+
 function createAuthApp(authConfig, options = {}) {
   const log = Object.hasOwn(options, 'log') ? options.log : securityLog;
   const authApp = new Hono();
@@ -181,6 +197,32 @@ describe('requireUser', () => {
 });
 
 describe('requireAdmin', () => {
+  it.each([
+    ['anonymous', undefined, 401, 'unauthorized', ''],
+    ['reader', 'reader-token', 403, 'forbidden', reader.id],
+  ])('handles a rejected async denial log for %s', async (_role, token, status, result, userId) => {
+    const events = [];
+    const promises = [];
+    const response = await createAuthApp(
+      { secureCookies: false },
+      { log: rejectingSecurityLogger(events, promises) },
+    ).request('/admin', {
+      headers: token ? { Cookie: `kitepop_dev_session=${token}` } : undefined,
+    });
+    const rejectionHandling = promises.map((promise) => promise.rejectionHandled);
+    await Promise.allSettled(promises);
+
+    expect(response.status).toBe(status);
+    expect(adminHandler).not.toHaveBeenCalled();
+    expect(events).toEqual([{
+      type: 'admin_access_denied',
+      result,
+      userId,
+      ip: 'unknown',
+    }]);
+    expect(rejectionHandling).toEqual([true]);
+  });
+
   it('emits exact string fields to a raw sink for an anonymous denial without a Node peer', async () => {
     const rawEvents = [];
     const response = await createAuthApp(

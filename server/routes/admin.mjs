@@ -1,18 +1,9 @@
 import { Hono } from 'hono';
 import { normalizeAboutProfile } from '../aboutModel.mjs';
 import { currentUser, requireAdmin } from '../middleware/auth.mjs';
+import { emitSecurityEvent } from '../securityLog.mjs';
 
 const app = new Hono();
-
-function securityLog(c, event) {
-  const log = c.get('securityLog');
-  if (typeof log !== 'function') return;
-  try {
-    log(event);
-  } catch {
-    // A completed user mutation must not be reported as failed because optional auditing is unavailable.
-  }
-}
 
 function userMutationFailure(c, error, fallback) {
   return c.json(
@@ -136,7 +127,7 @@ app.put('/users/:id', requireAdmin, async (c) => {
     const previousUser = userStore.listUsers().find((user) => user.id === id);
     const user = userStore.updateUser(id, body);
     if (user && previousUser && user.permission !== previousUser.permission) {
-      securityLog(c, {
+      emitSecurityEvent(c.get('securityLog'), {
         type: 'permission_change',
         userId: currentUser(c).id,
         result: `target=${user.id};permission=${user.permission}`
@@ -154,7 +145,7 @@ app.delete('/users/:id', requireAdmin, (c) => {
   try {
     const removed = userStore.removeUser(id);
     if (removed) {
-      securityLog(c, {
+      emitSecurityEvent(c.get('securityLog'), {
         type: 'user_delete',
         userId: currentUser(c).id,
         result: `target=${id}`

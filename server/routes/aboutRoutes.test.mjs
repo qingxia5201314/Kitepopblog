@@ -24,6 +24,22 @@ let authSession;
 let securityLog;
 let userStore;
 
+function rejectingSecurityLogger(events, promises) {
+  return (event) => {
+    events.push(event);
+    const promise = new (class extends Promise {
+      rejectionHandled = false;
+
+      then(onFulfilled, onRejected) {
+        if (typeof onRejected === 'function') this.rejectionHandled = true;
+        return super.then(onFulfilled, onRejected);
+      }
+    })((_, reject) => reject(new Error('security logger unavailable')));
+    promises.push(promise);
+    return promise;
+  };
+}
+
 beforeEach(() => {
   aboutStore = {
     get: vi.fn(() => profile),
@@ -223,6 +239,38 @@ describe('admin user routes', () => {
       userId: admin.id,
       result: `target=${reader.id}`,
     });
+  });
+
+  it('handles rejected async logs after permission changes and user deletion', async () => {
+    const events = [];
+    const promises = [];
+    securityLog = rejectingSecurityLogger(events, promises);
+    userStore.updateUser.mockReturnValue({ ...reader, permission: 'admin' });
+
+    const permissionChange = await app.request(`/api/admin/users/${reader.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission: 'admin' }),
+    });
+    const userDelete = await app.request(`/api/admin/users/${reader.id}`, { method: 'DELETE' });
+    const rejectionHandling = promises.map((promise) => promise.rejectionHandled);
+    await Promise.allSettled(promises);
+
+    expect(permissionChange.status).toBe(200);
+    expect(userDelete.status).toBe(200);
+    expect(events).toEqual([
+      {
+        type: 'permission_change',
+        userId: admin.id,
+        result: `target=${reader.id};permission=admin`,
+      },
+      {
+        type: 'user_delete',
+        userId: admin.id,
+        result: `target=${reader.id}`,
+      },
+    ]);
+    expect(rejectionHandling).toEqual([true, true]);
   });
 
   it.each([

@@ -35,6 +35,7 @@ import { authenticatedResponseCache, PUBLIC_DYNAMIC_CACHE, PUBLIC_FEED_CACHE } f
 import { apiNotFound } from './middleware/apiNotFound.mjs';
 import { hydrateAuth } from './middleware/auth.mjs';
 import { createOriginGuard } from './middleware/origin.mjs';
+import { closeServerResources, createServerTerminationController } from './serverLifecycle.mjs';
 
 const supportedNodeEnvironments = new Set(['development', 'test', 'production']);
 const nodeEnvironment = process.env.NODE_ENV;
@@ -92,25 +93,7 @@ function productionAdminCount(database) {
 let database;
 let scheduler;
 let server;
-let cleanupPromise;
-
-function cleanup() {
-  if (cleanupPromise) return cleanupPromise;
-  cleanupPromise = (async () => {
-    scheduler?.stop();
-    if (server) {
-      await new Promise((resolveClose) => {
-        try {
-          server.close(() => resolveClose());
-        } catch {
-          resolveClose();
-        }
-      });
-    }
-    database?.close();
-  })();
-  return cleanupPromise;
-}
+let terminationController;
 
 // Initialize stores
 try {
@@ -244,26 +227,18 @@ const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const address = server.address();
 const listeningPort = typeof address === 'object' && address ? address.port : port;
 
-const shutdown = async () => {
-  await cleanup();
-  if (process.connected) process.disconnect();
-  process.exitCode = 0;
-};
-process.once('SIGTERM', shutdown);
-process.once('SIGINT', shutdown);
-if (typeof process.send === 'function') {
-  process.on('message', (message) => {
-    if (message?.type === 'shutdown') shutdown();
-  });
-}
-server.on('error', async (error) => {
-  console.error(`Server error: ${error?.message || error}`);
-  process.exitCode = 1;
-  await cleanup();
+terminationController = createServerTerminationController({
+  processTarget: process,
+  server,
+  scheduler,
+  database,
+  logger: console,
 });
+terminationController.attach();
 console.log(`${packageJson.name} server listening on http://${host}:${listeningPort}`);
 } catch (error) {
-  await cleanup();
-  console.error(`Server startup failed: ${error?.message || error}`);
   process.exitCode = 1;
+  if (terminationController) await terminationController.terminate(1);
+  else await closeServerResources({ server, scheduler, database, logger: console });
+  console.error(`Server startup failed: ${error?.message || error}`);
 }

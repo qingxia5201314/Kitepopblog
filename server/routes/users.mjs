@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { requestIp } from '../requestIp.mjs';
+import { emitSecurityEvent } from '../securityLog.mjs';
 import { clearSessionCookie, writeSessionCookie } from '../sessionCookie.mjs';
 
 const CREDENTIALS_MESSAGE = '用户名或密码错误';
@@ -41,16 +42,6 @@ function hasOverlongCredentials(body, { nickname = false } = {}) {
   );
 }
 
-function securityLog(c, event) {
-  const log = c.get('securityLog');
-  if (typeof log !== 'function') return;
-  try {
-    Promise.resolve(log(event)).catch(() => {});
-  } catch {
-    // Authentication behavior must not depend on audit log availability.
-  }
-}
-
 async function revokeSessionBestEffort(c, token) {
   if (!token) return;
   try {
@@ -85,7 +76,7 @@ app.post('/register', async (c) => {
   const reservation = limiter.reserve(ip, REGISTRATION_IDENTITY);
   if (!reservation.allowed) {
     c.header('Retry-After', String(reservation.retryAfterSeconds));
-    securityLog(c, {
+    emitSecurityEvent(c.get('securityLog'), {
       type: 'registration_rate_limited',
       result: 'blocked',
       username: REGISTRATION_IDENTITY,
@@ -110,7 +101,7 @@ app.post('/register', async (c) => {
     const { user, expiresAt } = registration;
     writeSessionCookie(c, token);
     const response = c.json({ ok: true, user, expiresAt }, 201);
-    securityLog(c, {
+    emitSecurityEvent(c.get('securityLog'), {
       type: 'registration_success',
       result: 'success',
       userId: user.id,
@@ -124,7 +115,7 @@ app.post('/register', async (c) => {
       return c.json({ ok: false, message: error.message }, 400);
     }
 
-    securityLog(c, { type: 'registration_error', result: 'error', username, ip });
+    emitSecurityEvent(c.get('securityLog'), { type: 'registration_error', result: 'error', username, ip });
     return c.json({ ok: false, message: '注册失败' }, 500);
   }
 });
@@ -147,12 +138,12 @@ app.post('/login', async (c) => {
   const reservation = limiter.reserve(ip, username);
   if (!reservation.allowed) {
     c.header('Retry-After', String(reservation.retryAfterSeconds));
-    securityLog(c, { type: 'login_rate_limited', result: 'blocked', username, ip });
+    emitSecurityEvent(c.get('securityLog'), { type: 'login_rate_limited', result: 'blocked', username, ip });
     return c.json({ ok: false, message: RATE_LIMIT_MESSAGE }, 429);
   }
 
   if (!hasCredentialTypes(body) || hasOverlongCredentials(body)) {
-    securityLog(c, { type: 'login_failure', result: 'failure', username, ip });
+    emitSecurityEvent(c.get('securityLog'), { type: 'login_failure', result: 'failure', username, ip });
     return c.json({ ok: false, message: CREDENTIALS_MESSAGE }, 401);
   }
 
@@ -163,7 +154,7 @@ app.post('/login', async (c) => {
     const { user, expiresAt } = login;
     writeSessionCookie(c, token);
     const response = c.json({ ok: true, user, expiresAt });
-    securityLog(c, {
+    emitSecurityEvent(c.get('securityLog'), {
       type: 'login_success',
       result: 'success',
       userId: user.id,
@@ -175,11 +166,11 @@ app.post('/login', async (c) => {
   } catch (error) {
     await revokeSessionBestEffort(c, token);
     if (error?.message === CREDENTIALS_MESSAGE) {
-      securityLog(c, { type: 'login_failure', result: 'failure', username, ip });
+      emitSecurityEvent(c.get('securityLog'), { type: 'login_failure', result: 'failure', username, ip });
       return c.json({ ok: false, message: CREDENTIALS_MESSAGE }, 401);
     }
 
-    securityLog(c, { type: 'login_error', result: 'error', username, ip });
+    emitSecurityEvent(c.get('securityLog'), { type: 'login_error', result: 'error', username, ip });
     return c.json({ ok: false, message: '登录失败' }, 500);
   }
 });
@@ -203,7 +194,7 @@ app.post('/logout', async (c) => {
     try {
       clearSessionCookie(c);
     } finally {
-      securityLog(c, {
+      emitSecurityEvent(c.get('securityLog'), {
         type: 'logout',
         result: revokeFailed
           ? 'logout_error'

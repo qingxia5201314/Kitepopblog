@@ -11,3 +11,12 @@ export function writeSecurityEvent(event, sink = console.info) {
 
   sink(JSON.stringify(output));
 }
+
+export function emitSecurityEvent(log, event) {
+  if (typeof log !== 'function') return;
+  try {
+    Promise.resolve(log(event)).catch(() => {});
+  } catch {
+    // Security logging is best-effort and must not change application behavior.
+  }
+}

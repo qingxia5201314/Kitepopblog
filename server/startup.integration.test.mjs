@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { createServer } from 'node:net';
+import { createConnection, createServer } from 'node:net';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ const START_TIMEOUT_MS = 8_000;
 
 let children;
 let tempDir;
+const childClosePromises = new WeakMap();
 
 function sha256(data) {
   return createHash('sha256').update(data).digest('hex');
@@ -80,28 +81,27 @@ function spawnServer(env) {
     output.stderr += chunk;
   });
   children.add(child);
-  child.once('exit', () => children.delete(child));
+  const closed = new Promise((resolve) => {
+    child.once('close', (code, signal) => {
+      children.delete(child);
+      resolve({ code, signal });
+    });
+  });
+  childClosePromises.set(child, closed);
   return { child, output };
 }
 
-function waitForExit(child, timeoutMs = START_TIMEOUT_MS) {
-  if (child.exitCode !== null || child.signalCode !== null) {
-    return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
-  }
+function waitForClose(child, timeoutMs = START_TIMEOUT_MS) {
+  const closed = childClosePromises.get(child);
+  if (!closed) return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
-      cleanup();
       reject(new Error(`server child did not exit within ${timeoutMs}ms`));
     }, timeoutMs);
-    const onExit = (code, signal) => {
-      cleanup();
-      resolve({ code, signal });
-    };
-    const cleanup = () => {
+    closed.then((result) => {
       clearTimeout(timer);
-      child.off('exit', onExit);
-    };
-    child.once('exit', onExit);
+      resolve(result);
+    });
   });
 }
 
@@ -119,33 +119,33 @@ function waitForListening(child, output, timeoutMs = START_TIMEOUT_MS) {
       const port = parseListeningPort(output);
       if (port !== undefined) finish(undefined, port);
     };
-    const onExit = () => finish(new Error(`server exited before listening: ${output.stderr}`));
+    const onClose = () => finish(new Error(`server exited before listening: ${output.stderr}`));
     const finish = (error, port) => {
       clearTimeout(timer);
       child.stdout.off('data', onData);
-      child.off('exit', onExit);
+      child.off('close', onClose);
       if (error) reject(error);
       else resolve(port);
     };
     child.stdout.on('data', onData);
-    child.once('exit', onExit);
+    child.once('close', onClose);
     onData();
   });
 }
 
 async function stopChild(child, signal = 'SIGTERM') {
-  if (child.exitCode !== null || child.signalCode !== null) return waitForExit(child);
+  if (child.exitCode !== null || child.signalCode !== null) return waitForClose(child);
   if (process.platform === 'win32' && child.connected) {
     child.send({ type: 'shutdown', signal });
     try {
-      return await waitForExit(child, 3_000);
+      return await waitForClose(child, START_TIMEOUT_MS);
     } catch {
       child.kill('SIGTERM');
-      return waitForExit(child);
+      return waitForClose(child);
     }
   }
   child.kill(signal);
-  return waitForExit(child);
+  return waitForClose(child);
 }
 
 async function reservePort() {
@@ -155,6 +155,26 @@ async function reservePort() {
     server.listen(0, '127.0.0.1', resolve);
   });
   return { port: server.address().port, server };
+}
+
+async function openPartialPost(port) {
+  const socket = createConnection({ host: '127.0.0.1', port });
+  socket.on('error', () => {});
+  await new Promise((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('error', reject);
+  });
+  const closed = new Promise((resolve) => socket.once('close', () => resolve()));
+  socket.write(
+    'POST /api/users/login HTTP/1.1\r\n' +
+      'Host: 127.0.0.1\r\n' +
+      'Origin: https://blog.example\r\n' +
+      'Content-Type: application/json\r\n' +
+      'Content-Length: 100\r\n' +
+      'Connection: keep-alive\r\n\r\n{',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  return { socket, closed };
 }
 
 async function migrationCount(dbPath) {
@@ -207,13 +227,41 @@ describe('standalone server startup', () => {
     await expect(rm(dbPath)).resolves.toBeUndefined();
   }, 30_000);
 
+  it('bounds shutdown with an active partial POST and releases the database', async () => {
+    const dbPath = join(tempDir, 'active-request.sqlite');
+    await seedUsersDatabase(dbPath, 1);
+    const { child, output } = spawnServer(childEnvironment(dbPath));
+    const listeningPort = await waitForListening(child, output);
+    const { socket, closed } = await openPartialPost(listeningPort);
+
+    try {
+      expect(socket.destroyed).toBe(false);
+      const startedAt = Date.now();
+      const result = await stopChild(child);
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(result).toEqual({ code: 0, signal: null });
+      expect(elapsedMs).toBeLessThan(START_TIMEOUT_MS);
+      await expect(Promise.race([
+        closed,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('client remained connected')), 1_000)),
+      ])).resolves.toBeUndefined();
+      expect(socket.destroyed).toBe(true);
+      expect(output.stderr).not.toContain('UV_HANDLE_CLOSING');
+      expect(await migrationCount(dbPath)).toBe(1);
+      await expect(rm(dbPath)).resolves.toBeUndefined();
+    } finally {
+      socket.destroy();
+    }
+  }, 20_000);
+
   it.each([0, 2])('rejects production with %i admins before changing the database', async (adminCount) => {
     const dbPath = join(tempDir, `admins-${adminCount}.sqlite`);
     await seedUsersDatabase(dbPath, adminCount);
     const beforeHash = sha256(await readFile(dbPath));
     const { child, output } = spawnServer(childEnvironment(dbPath));
 
-    const result = await waitForExit(child);
+    const result = await waitForClose(child);
 
     expect(result.code).not.toBe(0);
     expect(output.stderr).toContain('requires exactly one admin');
@@ -229,7 +277,7 @@ describe('standalone server startup', () => {
     const dbPath = join(tempDir, 'must-not-exist.sqlite');
     const { child, output } = spawnServer(childEnvironment(dbPath, { NODE_ENV: nodeEnv }));
 
-    const result = await waitForExit(child, 3_000);
+    const result = await waitForClose(child, 3_000);
 
     expect(result.code).not.toBe(0);
     expect(output.stderr).toContain('NODE_ENV');
@@ -240,7 +288,7 @@ describe('standalone server startup', () => {
     const dbPath = join(tempDir, 'must-not-exist.sqlite');
     const { child, output } = spawnServer(childEnvironment(dbPath, { SITE_URL: 'not a URL' }));
 
-    const result = await waitForExit(child);
+    const result = await waitForClose(child);
 
     expect(result.code).not.toBe(0);
     expect(output.stderr).toContain('SITE_URL');
@@ -254,7 +302,7 @@ describe('standalone server startup', () => {
     const { child, output } = spawnServer(childEnvironment(dbPath, { PORT: String(port) }));
 
     try {
-      const result = await waitForExit(child);
+      const result = await waitForClose(child);
       expect(result.code).not.toBe(0);
       expect(output.stderr).toContain('EADDRINUSE');
       expect(output.stderr).not.toContain('UV_HANDLE_CLOSING');
