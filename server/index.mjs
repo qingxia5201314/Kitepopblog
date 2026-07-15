@@ -8,7 +8,7 @@ import { createAccountingStore } from './accountingStore.mjs';
 import { createPostStore } from './postStore.mjs';
 import { createRevisionStore } from './revisionStore.mjs';
 import { createUserStore } from './userStore.mjs';
-import { runAdminAuthMigration } from './migrations/adminAuthMigration.mjs';
+import { ADMIN_AUTH_MIGRATION_NAME, runAdminAuthMigration } from './migrations/adminAuthMigration.mjs';
 import { createLoginRateLimiter } from './loginRateLimit.mjs';
 import { writeSecurityEvent } from './securityLog.mjs';
 import { createAboutStore } from './aboutStore.mjs';
@@ -90,6 +90,19 @@ function productionAdminCount(database) {
   return Number(queryOne(database.db, "SELECT COUNT(*) AS count FROM users WHERE permission = 'admin'").count);
 }
 
+function adminAuthMigrationApplied(database) {
+  const migrationsTable = queryOne(
+    database.db,
+    "SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'",
+  );
+  if (!migrationsTable) return false;
+  return Boolean(
+    queryOne(database.db, 'SELECT 1 AS applied FROM schema_migrations WHERE name = ?', [
+      ADMIN_AUTH_MIGRATION_NAME,
+    ]),
+  );
+}
+
 let database;
 let scheduler;
 let server;
@@ -99,9 +112,13 @@ let terminationController;
 try {
 database = await createSqliteDatabase({ dbPath: postDbPath });
 if (production) {
+  const migrationApplied = adminAuthMigrationApplied(database);
   const adminCount = productionAdminCount(database);
-  if (adminCount !== 1) {
+  if (!migrationApplied && adminCount !== 1) {
     throw new Error(`Admin auth migration requires exactly one admin; found ${adminCount}`);
+  }
+  if (migrationApplied && adminCount < 1) {
+    throw new Error('Admin authentication requires at least one admin');
   }
 }
 const userStore = createUserStore({ database });

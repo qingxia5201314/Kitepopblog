@@ -989,11 +989,13 @@
 - Added `docs/admin-auth-deployment.md` with a stopped-service read-only administrator precondition, real `POST_DB_PATH` resolution, timestamped paired application/database backups, SHA-256 verification, matching frontend/backend deployment, production environment and Nginx gates, credential-redacted role/Cookie/Origin checks, and paired rollback.
 - Kept administrator selection database-driven. Deployment requires exactly one result from `SELECT id,username,nickname FROM users WHERE permission='admin';` and never assumes a username.
 - Recorded the existing project deployment names `/opt/kitepop-blog`, `/var/www/myblog`, and `kitepop-blog.service`; the untracked service environment file, active Nginx site, backup root, and release SHA are explicit guarded placeholders.
+- Corrected the production restart precondition so the first migration still requires exactly one administrator, while an already-migrated database requires at least one and can retain additional administrators created through the supported user-management flow.
+- Split the production TLS hosts so `www.dreamhunter2333.com` redirects to the canonical apex origin before proxying, and moved inline systemd authentication-environment conflict detection ahead of service shutdown.
 - Did not connect to or deploy the VPS in this task.
 
 ### Verification
 
-- `npm test -- --run`: passed, 87 test files and 652 tests.
+- `npm test -- --run`: passed, 87 test files and 656 tests.
 - `npm run build`: passed; TypeScript and Vite completed the production build.
 - Removed-auth residue scan: production runtime has no shared-password, Bearer, `adminToken`, or `accountingToken` authorization. Remaining matches are the admin-auth migration dropping old tables, `AppContext` deleting legacy localStorage keys once, negative assertions/probes in tests, and explanatory documentation.
 - `git diff --check` and the staged `git diff --cached --check`: passed, including the new deployment runbook.

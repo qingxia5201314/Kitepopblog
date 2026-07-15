@@ -101,7 +101,9 @@ Current persistent and authentication units include:
   - `permission = 'admin'` for backend, accounting, image, file, About, draft, revision, scheduling, and user-management APIs
   - Production Cookie: `__Host-kitepop_session; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000`
   - Absolute 30-day expiry, server-side logout revocation, and live permission checks
+  - Production startup requires exactly one administrator before the migration and at least one afterward; additional administrators remain valid
   - Exact production Origin validation for unsafe methods
+  - Checked-in Nginx redirects HTTPS `www` traffic to the configured apex origin before proxying
   - Resource-specific file capability links remain separate from account authentication
 
 ✓ Retired authentication:
@@ -150,7 +152,7 @@ server/
 
 The unified-auth implementation is complete in the repository. Fresh local verification on 2026-07-15 produced:
 
-- `npm test -- --run`: 87 test files and 652 tests passed.
+- `npm test -- --run`: 87 test files and 656 tests passed.
 - `npm run build`: TypeScript and the Vite production build passed.
 - Removed-auth residue review: no shared-password, Bearer, `adminToken`, or `accountingToken` authorization remains in production runtime code. Remaining strings are migration cleanup, one-time frontend localStorage cleanup, negative tests, and documentation.
 - Temporary production-server smoke: anonymous `401`, reader `403`, administrator `200`, cross-site write `403`, same-site write `200`, no-Cookie `/me` `401`, old Bearer-only request `401`, and logout Cookie replay `401`. The child exited with code 0, emitted no `UV_HANDLE_CLOSING`, and released the temporary database for reopen and deletion.

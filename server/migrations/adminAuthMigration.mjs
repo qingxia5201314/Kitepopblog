@@ -1,4 +1,4 @@
-const MIGRATION_NAME = '2026-07-15-admin-auth-cookie';
+export const ADMIN_AUTH_MIGRATION_NAME = '2026-07-15-admin-auth-cookie';
 
 function readOne(db, sql, params = []) {
   const statement = db.prepare(sql);
@@ -24,7 +24,9 @@ export function runAdminAuthMigration({ database, now = () => new Date(), requir
       )
     `);
 
-    const alreadyApplied = readOne(db, 'SELECT 1 AS applied FROM schema_migrations WHERE name = ?', [MIGRATION_NAME]);
+    const alreadyApplied = readOne(db, 'SELECT 1 AS applied FROM schema_migrations WHERE name = ?', [
+      ADMIN_AUTH_MIGRATION_NAME,
+    ]);
     if (alreadyApplied && (tableExists(db, 'admin_sessions') || tableExists(db, 'accounting_sessions'))) {
       throw new Error('Legacy auth tables detected after the admin auth migration');
     }
@@ -37,7 +39,10 @@ export function runAdminAuthMigration({ database, now = () => new Date(), requir
     db.run('DELETE FROM user_sessions');
     db.run('DROP TABLE IF EXISTS admin_sessions');
     db.run('DROP TABLE IF EXISTS accounting_sessions');
-    db.run('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)', [MIGRATION_NAME, now().toISOString()]);
+    db.run('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)', [
+      ADMIN_AUTH_MIGRATION_NAME,
+      now().toISOString(),
+    ]);
     database.persist();
 
     return { applied: true, adminCount };

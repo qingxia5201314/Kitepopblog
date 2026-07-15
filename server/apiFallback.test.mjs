@@ -30,7 +30,9 @@ describe('server auth wiring', () => {
     const migration = source.indexOf('runAdminAuthMigration({');
     const postStore = source.indexOf('const store = await createPostStore({ database })');
 
-    expect(source).toContain("import { runAdminAuthMigration } from './migrations/adminAuthMigration.mjs'");
+    expect(source).toContain(
+      "import { ADMIN_AUTH_MIGRATION_NAME, runAdminAuthMigration } from './migrations/adminAuthMigration.mjs'",
+    );
     expect(database).toBeGreaterThanOrEqual(0);
     expect(preflight).toBeGreaterThan(database);
     expect(userStore).toBeGreaterThan(preflight);
@@ -132,6 +134,32 @@ describe('production environment wiring', () => {
     expect(source).toContain('proxy_set_header X-Real-IP $remote_addr;');
     expect(source).toContain('proxy_set_header X-Forwarded-Proto https;');
     expect(source).toContain('proxy_set_header X-Forwarded-Host $host;');
+  });
+
+  it('redirects the HTTPS www host to the canonical origin before proxying writes', async () => {
+    const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
+    const httpsBlocks = source
+      .split(/(?=^server \{)/m)
+      .filter((block) => block.includes('listen 443 ssl http2;'));
+
+    expect(httpsBlocks).toHaveLength(2);
+    const wwwBlock = httpsBlocks.find((block) => block.includes('server_name www.dreamhunter2333.com;'));
+    const apexBlock = httpsBlocks.find((block) => block.includes('server_name dreamhunter2333.com;'));
+
+    expect(wwwBlock).toContain('return 301 https://dreamhunter2333.com$request_uri;');
+    expect(wwwBlock).not.toContain('proxy_pass');
+    expect(apexBlock).toContain('proxy_pass http://127.0.0.1:3000;');
+  });
+
+  it('checks inline authentication environment conflicts before stopping production', async () => {
+    const source = await readFile('docs/admin-auth-deployment.md', 'utf8');
+    const inlineEnvironmentGuard = source.indexOf(
+      "if sudo systemctl cat \"$SERVICE\" | grep -Eq '^[[:space:]]*Environment=.*(ADMIN_PASSWORD|NODE_ENV|SITE_URL|TRUST_PROXY)='; then",
+    );
+    const stopService = source.indexOf('sudo systemctl stop "$SERVICE"');
+
+    expect(inlineEnvironmentGuard).toBeGreaterThanOrEqual(0);
+    expect(stopService).toBeGreaterThan(inlineEnvironmentGuard);
   });
 
   it('keeps the security headers inside the assets location that overrides add_header inheritance', async () => {

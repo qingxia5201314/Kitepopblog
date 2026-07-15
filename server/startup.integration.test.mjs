@@ -44,6 +44,26 @@ async function seedUsersDatabase(dbPath, adminCount) {
   db.close();
 }
 
+async function addAdminUser(dbPath, index) {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(await readFile(dbPath));
+  db.run(
+    `INSERT INTO users (id, username, password_hash, nickname, role, permission, created_at, updated_at)
+     VALUES (?, ?, 'unused-hash', ?, 'admin', 'admin', '2026-07-15T00:00:00.000Z', '2026-07-15T00:00:00.000Z')`,
+    [`admin-${index}`, `admin-${index}`, `Admin ${index}`],
+  );
+  await writeFile(dbPath, Buffer.from(db.export()));
+  db.close();
+}
+
+async function removeAllAdmins(dbPath) {
+  const SQL = await initSqlJs();
+  const db = new SQL.Database(await readFile(dbPath));
+  db.run("DELETE FROM users WHERE permission = 'admin'");
+  await writeFile(dbPath, Buffer.from(db.export()));
+  db.close();
+}
+
 function childEnvironment(dbPath, overrides = {}) {
   const env = {
     ...process.env,
@@ -226,6 +246,42 @@ describe('standalone server startup', () => {
     expect(await migrationCount(dbPath)).toBe(1);
     await expect(rm(dbPath)).resolves.toBeUndefined();
   }, 30_000);
+
+  it('starts production with multiple admins after the auth migration is already applied', async () => {
+    const dbPath = join(tempDir, 'multiple-admins-after-migration.sqlite');
+    await seedUsersDatabase(dbPath, 1);
+
+    const initial = spawnServer(childEnvironment(dbPath));
+    await waitForListening(initial.child, initial.output);
+    expect(await stopChild(initial.child)).toEqual({ code: 0, signal: null });
+    expect(await migrationCount(dbPath)).toBe(1);
+
+    await addAdminUser(dbPath, 2);
+
+    const restarted = spawnServer(childEnvironment(dbPath));
+    const listeningPort = await waitForListening(restarted.child, restarted.output);
+    expect(listeningPort).toBeTypeOf('number');
+    expect(await stopChild(restarted.child)).toEqual({ code: 0, signal: null });
+    expect(await storedAdminCount(dbPath)).toBe(2);
+  });
+
+  it('rejects production with no admin after the auth migration is already applied', async () => {
+    const dbPath = join(tempDir, 'no-admin-after-migration.sqlite');
+    await seedUsersDatabase(dbPath, 1);
+
+    const initial = spawnServer(childEnvironment(dbPath));
+    await waitForListening(initial.child, initial.output);
+    expect(await stopChild(initial.child)).toEqual({ code: 0, signal: null });
+    expect(await migrationCount(dbPath)).toBe(1);
+
+    await removeAllAdmins(dbPath);
+
+    const restarted = spawnServer(childEnvironment(dbPath));
+    const result = await waitForClose(restarted.child, 1_000);
+    expect(result.code).not.toBe(0);
+    expect(restarted.output.stderr).toContain('requires at least one admin');
+    expect(await storedAdminCount(dbPath)).toBe(0);
+  });
 
   it('bounds shutdown with an active partial POST and releases the database', async () => {
     const dbPath = join(tempDir, 'active-request.sqlite');

@@ -26,6 +26,10 @@ esac
 
 sudo systemctl status "$SERVICE" --no-pager
 sudo systemctl cat "$SERVICE" | grep -F -- "$SERVICE_ENV_FILE" >/dev/null
+if sudo systemctl cat "$SERVICE" | grep -Eq '^[[:space:]]*Environment=.*(ADMIN_PASSWORD|NODE_ENV|SITE_URL|TRUST_PROXY)='; then
+  echo 'The unit has inline authentication environment values; reconcile them before stopping the service' >&2
+  exit 1
+fi
 test -d "$APP_DIR/.git"
 test -f "$APP_DIR/deploy/nginx-kitepop.conf"
 sudo test -f "$SERVICE_ENV_FILE"
@@ -174,11 +178,6 @@ if sudo grep -Eq '^[[:space:]]*ADMIN_PASSWORD[[:space:]]*=' "$SERVICE_ENV_FILE";
   echo 'ADMIN_PASSWORD is still configured' >&2
   exit 1
 fi
-if sudo systemctl cat "$SERVICE" | grep -Eq '^[[:space:]]*Environment=.*(ADMIN_PASSWORD|NODE_ENV|SITE_URL|TRUST_PROXY)='; then
-  echo 'The unit has inline authentication environment values; reconcile them instead of relying on the EnvironmentFile' >&2
-  exit 1
-fi
-
 sudo install -d -m 0755 "$STATIC_ROOT"
 sudo rsync -a --delete "$APP_DIR/dist/" "$STATIC_ROOT/"
 sudo install -m 0644 "$APP_DIR/deploy/nginx-kitepop.conf" "$NGINX_SITE"

@@ -33,6 +33,8 @@ SITE_URL=https://dreamhunter2333.com
 TRUST_PROXY=1
 ```
 
+The proxy redirects HTTPS `www.dreamhunter2333.com` requests to the canonical `https://dreamhunter2333.com` origin before serving the application, so browser `Origin` values remain consistent with `SITE_URL`.
+
 Production login and registration responses set:
 
 ```text
