@@ -190,7 +190,43 @@ describe('users routes', () => {
         username: 'reader01',
         ip: 'direct',
       },
+      {
+        type: 'logout',
+        result: 'anonymous',
+        username: '',
+        ip: 'direct',
+      },
     ]);
+  });
+
+  it('audits invalid-session logout without exposing or retaining the cookie token', async () => {
+    const invalidToken = 'invalid-session-token-marker';
+    const revokeSession = vi.fn((rawToken) => store.revokeSession(rawToken));
+    const app = createFixture({
+      userStore: { ...store, revokeSession },
+    });
+
+    const response = await app.request('http://localhost/api/users/logout', {
+      method: 'POST',
+      headers: { Cookie: `kitepop_dev_session=${invalidToken}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    expect(response.headers.get('set-cookie')).toMatch(/^kitepop_dev_session=;/);
+    expectPrivateNoStore(response);
+    expect(revokeSession).toHaveBeenCalledOnce();
+    expect(revokeSession).toHaveBeenCalledWith(invalidToken);
+    expect(events).toEqual([
+      {
+        type: 'logout',
+        result: 'invalid_session',
+        username: '',
+        ip: 'direct',
+      },
+    ]);
+    expect(Object.keys(events[0]).sort()).toEqual(['ip', 'result', 'type', 'username']);
+    expect(JSON.stringify(events)).not.toContain(invalidToken);
   });
 
   it('uses the same 401 response and failure log for unknown users and wrong passwords', async () => {

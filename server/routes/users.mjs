@@ -92,15 +92,13 @@ app.post('/logout', async (c) => {
   if (rawToken) await c.get('userStore').revokeSession(rawToken);
   clearSessionCookie(c);
 
-  if (session?.user) {
-    securityLog(c, {
-      type: 'logout',
-      result: 'success',
-      userId: session.user.id,
-      username: normalizedUsername(session.user.username),
-      ip: requestIp(c),
-    });
-  }
+  securityLog(c, {
+    type: 'logout',
+    result: session?.user ? 'success' : rawToken ? 'invalid_session' : 'anonymous',
+    ...(session?.user ? { userId: session.user.id } : {}),
+    username: normalizedUsername(session?.user?.username),
+    ip: requestIp(c),
+  });
   return c.json({ ok: true });
 });
 
