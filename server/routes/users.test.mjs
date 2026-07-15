@@ -12,7 +12,10 @@ import { usersRoutes } from './users.mjs';
 
 const CREDENTIALS_MESSAGE = '用户名或密码错误';
 const RATE_LIMIT_MESSAGE = '登录尝试过于频繁，请稍后再试';
+const REGISTRATION_RATE_LIMIT_MESSAGE = '注册尝试过于频繁，请稍后再试';
+const REGISTRATION_VALIDATION_MESSAGE = '注册信息格式错误';
 const PRIVATE_NO_STORE = 'private, no-store';
+const JSON_BODY_LIMIT_BYTES = 16 * 1024;
 
 let database;
 let events;
@@ -48,6 +51,20 @@ function jsonRequest(path, body, { headers = {}, method = 'POST' } = {}) {
       body: typeof body === 'string' ? body : JSON.stringify(body),
     },
   ];
+}
+
+function nodeEnv(remoteAddress) {
+  return remoteAddress === undefined
+    ? {}
+    : {
+        incoming: {
+          socket: {
+            remoteAddress,
+            remotePort: 43_210,
+            remoteFamily: remoteAddress.includes(':') ? 'IPv6' : 'IPv4',
+          },
+        },
+      };
 }
 
 function cookiePair(response) {
@@ -110,10 +127,307 @@ describe('users routes', () => {
 
     expect(malformed.status).toBe(400);
     expect(invalid.status).toBe(400);
+    expect(await malformed.json()).toEqual({ ok: false, message: '请求格式错误' });
+    expect(await invalid.json()).toEqual({
+      ok: false,
+      message: '用户名需为 3-24 位字母、数字或下划线',
+    });
     expectPrivateNoStore(malformed);
     expectPrivateNoStore(invalid);
     expect(malformed.headers.get('set-cookie')).toBeNull();
     expect(invalid.headers.get('set-cookie')).toBeNull();
+  });
+
+  it.each([
+    '用户名需为 3-24 位字母、数字或下划线',
+    '密码至少 6 位',
+    '用户名已存在',
+  ])('returns only the allowlisted registration business error: %s', async (message) => {
+    const app = createFixture({
+      userStore: {
+        ...store,
+        register: vi.fn().mockRejectedValue(new Error(message)),
+      },
+    });
+
+    const response = await app.request(
+      ...jsonRequest('/api/users/register', {
+        username: 'reader01',
+        password: 'registration-secret',
+        nickname: 'Reader',
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ ok: false, message });
+    expectPrivateNoStore(response);
+  });
+
+  it('hides unexpected registration errors and logs only the generic registration error event', async () => {
+    const register = vi.fn().mockRejectedValue(new Error('database exploded: internal-secret'));
+    const app = createFixture({ userStore: { ...store, register } });
+    const response = await app.request(
+      ...jsonRequest('/api/users/register', {
+        username: 'SecretInput',
+        password: 'registration-password-marker',
+        nickname: 'Nickname Marker',
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ ok: false, message: '注册失败' });
+    expectPrivateNoStore(response);
+    expect(events).toEqual([
+      {
+        type: 'registration_error',
+        result: 'error',
+        username: 'secretinput',
+        ip: 'unknown',
+      },
+    ]);
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain('internal-secret');
+    expect(serialized).not.toContain('registration-password-marker');
+    expect(serialized).not.toContain('Nickname Marker');
+  });
+
+  it('keeps successful registration reservations and blocks the sixth before entering the store', async () => {
+    const baseLimiter = createLoginRateLimiter({ now: () => 1_000 });
+    const limiter = {
+      reserve: vi.fn((ip, username) => baseLimiter.reserve(ip, username)),
+      clear: vi.fn((ip, username) => baseLimiter.clear(ip, username)),
+    };
+    const register = vi.fn((draft) => store.register(draft));
+    const app = createFixture({ limiter, userStore: { ...store, register } });
+
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const response = await app.request(
+        ...jsonRequest('/api/users/register', {
+          username: `reader0${attempt}`,
+          password: 'registration-secret',
+          nickname: `Reader ${attempt}`,
+        }),
+        nodeEnv('198.51.100.30'),
+      );
+      expect(response.status).toBe(201);
+    }
+
+    const blocked = await app.request(
+      ...jsonRequest('/api/users/register', {
+        username: 'reader06',
+        password: 'registration-secret',
+        nickname: 'Reader 6',
+      }),
+      nodeEnv('198.51.100.30'),
+    );
+
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get('retry-after')).toBe('900');
+    expect(await blocked.json()).toEqual({ ok: false, message: REGISTRATION_RATE_LIMIT_MESSAGE });
+    expectPrivateNoStore(blocked);
+    expect(register).toHaveBeenCalledTimes(5);
+    expect(limiter.reserve).toHaveBeenCalledTimes(6);
+    expect(limiter.reserve.mock.calls.every(([, username]) => username === '<registration>')).toBe(true);
+    expect(limiter.clear).not.toHaveBeenCalled();
+    expect(events.at(-1)).toEqual({
+      type: 'registration_rate_limited',
+      result: 'blocked',
+      username: '<registration>',
+      ip: '198.51.100.30',
+    });
+  }, 30_000);
+
+  it('allows only one concurrent registration to enter the store after one reservation', async () => {
+    const register = vi.fn(async () => ({
+      token: 'registration-session-token',
+      user: { id: 'user-1', username: 'reader01', nickname: 'Reader', permission: 'reader' },
+      expiresAt: '2026-08-14T00:00:00.000Z',
+    }));
+    const app = createFixture({
+      limiter: createLoginRateLimiter({ now: () => 1_000, maxFailures: 1 }),
+      userStore: { ...store, register },
+    });
+
+    const responses = await Promise.all(
+      Array.from({ length: 3 }, (_, index) =>
+        app.request(
+          ...jsonRequest('/api/users/register', {
+            username: `reader0${index + 1}`,
+            password: 'registration-secret',
+            nickname: 'Reader',
+          }),
+          nodeEnv('198.51.100.31'),
+        ),
+      ),
+    );
+
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 429, 429]);
+    expect(register).toHaveBeenCalledOnce();
+  });
+
+  it('rejects declared login and registration bodies larger than 16 KiB before parsing or reserving', async () => {
+    const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
+    const register = vi.fn();
+    const login = vi.fn();
+    const app = createFixture({
+      limiter: { reserve, clear: vi.fn() },
+      userStore: { ...store, register, login },
+    });
+    const oversizedHeaders = { 'Content-Length': String(JSON_BODY_LIMIT_BYTES + 1) };
+
+    const registration = await app.request(
+      ...jsonRequest('/api/users/register', {}, { headers: oversizedHeaders }),
+    );
+    const loginResponse = await app.request(
+      ...jsonRequest('/api/users/login', {}, { headers: oversizedHeaders }),
+    );
+
+    for (const response of [registration, loginResponse]) {
+      expect(response.status).toBe(413);
+      expect(await response.json()).toEqual({ ok: false, message: '请求体过大' });
+      expectPrivateNoStore(response);
+    }
+    expect(reserve).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
+  });
+
+  it('rejects actual bodies larger than 16 KiB when Content-Length is absent', async () => {
+    await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
+    const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
+    const register = vi.fn((draft) => store.register(draft));
+    const login = vi.fn((draft) => store.login(draft));
+    const app = createFixture({
+      limiter: { reserve, clear: vi.fn() },
+      userStore: { ...store, register, login },
+    });
+    const padding = 'x'.repeat(JSON_BODY_LIMIT_BYTES + 1);
+    const registrationRequest = new Request('http://localhost/api/users/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'oversize01',
+        password: 'registration-secret',
+        nickname: 'Reader',
+        padding,
+      }),
+    });
+    const loginRequest = new Request('http://localhost/api/users/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'reader01', password: 'secret123', padding }),
+    });
+
+    expect(registrationRequest.headers.get('content-length')).toBeNull();
+    expect(loginRequest.headers.get('content-length')).toBeNull();
+    const registration = await app.request(registrationRequest);
+    const loginResponse = await app.request(loginRequest);
+
+    for (const response of [registration, loginResponse]) {
+      expect(response.status).toBe(413);
+      expect(await response.json()).toEqual({ ok: false, message: '请求体过大' });
+      expectPrivateNoStore(response);
+    }
+    expect(reserve).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-string credential objects without coercion or entering the store', async () => {
+    const baseLimiter = createLoginRateLimiter({ now: () => 1_000 });
+    const reserve = vi.fn((ip, username) => baseLimiter.reserve(ip, username));
+    const register = vi.fn();
+    const login = vi.fn();
+    const app = createFixture({
+      limiter: { reserve, clear: vi.fn() },
+      userStore: { ...store, register, login },
+    });
+    const maliciousValue = { toString: null, valueOf: null };
+
+    const registration = await app.request(
+      ...jsonRequest('/api/users/register', {
+        username: maliciousValue,
+        password: 'registration-secret',
+        nickname: 'Reader',
+      }),
+    );
+    const loginResponse = await app.request(
+      ...jsonRequest('/api/users/login', {
+        username: maliciousValue,
+        password: 'secret123',
+      }),
+    );
+
+    expect(registration.status).toBe(400);
+    expect(await registration.json()).toEqual({ ok: false, message: REGISTRATION_VALIDATION_MESSAGE });
+    expect(loginResponse.status).toBe(401);
+    expect(await loginResponse.json()).toEqual({ ok: false, message: CREDENTIALS_MESSAGE });
+    expectPrivateNoStore(registration);
+    expectPrivateNoStore(loginResponse);
+    expect(reserve.mock.calls).toEqual([
+      ['unknown', '<registration>'],
+      ['unknown', ''],
+    ]);
+    expect(register).not.toHaveBeenCalled();
+    expect(login).not.toHaveBeenCalled();
+  });
+
+  it('rejects overlong registration fields after reserving but before entering the store', async () => {
+    const baseLimiter = createLoginRateLimiter({ now: () => 1_000 });
+    const reserve = vi.fn((ip, username) => baseLimiter.reserve(ip, username));
+    const register = vi.fn();
+    const app = createFixture({
+      limiter: { reserve, clear: vi.fn() },
+      userStore: { ...store, register },
+    });
+    const drafts = [
+      { username: 'u'.repeat(25), password: 'valid-password', nickname: 'Reader' },
+      { username: `reader01${' '.repeat(17)}`, password: 'valid-password', nickname: 'Reader' },
+      { username: 'reader01', password: 'p'.repeat(257), nickname: 'Reader' },
+      { username: 'reader02', password: 'valid-password', nickname: 'n'.repeat(81) },
+      { username: 'reader03', password: 'valid-password', nickname: ' '.repeat(81) },
+    ];
+
+    for (const draft of drafts) {
+      const response = await app.request(...jsonRequest('/api/users/register', draft));
+      const body = await response.json();
+      expect(response.status).toBe(400);
+      expect(body).toEqual({ ok: false, message: REGISTRATION_VALIDATION_MESSAGE });
+      expectPrivateNoStore(response);
+      expect(JSON.stringify(body)).not.toContain(draft.password);
+    }
+
+    expect(reserve).toHaveBeenCalledTimes(5);
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it('revokes a registration session when writing its cookie fails', async () => {
+    const authConfig = { secureCookies: false, trustProxy: false };
+    let issuedSession;
+    const revokeSession = vi.fn((rawToken) => store.revokeSession(rawToken));
+    const register = vi.fn(async (draft) => {
+      issuedSession = await store.register(draft);
+      authConfig.secureCookies = undefined;
+      return issuedSession;
+    });
+    const app = createFixture({
+      authConfig,
+      userStore: { ...store, register, revokeSession },
+    });
+
+    const response = await app.request(
+      ...jsonRequest('/api/users/register', {
+        username: 'reader01',
+        password: 'registration-secret',
+        nickname: 'Reader',
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ ok: false, message: '注册失败' });
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(revokeSession).toHaveBeenCalledWith(issuedSession.token);
+    expect(store.verifySession(issuedSession.token)).toBeNull();
   });
 
   it('logs in with a cookie without returning the raw token', async () => {
@@ -139,7 +453,7 @@ describe('users routes', () => {
       result: 'success',
       userId: body.user.id,
       username: 'reader01',
-      ip: 'direct',
+      ip: 'unknown',
     });
   });
 
@@ -188,13 +502,13 @@ describe('users routes', () => {
         result: 'success',
         userId: session.user.id,
         username: 'reader01',
-        ip: 'direct',
+        ip: 'unknown',
       },
       {
         type: 'logout',
         result: 'anonymous',
         username: '',
-        ip: 'direct',
+        ip: 'unknown',
       },
     ]);
   });
@@ -222,11 +536,43 @@ describe('users routes', () => {
         type: 'logout',
         result: 'invalid_session',
         username: '',
-        ip: 'direct',
+        ip: 'unknown',
       },
     ]);
     expect(Object.keys(events[0]).sort()).toEqual(['ip', 'result', 'type', 'username']);
     expect(JSON.stringify(events)).not.toContain(invalidToken);
+  });
+
+  it('clears the cookie and audits a generic logout error when session revocation fails', async () => {
+    const session = await store.register({
+      username: 'reader01',
+      password: 'secret123',
+      nickname: 'Reader',
+    });
+    const revokeSession = vi.fn(() => {
+      throw new Error(`revoke failed for ${session.token}`);
+    });
+    const app = createFixture({ userStore: { ...store, revokeSession } });
+    const response = await app.request('http://localhost/api/users/logout', {
+      method: 'POST',
+      headers: { Cookie: `kitepop_dev_session=${session.token}` },
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ ok: false, message: '退出登录失败' });
+    expect(response.headers.get('set-cookie')).toMatch(/^kitepop_dev_session=;/);
+    expectPrivateNoStore(response);
+    expect(revokeSession).toHaveBeenCalledWith(session.token);
+    expect(events).toEqual([
+      {
+        type: 'logout',
+        result: 'logout_error',
+        userId: session.user.id,
+        username: 'reader01',
+        ip: 'unknown',
+      },
+    ]);
+    expect(JSON.stringify(events)).not.toContain(session.token);
   });
 
   it('uses the same 401 response and failure log for unknown users and wrong passwords', async () => {
@@ -245,8 +591,8 @@ describe('users routes', () => {
       expectPrivateNoStore(response);
     }
     expect(events).toEqual([
-      { type: 'login_failure', result: 'failure', username: 'missing', ip: 'direct' },
-      { type: 'login_failure', result: 'failure', username: 'reader01', ip: 'direct' },
+      { type: 'login_failure', result: 'failure', username: 'missing', ip: 'unknown' },
+      { type: 'login_failure', result: 'failure', username: 'reader01', ip: 'unknown' },
     ]);
   });
 
@@ -261,6 +607,32 @@ describe('users routes', () => {
     expect(await missing.json()).toEqual({ ok: false, message: CREDENTIALS_MESSAGE });
     expectPrivateNoStore(malformed);
     expectPrivateNoStore(missing);
+  });
+
+  it('rejects overlong login credentials generically after reserving and before password verification', async () => {
+    const baseLimiter = createLoginRateLimiter({ now: () => 1_000 });
+    const reserve = vi.fn((ip, username) => baseLimiter.reserve(ip, username));
+    const login = vi.fn();
+    const app = createFixture({
+      limiter: { reserve, clear: vi.fn() },
+      userStore: { ...store, login },
+    });
+    const drafts = [
+      { username: 'u'.repeat(25), password: 'valid-password' },
+      { username: 'reader01', password: 'p'.repeat(257) },
+    ];
+
+    for (const draft of drafts) {
+      const response = await app.request(...jsonRequest('/api/users/login', draft));
+      const body = await response.json();
+      expect(response.status).toBe(401);
+      expect(body).toEqual({ ok: false, message: CREDENTIALS_MESSAGE });
+      expectPrivateNoStore(response);
+      expect(JSON.stringify(body)).not.toContain(draft.password);
+    }
+
+    expect(reserve).toHaveBeenCalledTimes(2);
+    expect(login).not.toHaveBeenCalled();
   });
 
   it('reserves five failed attempts and blocks the sixth with Retry-After', async () => {
@@ -285,7 +657,7 @@ describe('users routes', () => {
       type: 'login_rate_limited',
       result: 'blocked',
       username: 'reader01',
-      ip: 'direct',
+      ip: 'unknown',
     });
   }, 15_000);
 
@@ -333,43 +705,110 @@ describe('users routes', () => {
     expect(loginCalls).toBe(1);
   });
 
-  it.each([
-    [false, 'direct'],
-    [true, '203.0.113.44'],
-  ])('uses only the configured client IP source when trustProxy=%s', async (trustProxy, expectedIp) => {
+  it('uses the actual peer address and keeps direct peers in separate limiter buckets', async () => {
     const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
     const app = createFixture({
-      authConfig: { secureCookies: false, trustProxy },
+      authConfig: { secureCookies: false, trustProxy: false },
       limiter: { reserve, clear: vi.fn() },
     });
-    const response = await app.request(
+    const first = await app.request(
       ...jsonRequest(
         '/api/users/login',
         { username: ' Mixed_User ', password: 'not-a-secret' },
-        {
-          headers: {
-            'X-Real-IP': '203.0.113.44',
-            'X-Forwarded-For': '198.51.100.8',
-          },
-        },
       ),
+      nodeEnv('198.51.100.10'),
+    );
+    const second = await app.request(
+      ...jsonRequest('/api/users/login', { username: ' Mixed_User ', password: 'not-a-secret' }),
+      nodeEnv('198.51.100.11'),
     );
 
-    expect(response.status).toBe(401);
-    expect(reserve).toHaveBeenCalledWith(expectedIp, 'mixed_user');
-    expect(events.at(-1)).toMatchObject({ username: 'mixed_user', ip: expectedIp });
+    expect(first.status).toBe(401);
+    expect(second.status).toBe(401);
+    expect(reserve.mock.calls).toEqual([
+      ['198.51.100.10', 'mixed_user'],
+      ['198.51.100.11', 'mixed_user'],
+    ]);
+    expect(events.map((event) => event.ip)).toEqual(['198.51.100.10', '198.51.100.11']);
   });
 
-  it('uses an empty trusted IP when x-real-ip is absent', async () => {
+  it('ignores spoofed proxy headers for direct clients', async () => {
+    const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
+    const app = createFixture({
+      authConfig: { secureCookies: false, trustProxy: false },
+      limiter: { reserve, clear: vi.fn() },
+    });
+
+    await app.request(
+      ...jsonRequest(
+        '/api/users/login',
+        { username: 'reader01', password: 'wrong-password' },
+        { headers: { 'X-Real-IP': '203.0.113.44' } },
+      ),
+      nodeEnv('198.51.100.20'),
+    );
+
+    expect(reserve).toHaveBeenCalledWith('198.51.100.20', 'reader01');
+  });
+
+  it.each(['127.0.0.1', '::1', '::ffff:127.0.0.1'])(
+    'trusts x-real-ip only from loopback proxy peer %s',
+    async (peerAddress) => {
+      const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
+      const app = createFixture({
+        authConfig: { secureCookies: false, trustProxy: true },
+        limiter: { reserve, clear: vi.fn() },
+      });
+
+      await app.request(
+        ...jsonRequest(
+          '/api/users/login',
+          { username: 'reader01', password: 'wrong-password' },
+          { headers: { 'X-Real-IP': '203.0.113.44' } },
+        ),
+        nodeEnv(peerAddress),
+      );
+
+      expect(reserve).toHaveBeenCalledWith('203.0.113.44', 'reader01');
+    },
+  );
+
+  it('ignores x-real-ip from a non-loopback peer even when trustProxy is enabled', async () => {
     const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
     const app = createFixture({
       authConfig: { secureCookies: false, trustProxy: true },
       limiter: { reserve, clear: vi.fn() },
     });
 
-    await app.request(...jsonRequest('/api/users/login', { username: 'reader01', password: 'wrong-password' }));
+    await app.request(
+      ...jsonRequest(
+        '/api/users/login',
+        { username: 'reader01', password: 'wrong-password' },
+        { headers: { 'X-Real-IP': '203.0.113.44' } },
+      ),
+      nodeEnv('198.51.100.21'),
+    );
 
-    expect(reserve).toHaveBeenCalledWith('', 'reader01');
+    expect(reserve).toHaveBeenCalledWith('198.51.100.21', 'reader01');
+  });
+
+  it('uses unknown when the Node peer address is unavailable', async () => {
+    const reserve = vi.fn(() => ({ allowed: true, retryAfterSeconds: 0 }));
+    const app = createFixture({
+      authConfig: { secureCookies: false, trustProxy: true },
+      limiter: { reserve, clear: vi.fn() },
+    });
+
+    await app.request(
+      ...jsonRequest(
+        '/api/users/login',
+        { username: 'reader01', password: 'wrong-password' },
+        { headers: { 'X-Real-IP': '203.0.113.44' } },
+      ),
+      nodeEnv(undefined),
+    );
+
+    expect(reserve).toHaveBeenCalledWith('unknown', 'reader01');
   });
 
   it('keeps failed reservations and hides unexpected login errors behind a generic 500', async () => {
@@ -393,10 +832,80 @@ describe('users routes', () => {
     expectPrivateNoStore(response);
     expect(clear).not.toHaveBeenCalled();
     expect(events).toEqual([
-      { type: 'login_error', result: 'error', username: 'reader01', ip: 'direct' },
+      { type: 'login_error', result: 'error', username: 'reader01', ip: 'unknown' },
     ]);
     expect(JSON.stringify(events)).not.toContain('internal-secret');
     expect(JSON.stringify(events)).not.toContain('password-secret');
+  });
+
+  it('revokes a login session and keeps its reservation when writing the cookie fails', async () => {
+    await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
+    const authConfig = { secureCookies: false, trustProxy: false };
+    const clear = vi.fn();
+    let issuedSession;
+    const revokeSession = vi.fn((rawToken) => store.revokeSession(rawToken));
+    const login = vi.fn(async (draft) => {
+      issuedSession = await store.login(draft);
+      authConfig.secureCookies = undefined;
+      return issuedSession;
+    });
+    const app = createFixture({
+      authConfig,
+      limiter: { reserve: () => ({ allowed: true, retryAfterSeconds: 0 }), clear },
+      userStore: { ...store, login, revokeSession },
+    });
+
+    const response = await app.request(
+      ...jsonRequest('/api/users/login', { username: 'reader01', password: 'secret123' }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ ok: false, message: '登录失败' });
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(clear).not.toHaveBeenCalled();
+    expect(revokeSession).toHaveBeenCalledWith(issuedSession.token);
+    expect(store.verifySession(issuedSession.token)).toBeNull();
+    expect(events).toEqual([
+      { type: 'login_error', result: 'error', username: 'reader01', ip: 'unknown' },
+    ]);
+  });
+
+  it('keeps the login reservation when serializing the signed session response fails', async () => {
+    await store.register({ username: 'reader01', password: 'secret123', nickname: 'Reader' });
+    const clear = vi.fn();
+    let issuedSession;
+    const revokeSession = vi.fn((rawToken) => store.revokeSession(rawToken));
+    const login = vi.fn(async (draft) => {
+      issuedSession = await store.login(draft);
+      return {
+        ...issuedSession,
+        user: {
+          ...issuedSession.user,
+          toJSON() {
+            throw new Error('response serialization failed: internal-secret');
+          },
+        },
+      };
+    });
+    const app = createFixture({
+      limiter: { reserve: () => ({ allowed: true, retryAfterSeconds: 0 }), clear },
+      userStore: { ...store, login, revokeSession },
+    });
+
+    const response = await app.request(
+      ...jsonRequest('/api/users/login', { username: 'reader01', password: 'secret123' }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ ok: false, message: '登录失败' });
+    expect(clear).not.toHaveBeenCalled();
+    expect(revokeSession).toHaveBeenCalledWith(issuedSession.token);
+    expect(store.verifySession(issuedSession.token)).toBeNull();
+    expect(events).toEqual([
+      { type: 'login_error', result: 'error', username: 'reader01', ip: 'unknown' },
+    ]);
+    expect(JSON.stringify(events)).not.toContain('internal-secret');
+    expect(JSON.stringify(events)).not.toContain(issuedSession.token);
   });
 
   it('passes only allowlisted, non-sensitive fields to the security logger', async () => {
@@ -423,9 +932,11 @@ describe('users routes', () => {
       expect(Object.keys(event).every((key) => allowedFields.has(key))).toBe(true);
     }
     const serialized = JSON.stringify(events);
+    const loginToken = cookiePair(login).split('=', 2)[1];
     expect(serialized).not.toContain('log-password-marker');
     expect(serialized).not.toContain('secret123');
     expect(serialized).not.toContain(registered.token);
+    expect(serialized).not.toContain(loginToken);
     expect(serialized).not.toContain(cookiePair(login));
   });
 });

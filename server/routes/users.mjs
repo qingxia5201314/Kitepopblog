@@ -1,8 +1,19 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import { clearSessionCookie, writeSessionCookie } from '../sessionCookie.mjs';
 
 const CREDENTIALS_MESSAGE = '用户名或密码错误';
 const RATE_LIMIT_MESSAGE = '登录尝试过于频繁，请稍后再试';
+const REGISTRATION_RATE_LIMIT_MESSAGE = '注册尝试过于频繁，请稍后再试';
+const REGISTRATION_VALIDATION_MESSAGE = '注册信息格式错误';
+const JSON_BODY_LIMIT_BYTES = 16 * 1024;
+const REGISTRATION_IDENTITY = '<registration>';
+const REGISTRATION_BUSINESS_ERRORS = new Set([
+  '用户名需为 3-24 位字母、数字或下划线',
+  '密码至少 6 位',
+  '用户名已存在',
+]);
 
 const app = new Hono();
 
@@ -10,8 +21,51 @@ function normalizedUsername(value) {
   return String(value ?? '').trim().toLowerCase();
 }
 
+function peerAddress(c) {
+  try {
+    const address = getConnInfo(c)?.remote?.address;
+    return typeof address === 'string' && address.trim() ? address.trim() : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function isLoopbackAddress(address) {
+  const normalized = address.toLowerCase();
+  return (
+    normalized === '::1' ||
+    normalized.startsWith('127.') ||
+    normalized.startsWith('::ffff:127.')
+  );
+}
+
 function requestIp(c) {
-  return c.get('authConfig')?.trustProxy === true ? c.req.header('x-real-ip') ?? '' : 'direct';
+  const peer = peerAddress(c);
+  if (c.get('authConfig')?.trustProxy === true && isLoopbackAddress(peer)) {
+    const forwarded = String(c.req.header('x-real-ip') ?? '').trim();
+    if (forwarded) return forwarded;
+  }
+  return peer;
+}
+
+function isJsonObject(body) {
+  return body !== null && typeof body === 'object' && !Array.isArray(body);
+}
+
+function hasCredentialTypes(body, { nickname = false } = {}) {
+  return (
+    typeof body.username === 'string' &&
+    typeof body.password === 'string' &&
+    (!nickname || body.nickname === undefined || typeof body.nickname === 'string')
+  );
+}
+
+function hasOverlongCredentials(body, { nickname = false } = {}) {
+  return (
+    body.username.length > 24 ||
+    body.password.length > 256 ||
+    (nickname && typeof body.nickname === 'string' && body.nickname.length > 80)
+  );
 }
 
 function securityLog(c, event) {
@@ -19,19 +73,73 @@ function securityLog(c, event) {
   if (typeof log === 'function') log(event);
 }
 
+async function revokeSessionBestEffort(c, token) {
+  if (!token) return;
+  try {
+    await c.get('userStore').revokeSession(token);
+  } catch {
+    // Preserve the original authentication failure.
+  }
+}
+
 app.use('*', async (c, next) => {
   await next();
   c.header('Cache-Control', 'private, no-store');
 });
 
+const jsonBodyLimit = bodyLimit({
+  maxSize: JSON_BODY_LIMIT_BYTES,
+  onError: (c) => c.json({ ok: false, message: '请求体过大' }, 413),
+});
+app.use('/register', jsonBodyLimit);
+app.use('/login', jsonBodyLimit);
+
 app.post('/register', async (c) => {
+  let body;
   try {
-    const body = await c.req.json();
-    const { token, user, expiresAt } = await c.get('userStore').register(body);
+    body = await c.req.json();
+  } catch {
+    return c.json({ ok: false, message: '请求格式错误' }, 400);
+  }
+
+  const ip = requestIp(c);
+  const limiter = c.get('loginRateLimiter');
+  const reservation = limiter.reserve(ip, REGISTRATION_IDENTITY);
+  if (!reservation.allowed) {
+    c.header('Retry-After', String(reservation.retryAfterSeconds));
+    securityLog(c, {
+      type: 'registration_rate_limited',
+      result: 'blocked',
+      username: REGISTRATION_IDENTITY,
+      ip,
+    });
+    return c.json({ ok: false, message: REGISTRATION_RATE_LIMIT_MESSAGE }, 429);
+  }
+
+  const username = typeof body?.username === 'string' ? normalizedUsername(body.username) : '';
+  if (
+    !isJsonObject(body) ||
+    !hasCredentialTypes(body, { nickname: true }) ||
+    hasOverlongCredentials(body, { nickname: true })
+  ) {
+    return c.json({ ok: false, message: REGISTRATION_VALIDATION_MESSAGE }, 400);
+  }
+
+  let token = '';
+  try {
+    const registration = await c.get('userStore').register(body);
+    ({ token } = registration);
+    const { user, expiresAt } = registration;
     writeSessionCookie(c, token);
     return c.json({ ok: true, user, expiresAt }, 201);
   } catch (error) {
-    return c.json({ ok: false, message: error?.message || '注册失败' }, 400);
+    await revokeSessionBestEffort(c, token);
+    if (REGISTRATION_BUSINESS_ERRORS.has(error?.message)) {
+      return c.json({ ok: false, message: error.message }, 400);
+    }
+
+    securityLog(c, { type: 'registration_error', result: 'error', username, ip });
+    return c.json({ ok: false, message: '注册失败' }, 500);
   }
 });
 
@@ -43,11 +151,11 @@ app.post('/login', async (c) => {
     return c.json({ ok: false, message: '请求格式错误' }, 400);
   }
 
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+  if (!isJsonObject(body)) {
     return c.json({ ok: false, message: '请求格式错误' }, 400);
   }
 
-  const username = normalizedUsername(body.username);
+  const username = typeof body.username === 'string' ? normalizedUsername(body.username) : '';
   const ip = requestIp(c);
   const limiter = c.get('loginRateLimiter');
   const reservation = limiter.reserve(ip, username);
@@ -57,10 +165,18 @@ app.post('/login', async (c) => {
     return c.json({ ok: false, message: RATE_LIMIT_MESSAGE }, 429);
   }
 
+  if (!hasCredentialTypes(body) || hasOverlongCredentials(body)) {
+    securityLog(c, { type: 'login_failure', result: 'failure', username, ip });
+    return c.json({ ok: false, message: CREDENTIALS_MESSAGE }, 401);
+  }
+
+  let token = '';
   try {
-    const { token, user, expiresAt } = await c.get('userStore').login(body);
-    limiter.clear(ip, username);
+    const login = await c.get('userStore').login(body);
+    ({ token } = login);
+    const { user, expiresAt } = login;
     writeSessionCookie(c, token);
+    const response = c.json({ ok: true, user, expiresAt });
     securityLog(c, {
       type: 'login_success',
       result: 'success',
@@ -68,8 +184,10 @@ app.post('/login', async (c) => {
       username,
       ip,
     });
-    return c.json({ ok: true, user, expiresAt });
+    limiter.clear(ip, username);
+    return response;
   } catch (error) {
+    await revokeSessionBestEffort(c, token);
     if (error?.message === CREDENTIALS_MESSAGE) {
       securityLog(c, { type: 'login_failure', result: 'failure', username, ip });
       return c.json({ ok: false, message: CREDENTIALS_MESSAGE }, 401);
@@ -89,16 +207,35 @@ app.get('/me', (c) => {
 app.post('/logout', async (c) => {
   const rawToken = c.get('authToken') || '';
   const session = c.get('authSession');
-  if (rawToken) await c.get('userStore').revokeSession(rawToken);
-  clearSessionCookie(c);
+  let revokeFailed = false;
 
-  securityLog(c, {
-    type: 'logout',
-    result: session?.user ? 'success' : rawToken ? 'invalid_session' : 'anonymous',
-    ...(session?.user ? { userId: session.user.id } : {}),
-    username: normalizedUsername(session?.user?.username),
-    ip: requestIp(c),
-  });
+  try {
+    if (rawToken) await c.get('userStore').revokeSession(rawToken);
+  } catch {
+    revokeFailed = true;
+  } finally {
+    try {
+      clearSessionCookie(c);
+    } finally {
+      securityLog(c, {
+        type: 'logout',
+        result: revokeFailed
+          ? 'logout_error'
+          : session?.user
+            ? 'success'
+            : rawToken
+              ? 'invalid_session'
+              : 'anonymous',
+        ...(session?.user ? { userId: session.user.id } : {}),
+        username: normalizedUsername(session?.user?.username),
+        ip: requestIp(c),
+      });
+    }
+  }
+
+  if (revokeFailed) {
+    return c.json({ ok: false, message: '退出登录失败' }, 500);
+  }
   return c.json({ ok: true });
 });
 
