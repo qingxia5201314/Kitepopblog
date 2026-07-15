@@ -94,4 +94,21 @@ describe('writeSecurityEvent', () => {
       ip: '127.0.0.1'
     });
   });
+
+  it('uses safe defaults for missing allowlisted fields', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T10:11:12.345Z'));
+    const sink = vi.fn();
+
+    writeSecurityEvent({}, sink);
+
+    expect(JSON.parse(sink.mock.calls[0][0])).toEqual({
+      timestamp: '2026-07-15T10:11:12.345Z',
+      type: 'unknown',
+      result: '',
+      userId: '',
+      username: '',
+      ip: ''
+    });
+  });
 });
