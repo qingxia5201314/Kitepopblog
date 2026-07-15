@@ -19,6 +19,20 @@ function sessionFor(token) {
   return null;
 }
 
+function nodeEnv(remoteAddress) {
+  return remoteAddress === undefined
+    ? {}
+    : {
+        incoming: {
+          socket: {
+            remoteAddress,
+            remotePort: 43_210,
+            remoteFamily: remoteAddress.includes(':') ? 'IPv6' : 'IPv4'
+          }
+        }
+      };
+}
+
 function createAuthApp(authConfig, options = {}) {
   const log = Object.hasOwn(options, 'log') ? options.log : securityLog;
   const authApp = new Hono();
@@ -167,23 +181,64 @@ describe('requireUser', () => {
 });
 
 describe('requireAdmin', () => {
-  it.each([
-    ['anonymous', undefined, 401, 'unauthorized', null],
-    ['reader', 'reader-token', 403, 'forbidden', reader.id]
-  ])('denies %s requests and emits one safe audit event', async (_role, token, status, result, userId) => {
-    const response = await app.request('/admin', {
-      headers: token ? { Cookie: `kitepop_dev_session=${token}` } : undefined
-    });
+  it('emits exact string fields to a raw sink for an anonymous denial without a Node peer', async () => {
+    const rawEvents = [];
+    const response = await createAuthApp(
+      { secureCookies: false, trustProxy: false },
+      { log: (event) => rawEvents.push(event) }
+    ).request('/admin');
 
-    expect(response.status).toBe(status);
+    expect(response.status).toBe(401);
+    expect(adminHandler).not.toHaveBeenCalled();
+    expect(rawEvents).toEqual([{
+      type: 'admin_access_denied',
+      result: 'unauthorized',
+      userId: '',
+      ip: 'direct'
+    }]);
+  });
+
+  it('records the authenticated user and direct Node peer for a forbidden denial', async () => {
+    const response = await app.request(
+      '/admin',
+      { headers: { Cookie: 'kitepop_dev_session=reader-token' } },
+      nodeEnv('198.51.100.10')
+    );
+
+    expect(response.status).toBe(403);
     expect(adminHandler).not.toHaveBeenCalled();
     expect(securityLog).toHaveBeenCalledOnce();
     expect(securityLog).toHaveBeenCalledWith({
       type: 'admin_access_denied',
-      result,
-      userId,
-      ip: null
+      result: 'forbidden',
+      userId: reader.id,
+      ip: '198.51.100.10'
     });
+  });
+
+  it.each(['127.0.0.1', '::1', '::ffff:127.0.0.1'])(
+    'trusts x-real-ip from loopback proxy peer %s',
+    async (peerAddress) => {
+      const response = await createAuthApp({ secureCookies: false, trustProxy: true }).request(
+        '/admin',
+        { headers: { 'X-Real-IP': '203.0.113.44' } },
+        nodeEnv(peerAddress)
+      );
+
+      expect(response.status).toBe(401);
+      expect(securityLog).toHaveBeenCalledWith(expect.objectContaining({ ip: '203.0.113.44' }));
+    }
+  );
+
+  it('ignores a spoofed x-real-ip header from a non-loopback peer', async () => {
+    const response = await createAuthApp({ secureCookies: false, trustProxy: true }).request(
+      '/admin',
+      { headers: { 'X-Real-IP': '203.0.113.44' } },
+      nodeEnv('198.51.100.20')
+    );
+
+    expect(response.status).toBe(401);
+    expect(securityLog).toHaveBeenCalledWith(expect.objectContaining({ ip: '198.51.100.20' }));
   });
 
   it('allows administrators without emitting a denial event', async () => {
@@ -196,10 +251,18 @@ describe('requireAdmin', () => {
     expect(securityLog).not.toHaveBeenCalled();
   });
 
-  it('does not fail when the optional security logger is missing', async () => {
-    const response = await createAuthApp({ secureCookies: false }, { log: undefined }).request('/admin');
+  it.each([
+    ['missing', 'anonymous', undefined, undefined, 401],
+    ['missing', 'reader', undefined, 'reader-token', 403],
+    ['throws', 'anonymous', () => { throw new Error('logger failed'); }, undefined, 401],
+    ['throws', 'reader', () => { throw new Error('logger failed'); }, 'reader-token', 403]
+  ])('preserves denial status when the optional security logger is %s for %s', async (_loggerState, _role, log, token, status) => {
+    const response = await createAuthApp({ secureCookies: false }, { log }).request('/admin', {
+      headers: token ? { Cookie: `kitepop_dev_session=${token}` } : undefined
+    });
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(status);
+    expect(adminHandler).not.toHaveBeenCalled();
   });
 });
 
