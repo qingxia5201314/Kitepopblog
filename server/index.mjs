@@ -31,7 +31,7 @@ import { imagesRoutes } from './routes/images.mjs';
 import { folderRoutes } from './routes/folders.mjs';
 import { aboutRoutes } from './routes/about.mjs';
 import { renderRobots, renderRss, renderSeoPage, renderSitemap } from './seo.mjs';
-import { PUBLIC_DYNAMIC_CACHE, PUBLIC_FEED_CACHE } from './httpCache.mjs';
+import { authenticatedResponseCache, PUBLIC_DYNAMIC_CACHE, PUBLIC_FEED_CACHE } from './httpCache.mjs';
 import { apiNotFound } from './middleware/apiNotFound.mjs';
 import { hydrateAuth } from './middleware/auth.mjs';
 import { createOriginGuard } from './middleware/origin.mjs';
@@ -163,6 +163,7 @@ app.use('*', async (c, next) => {
 
 // Inject dependencies into context
 app.use('*', async (c, next) => {
+  c.set('database', database);
   c.set('store', store);
   c.set('postService', postService);
   c.set('postRevisionService', postRevisionService);
@@ -183,10 +184,7 @@ app.use('*', async (c, next) => {
 
 app.use('/api/*', originGuard);
 app.use('/api/*', hydrateAuth);
-app.use('/api/*', async (c, next) => {
-  await next();
-  if (c.get('authSession')) c.header('Cache-Control', 'private, no-store');
-});
+app.use('/api/*', authenticatedResponseCache);
 
 // API routes
 app.route('/api/admin', adminRoutes);

@@ -175,6 +175,71 @@ describe('users routes', () => {
     expect(await response.json()).toEqual({ ok: false, message: CREDENTIALS_MESSAGE });
   });
 
+  it('keeps auth responses and handles rejected asynchronous security logs', async () => {
+    const unhandledRejections = [];
+    const onUnhandledRejection = (reason) => unhandledRejections.push(reason);
+    const loggerPromises = [];
+    const securityEvents = [];
+    class ObservedRejectedPromise extends Promise {
+      rejectionHandled = false;
+
+      then(onFulfilled, onRejected) {
+        if (typeof onRejected === 'function') this.rejectionHandled = true;
+        return super.then(onFulfilled, onRejected);
+      }
+    }
+    const securityLog = (event) => {
+      securityEvents.push(event);
+      const promise = new ObservedRejectedPromise((_, reject) => {
+        reject(new Error('security logger unavailable'));
+      });
+      loggerPromises.push(promise);
+      return promise;
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+
+    try {
+      const app = createFixture({ securityLog });
+      const registration = await app.request(
+        ...jsonRequest('/api/users/register', {
+          username: 'reader01',
+          password: 'registration-secret',
+          nickname: 'Reader',
+        }),
+      );
+      const login = await app.request(
+        ...jsonRequest('/api/users/login', { username: 'reader01', password: 'registration-secret' }),
+      );
+      const failure = await app.request(
+        ...jsonRequest('/api/users/login', { username: 'reader01', password: 'wrong-password' }),
+      );
+      const logout = await app.request('http://localhost/api/users/logout', {
+        method: 'POST',
+        headers: { Cookie: cookiePair(login) },
+      });
+      const rejectionHandling = loggerPromises.map((promise) => promise.rejectionHandled);
+      await Promise.allSettled(loggerPromises);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(registration.status).toBe(201);
+      expect(login.status).toBe(200);
+      expect(failure.status).toBe(401);
+      expect(await failure.json()).toEqual({ ok: false, message: CREDENTIALS_MESSAGE });
+      expect(logout.status).toBe(200);
+      expect(await logout.json()).toEqual({ ok: true });
+      expect(securityEvents.map((event) => event.type)).toEqual([
+        'registration_success',
+        'login_success',
+        'login_failure',
+        'logout',
+      ]);
+      expect(rejectionHandling).toEqual([true, true, true, true]);
+      expect(unhandledRejections).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+  });
+
   it('returns 400 for malformed registration JSON and invalid registration input', async () => {
     const app = createFixture();
     const malformed = await app.request(...jsonRequest('/api/users/register', '{'));

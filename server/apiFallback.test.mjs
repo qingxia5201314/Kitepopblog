@@ -41,6 +41,7 @@ describe('server auth wiring', () => {
 
   it('injects unified auth dependencies before origin, hydration, and API routes', async () => {
     const source = await readFile('server/index.mjs', 'utf8');
+    const databaseInjection = source.indexOf("c.set('database', database)");
     const dependencyInjection = source.indexOf("c.set('authConfig', authConfig)");
     const origin = source.indexOf("app.use('/api/*', originGuard)");
     const hydration = source.indexOf("app.use('/api/*', hydrateAuth)");
@@ -53,9 +54,10 @@ describe('server auth wiring', () => {
     expect(source).toMatch(/const authConfig = \{[\s\S]*secureCookies: production,[\s\S]*siteUrl: String\(process\.env\.SITE_URL \|\| ''\),[\s\S]*trustProxy: process\.env\.TRUST_PROXY === '1'[\s\S]*\}/);
     expect(source).toContain('const loginRateLimiter = createLoginRateLimiter()');
     expect(source).toContain('const originGuard = createOriginGuard({ production, siteUrl })');
+    expect(databaseInjection).toBeGreaterThanOrEqual(0);
     expect(source).toContain("c.set('loginRateLimiter', loginRateLimiter)");
     expect(source).toContain("c.set('securityLog', writeSecurityEvent)");
-    expect(dependencyInjection).toBeGreaterThanOrEqual(0);
+    expect(dependencyInjection).toBeGreaterThan(databaseInjection);
     expect(origin).toBeGreaterThan(dependencyInjection);
     expect(hydration).toBeGreaterThan(origin);
     expect(routes).toBeGreaterThan(hydration);
@@ -64,7 +66,7 @@ describe('server auth wiring', () => {
   it('marks authenticated API responses private without changing public route cache directives', async () => {
     const source = await readFile('server/index.mjs', 'utf8');
     const hydration = source.indexOf("app.use('/api/*', hydrateAuth)");
-    const privateCache = source.indexOf("c.header('Cache-Control', 'private, no-store')", hydration);
+    const privateCache = source.indexOf("app.use('/api/*', authenticatedResponseCache)", hydration);
     const routes = source.indexOf("app.route('/api/admin', adminRoutes)");
 
     expect(privateCache).toBeGreaterThan(hydration);
@@ -150,6 +152,8 @@ describe('production environment wiring', () => {
     }
     const assetsLocation = source.slice(start, end + 1);
 
+    expect(assetsLocation).toContain('expires 1y;');
+    expect(assetsLocation).toContain('add_header Cache-Control "public, max-age=31536000, immutable";');
     expect(assetsLocation).toContain('add_header X-Content-Type-Options nosniff always;');
     expect(assetsLocation).toContain('add_header Referrer-Policy strict-origin-when-cross-origin always;');
     expect(assetsLocation).toContain('add_header X-Frame-Options DENY always;');

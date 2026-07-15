@@ -45,7 +45,7 @@ function securityLog(c, event) {
   const log = c.get('securityLog');
   if (typeof log !== 'function') return;
   try {
-    log(event);
+    Promise.resolve(log(event)).catch(() => {});
   } catch {
     // Authentication behavior must not depend on audit log availability.
   }

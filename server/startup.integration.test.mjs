@@ -105,20 +105,27 @@ function waitForExit(child, timeoutMs = START_TIMEOUT_MS) {
   });
 }
 
+function parseListeningPort(output) {
+  const match = output.stdout.match(/server listening on http:\/\/127\.0\.0\.1:(\d+)/);
+  return match ? Number(match[1]) : undefined;
+}
+
 function waitForListening(child, output, timeoutMs = START_TIMEOUT_MS) {
-  if (output.stdout.includes('server listening on')) return Promise.resolve();
+  const currentPort = parseListeningPort(output);
+  if (currentPort !== undefined) return Promise.resolve(currentPort);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error(`server did not listen within ${timeoutMs}ms`)), timeoutMs);
     const onData = () => {
-      if (output.stdout.includes('server listening on')) finish();
+      const port = parseListeningPort(output);
+      if (port !== undefined) finish(undefined, port);
     };
     const onExit = () => finish(new Error(`server exited before listening: ${output.stderr}`));
-    const finish = (error) => {
+    const finish = (error, port) => {
       clearTimeout(timer);
       child.stdout.off('data', onData);
       child.off('exit', onExit);
       if (error) reject(error);
-      else resolve();
+      else resolve(port);
     };
     child.stdout.on('data', onData);
     child.once('exit', onExit);
@@ -187,7 +194,11 @@ describe('standalone server startup', () => {
 
     for (const signal of ['SIGTERM', 'SIGINT']) {
       const { child, output } = spawnServer(childEnvironment(dbPath));
-      await waitForListening(child, output);
+      const listeningPort = await waitForListening(child, output);
+      expect(listeningPort).toBeTypeOf('number');
+      const me = await fetch(`http://127.0.0.1:${listeningPort}/api/users/me`);
+      expect(me.status).toBe(401);
+      expect(me.headers.get('cache-control')).toBe('private, no-store');
       expect(await stopChild(child, signal)).toEqual({ code: 0, signal: null });
       expect(output.stderr).not.toContain('UV_HANDLE_CLOSING');
     }
