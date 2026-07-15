@@ -1,55 +1,46 @@
-import { ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { UserSession } from '../lib/blog';
+import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type { UserSession } from '../lib/blog';
+import { AUTH_EXPIRED_EVENT, logoutUserRequest, restoreUserSessionRequest } from '../lib/apiClient';
 import { AppNotification, NotificationType, createNotification } from '../lib/notification';
-import { getCurrentUser } from '../lib/blogApi';
-import { clearAdminSession, loadSavedAdminSession, saveAdminSession } from '../lib/adminSession';
 
-const USER_SESSION_KEY = 'kitepop-user-session';
+const LEGACY_SESSION_KEYS = [
+  'kitepop-admin-session',
+  'kitepop-user-session',
+  'kitepop-accounting-session'
+];
 
 interface AppContextType {
   notification: AppNotification | null;
   notify: (type: NotificationType, message: string, durationMs?: number) => void;
   clearNotification: () => void;
-  adminUnlocked: boolean;
-  adminToken: string;
-  loginAdmin: (token: string, expiresAt?: string) => void;
-  logoutAdmin: () => void;
+  authReady: boolean;
   userSession: UserSession | null;
+  isAdmin: boolean;
   loginUser: (session: UserSession) => void;
-  logoutUser: () => void;
+  logoutUser: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-function loadUserSession(): UserSession | null {
-  try {
-    const raw = window.localStorage.getItem(USER_SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as UserSession;
-    if (!parsed.token || !parsed.expiresAt || Date.parse(parsed.expiresAt) <= Date.now()) {
-      window.localStorage.removeItem(USER_SESSION_KEY);
-      return null;
+function clearLegacySessions() {
+  for (const key of LEGACY_SESSION_KEYS) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch {
+      // Cookie identity still works when storage is unavailable.
     }
-    return parsed;
-  } catch {
-    window.localStorage.removeItem(USER_SESSION_KEY);
-    return null;
   }
-}
-
-function saveUserSession(session: UserSession) {
-  window.localStorage.setItem(USER_SESSION_KEY, JSON.stringify(session));
-}
-
-function clearUserSession() {
-  window.localStorage.removeItem(USER_SESSION_KEY);
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [notification, setNotification] = useState<AppNotification | null>(null);
-  const [adminUnlocked, setAdminUnlocked] = useState(() => Boolean(loadSavedAdminSession()));
-  const [adminToken, setAdminToken] = useState(() => loadSavedAdminSession()?.token ?? '');
-  const [userSession, setUserSession] = useState<UserSession | null>(() => loadUserSession());
+  const [authReady, setAuthReady] = useState(false);
+  const [userSession, setUserSession] = useState<UserSession | null>(() => {
+    clearLegacySessions();
+    return null;
+  });
+  const identityRevisionRef = useRef(0);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     if (!notification) return;
@@ -60,37 +51,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [notification]);
 
   useEffect(() => {
-    const saved = loadSavedAdminSession();
-    if (!saved?.token) return;
+    let cancelled = false;
+    mountedRef.current = true;
+    const restoreRevision = identityRevisionRef.current;
+    const handleAuthExpired = () => {
+      identityRevisionRef.current += 1;
+      if (!cancelled) setUserSession(null);
+    };
 
-    fetch('/api/admin/session', {
-      headers: { Authorization: `Bearer ${saved.token}` }
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('expired');
-        setAdminUnlocked(true);
-        setAdminToken(saved.token);
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    void restoreUserSessionRequest()
+      .then((session) => {
+        if (!cancelled && identityRevisionRef.current === restoreRevision) {
+          setUserSession(session);
+        }
       })
       .catch(() => {
-        clearAdminSession();
-        setAdminUnlocked(false);
-        setAdminToken('');
-      });
-  }, []);
-
-  useEffect(() => {
-    const saved = loadUserSession();
-    if (!saved?.token) return;
-    void getCurrentUser(saved.token)
-      .then((user) => {
-        const session = { ...saved, user };
-        saveUserSession(session);
-        setUserSession(session);
+        if (!cancelled && identityRevisionRef.current === restoreRevision) {
+          setUserSession(null);
+        }
       })
-      .catch(() => {
-        clearUserSession();
-        setUserSession(null);
+      .finally(() => {
+        if (!cancelled) setAuthReady(true);
       });
+
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    };
   }, []);
 
   useEffect(() => {
@@ -111,46 +100,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const clearNotification = useCallback(() => setNotification(null), []);
 
-  const loginAdmin = (token: string, expiresAt?: string) => {
-    setAdminUnlocked(true);
-    setAdminToken(token);
-    saveAdminSession({ token, expiresAt });
-  };
-
-  const logoutAdmin = () => {
-    clearAdminSession();
-    setAdminUnlocked(false);
-    setAdminToken('');
-  };
-
-  const loginUser = (session: UserSession) => {
-    saveUserSession(session);
+  const loginUser = useCallback((session: UserSession) => {
+    identityRevisionRef.current += 1;
     setUserSession(session);
-  };
+  }, []);
 
-  const logoutUser = () => {
-    clearUserSession();
-    setUserSession(null);
-  };
+  const logoutUser = useCallback(async () => {
+    identityRevisionRef.current += 1;
+    try {
+      await logoutUserRequest();
+    } finally {
+      if (mountedRef.current) setUserSession(null);
+    }
+  }, []);
 
-  return (
-    <AppContext.Provider
-      value={{
-        notification,
-        notify,
-        clearNotification,
-        adminUnlocked,
-        adminToken,
-        loginAdmin,
-        logoutAdmin,
-        userSession,
-        loginUser,
-        logoutUser
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+  const value = useMemo<AppContextType>(
+    () => ({
+      notification,
+      notify,
+      clearNotification,
+      authReady,
+      userSession,
+      isAdmin: userSession?.user.permission === 'admin',
+      loginUser,
+      logoutUser
+    }),
+    [authReady, clearNotification, loginUser, logoutUser, notification, notify, userSession]
   );
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {

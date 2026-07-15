@@ -116,7 +116,6 @@ export interface BlogUser {
 }
 
 export interface UserSession {
-  token: string;
   expiresAt: string;
   user: BlogUser;
 }

@@ -15,7 +15,6 @@ import { useDraftAutosave } from '../features/editor/hooks/useDraftAutosave';
 import { useMarkdownEditor } from '../features/editor/hooks/useMarkdownEditor';
 import { useApp } from '../context/AppContext';
 import { useBlogData } from '../context/BlogDataContext';
-import { useAdminAccess } from '../hooks/useAdminAccess';
 import { ArticleAutosaveDraft, BlogCategoryId, BlogPost, BlogUser, PostStatus } from '../lib/blog';
 import {
   clearArticleAutosaveDraft,
@@ -56,8 +55,6 @@ export function AdminPage() {
   const [searchParams] = useSearchParams();
   const { notify, adminToken } = useApp();
   const { posts, loadPosts } = useBlogData();
-  const { password, setPassword, unlockAdmin } = useAdminAccess('已进入后台', '无法连接后台登录接口');
-
   const [adminUnlocked, setAdminUnlocked] = useState(Boolean(adminToken));
   const [localAdminToken, setLocalAdminToken] = useState(adminToken);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -122,15 +119,6 @@ export function AdminPage() {
     },
     onSaved: setServerDraft
   });
-
-  const handleUnlockAdmin = async (event: FormEvent<HTMLFormElement>) => {
-    const session = await unlockAdmin(event);
-    if (!session?.token) return;
-    setAdminUnlocked(true);
-    setLocalAdminToken(session.token);
-    await loadPosts(true, session.token);
-    await loadAdminUsers(session.token);
-  };
 
   const loadAdminUsers = async (token = localAdminToken) => {
     if (!token) return;
@@ -329,26 +317,6 @@ export function AdminPage() {
   const updateAdminUser = (userId: string, patch: Partial<Pick<BlogUser, 'nickname' | 'permission'>>) => {
     setAdminUsers((current) => current.map((item) => (item.id === userId ? { ...item, ...patch } : item)));
   };
-
-  if (!adminUnlocked) {
-    return (
-      <section className="admin-layout">
-        <form className="unlock-panel" onSubmit={handleUnlockAdmin}>
-          <p className="eyebrow">Admin</p>
-          <h1>后台发布中心</h1>
-          <p>输入后台口令后，可以新增、编辑、删除文章，并管理草稿和用户。</p>
-          <input
-            aria-label="后台口令"
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="输入后台口令"
-            type="password"
-            value={password}
-          />
-          <button type="submit">进入后台</button>
-        </form>
-      </section>
-    );
-  }
 
   return (
     <section className="admin-layout">

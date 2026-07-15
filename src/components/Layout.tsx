@@ -6,9 +6,9 @@ import { ToolMenu } from './ToolMenu';
 
 export function Layout() {
   const location = useLocation();
-  const { notification, clearNotification, adminUnlocked, userSession } = useApp();
+  const { notification, clearNotification, isAdmin } = useApp();
   const trailRef = useRef(0);
-  const toolsUnlocked = Boolean(adminUnlocked || userSession);
+  const toolsUnlocked = isAdmin;
   const isNavActive = (path: string) =>
     path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
 
