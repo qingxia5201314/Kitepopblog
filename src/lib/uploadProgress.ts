@@ -1,3 +1,5 @@
+import { broadcastAuthExpiry } from './apiClient';
+
 export interface UploadProgress {
   loaded: number;
   total: number;
@@ -48,6 +50,7 @@ export function uploadFormDataWithProgress<T>({
     };
 
     xhr.onload = () => {
+      if (xhr.status === 401) broadcastAuthExpiry();
       try {
         resolve(parseUploadResponse<T>(xhr));
       } catch (error) {

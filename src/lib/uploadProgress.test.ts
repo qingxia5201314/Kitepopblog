@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AUTH_EXPIRED_EVENT } from './apiClient';
 import { uploadFormDataWithProgress } from './uploadProgress';
 
 class FakeUploadTarget {
@@ -96,5 +97,55 @@ describe('upload progress helper', () => {
     xhr.onload?.();
 
     await expect(resultPromise).rejects.toThrow('文件太大');
+  });
+
+  it.each([
+    ['an empty response', ''],
+    ['an HTML response', '<html>Session expired</html>'],
+    ['invalid JSON', '{not-json']
+  ])('broadcasts auth expiry exactly once for a 401 with %s', async (_label, responseText) => {
+    vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+    const listener = vi.fn();
+    window.addEventListener(AUTH_EXPIRED_EVENT, listener);
+    const resultPromise = uploadFormDataWithProgress({
+      formData: new FormData(),
+      url: '/api/files'
+    });
+    const xhr = FakeXMLHttpRequest.latest!;
+
+    try {
+      xhr.status = 401;
+      xhr.responseText = responseText;
+      xhr.onload?.();
+
+      await expect(resultPromise).rejects.toBeInstanceOf(Error);
+      expect(listener).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, listener);
+    }
+  });
+
+  it('rejects with a stable message after an XHR network error', async () => {
+    vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+    const resultPromise = uploadFormDataWithProgress({
+      formData: new FormData(),
+      url: '/api/files'
+    });
+
+    FakeXMLHttpRequest.latest!.onerror?.();
+
+    await expect(resultPromise).rejects.toThrow('上传失败，请检查网络连接');
+  });
+
+  it('rejects with a stable message after an XHR abort', async () => {
+    vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+    const resultPromise = uploadFormDataWithProgress({
+      formData: new FormData(),
+      url: '/api/files'
+    });
+
+    FakeXMLHttpRequest.latest!.onabort?.();
+
+    await expect(resultPromise).rejects.toThrow('上传已取消');
   });
 });

@@ -8,7 +8,7 @@ import {
   PostStatus,
   UserSession
 } from './blog';
-import { apiFetch, getCurrentUserRequest, loginUserRequest } from './apiClient';
+import { apiFetch, getCurrentUserRequest, loginUserRequest, registerUserRequest } from './apiClient';
 
 export { logoutUserRequest } from './apiClient';
 
@@ -162,13 +162,7 @@ export async function registerUser(draft: {
   password: string;
   nickname: string;
 }): Promise<UserSession> {
-  return parseResponse<UserSession>(
-    await apiFetch('/api/users/register', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(draft)
-    })
-  );
+  return registerUserRequest(draft);
 }
 
 export async function loginUser(username: string, password: string): Promise<UserSession> {

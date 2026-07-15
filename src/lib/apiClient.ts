@@ -2,14 +2,18 @@ import type { BlogUser, UserSession } from './blog';
 
 export const AUTH_EXPIRED_EVENT = 'kitepop:auth-expired';
 
+export function broadcastAuthExpiry(): void {
+  window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+}
+
 async function sameOriginRequest(
   input: RequestInfo | URL,
   init: RequestInit = {},
-  broadcastAuthExpiry = true
+  shouldBroadcastAuthExpiry = true
 ): Promise<Response> {
   const response = await fetch(input, { ...init, credentials: 'same-origin' });
-  if (broadcastAuthExpiry && response.status === 401) {
-    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  if (shouldBroadcastAuthExpiry && response.status === 401) {
+    broadcastAuthExpiry();
   }
   return response;
 }
@@ -48,6 +52,20 @@ export async function loginUserRequest(username: string, password: string): Prom
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ username, password })
+    })
+  );
+}
+
+export async function registerUserRequest(draft: {
+  username: string;
+  password: string;
+  nickname: string;
+}): Promise<UserSession> {
+  return parseSessionResponse(
+    await apiFetch('/api/users/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(draft)
     })
   );
 }

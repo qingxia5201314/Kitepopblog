@@ -144,10 +144,17 @@ describe('blog api client', () => {
   });
 
   it('registers, logs in, restores, and logs out users with same-origin cookies', async () => {
-    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json(session)));
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(Response.json({
+      ...session,
+      ok: true,
+      token: 'legacy-secret',
+      traceId: 'must-not-escape'
+    })));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(registerUser({ username: 'kite', password: 'secret123', nickname: 'Kite' })).resolves.toEqual(session);
+    const registered = await registerUser({ username: 'kite', password: 'secret123', nickname: 'Kite' });
+    expect(registered).toEqual(session);
+    expect(registered).not.toHaveProperty('token');
     await expect(loginUser('kite', 'secret123')).resolves.toEqual(session);
     await expect(getCurrentUser()).resolves.toEqual(session);
     await logoutUserRequest();
@@ -170,6 +177,17 @@ describe('blog api client', () => {
       credentials: 'same-origin'
     });
     expectNoBearerCalls(fetchMock);
+  });
+
+  it('rejects malformed registration session responses with a safe generic error', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(Response.json({ ...session, expiresAt: 123 }))
+      .mockResolvedValueOnce(Response.json({ ...session, user: { ...user, id: 123 } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const draft = { username: 'kite', password: 'secret123', nickname: 'Kite' };
+
+    await expect(registerUser(draft)).rejects.toThrow('Authentication response was invalid');
+    await expect(registerUser(draft)).rejects.toThrow('Authentication response was invalid');
   });
 
   it('rejects invalid current-user responses instead of returning a nullable restore result', async () => {
