@@ -18,3 +18,4 @@ vite.config.d.ts
 .superpowers/
 .codex/
 .playwright-mcp/
+.worktrees/
