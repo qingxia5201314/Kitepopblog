@@ -14,6 +14,7 @@ const reader = { id: 'reader-1', username: 'reader', nickname: 'Reader', permiss
 const admin = { id: 'admin-1', username: 'admin', nickname: 'Admin', permission: 'admin' };
 
 let verifySession;
+let privateHandler;
 let app;
 
 function sessionFor(token) {
@@ -22,23 +23,30 @@ function sessionFor(token) {
   return null;
 }
 
-beforeEach(() => {
-  verifySession = vi.fn(sessionFor);
-  app = new Hono();
-  app.use('*', async (c, next) => {
-    c.set('authConfig', { secureCookies: false });
+function createAuthApp(authConfig) {
+  const authApp = new Hono();
+  authApp.onError((error, c) => c.text(error.message, 500));
+  authApp.use('*', async (c, next) => {
+    if (authConfig !== undefined) c.set('authConfig', authConfig);
     c.set('userStore', { verifySession });
     await next();
   });
-  app.use('*', hydrateAuth);
-  app.get('/context', (c) =>
+  authApp.use('*', hydrateAuth);
+  authApp.get('/context', (c) =>
     c.json({
       authToken: c.get('authToken'),
       authSession: c.get('authSession'),
       user: currentUser(c)
     })
   );
-  app.get('/private', requireUser, (c) => c.json({ ok: true, user: currentUser(c) }));
+  authApp.get('/private', requireUser, privateHandler);
+  return authApp;
+}
+
+beforeEach(() => {
+  verifySession = vi.fn(sessionFor);
+  privateHandler = vi.fn((c) => c.json({ ok: true, user: currentUser(c) }));
+  app = createAuthApp({ secureCookies: false });
 });
 
 describe('hydrateAuth', () => {
@@ -85,6 +93,52 @@ describe('hydrateAuth', () => {
 
     expect(response.status).toBe(200);
     expect(verifySession).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['missing authConfig', undefined],
+    ['empty authConfig', {}],
+    ['non-boolean secureCookies', { secureCookies: 'false' }]
+  ])('rejects %s before session verification or protected handlers', async (_configLabel, authConfig) => {
+    const response = await createAuthApp(authConfig).request('/private', {
+      headers: { Cookie: 'kitepop_dev_session=reader-token' }
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('authConfig.secureCookies must be boolean');
+    expect(verifySession).not.toHaveBeenCalled();
+    expect(privateHandler).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['throws synchronously', () => {
+      throw new Error('sync verifier failure');
+    }],
+    ['rejects asynchronously', () => Promise.reject(new Error('async verifier failure'))]
+  ])('returns 500 and skips protected handlers when verifySession %s', async (_label, failure) => {
+    verifySession.mockImplementation(failure);
+
+    const response = await app.request('/private', {
+      headers: { Cookie: 'kitepop_dev_session=reader-token' }
+    });
+
+    expect(response.status).toBe(500);
+    expect(privateHandler).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['bad-token; kitepop_dev_session=reader-token', 401, 'bad-token'],
+    ['reader-token; kitepop_dev_session=bad-token', 200, 'reader-token']
+  ])('uses the first duplicate session cookie value from %s', async (cookieValues, status, expectedToken) => {
+    const response = await app.request('/private', {
+      headers: { Cookie: `kitepop_dev_session=${cookieValues}` }
+    });
+
+    expect(response.status).toBe(status);
+    expect(verifySession).toHaveBeenCalledOnce();
+    expect(verifySession).toHaveBeenCalledWith(expectedToken);
+    if (status === 401) expect(privateHandler).not.toHaveBeenCalled();
+    else expect(privateHandler).toHaveBeenCalledOnce();
   });
 });
 

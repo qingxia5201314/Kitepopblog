@@ -8,10 +8,11 @@ import {
   writeSessionCookie
 } from './sessionCookie.mjs';
 
-function createCookieApp(secureCookies) {
+function createCookieApp(authConfig) {
   const app = new Hono();
+  app.onError((error, c) => c.text(error.message, 500));
   app.use('*', async (c, next) => {
-    c.set('authConfig', { secureCookies });
+    if (authConfig !== undefined) c.set('authConfig', authConfig);
     await next();
   });
   app.get('/read', (c) => c.json({ token: readSessionCookie(c) }));
@@ -37,7 +38,7 @@ describe('session cookies', () => {
     [true, '__Host-kitepop_session', true],
     [false, 'kitepop_dev_session', false]
   ])('writes the secure=%s cookie with the required attributes', async (secureCookies, name, expectsSecure) => {
-    const response = await createCookieApp(secureCookies).request('/write', { method: 'POST' });
+    const response = await createCookieApp({ secureCookies }).request('/write', { method: 'POST' });
     const header = response.headers.get('set-cookie');
 
     expect(header).toContain(`${name}=token%2B%2F%3D%3B%3F%20%25`);
@@ -55,7 +56,7 @@ describe('session cookies', () => {
     [false, 'kitepop_dev_session']
   ])('reads only the cookie selected by secure=%s', async (secureCookies, expectedName) => {
     const otherName = sessionCookieName(!secureCookies);
-    const response = await createCookieApp(secureCookies).request('/read', {
+    const response = await createCookieApp({ secureCookies }).request('/read', {
       headers: { Cookie: `${otherName}=wrong; ${expectedName}=right%2Bvalue` }
     });
 
@@ -63,7 +64,7 @@ describe('session cookies', () => {
   });
 
   it('returns an empty token for missing and malformed cookies without throwing', async () => {
-    const app = createCookieApp(true);
+    const app = createCookieApp({ secureCookies: true });
     const missing = await app.request('/read');
     const malformed = await app.request('/read', {
       headers: { Cookie: 'broken; =bad; __Host-kitepop_session="unterminated\u0001"; other=%E0%A4%A' }
@@ -79,7 +80,7 @@ describe('session cookies', () => {
     [true, '__Host-kitepop_session', true],
     [false, 'kitepop_dev_session', false]
   ])('clears the secure=%s cookie with matching scope', async (secureCookies, name, expectsSecure) => {
-    const response = await createCookieApp(secureCookies).request('/clear', { method: 'POST' });
+    const response = await createCookieApp({ secureCookies }).request('/clear', { method: 'POST' });
     const header = response.headers.get('set-cookie');
 
     expect(header).toContain(`${name}=`);
@@ -90,5 +91,22 @@ describe('session cookies', () => {
     expect(header).not.toMatch(/(?:^|;)\s*Domain=/i);
     if (expectsSecure) expect(header).toContain('Secure');
     else expect(header).not.toMatch(/(?:^|;)\s*Secure(?:;|$)/i);
+  });
+
+  it.each([
+    ['read', 'missing authConfig', 'GET', undefined],
+    ['read', 'empty authConfig', 'GET', {}],
+    ['read', 'non-boolean secureCookies', 'GET', { secureCookies: 'false' }],
+    ['write', 'missing authConfig', 'POST', undefined],
+    ['write', 'empty authConfig', 'POST', {}],
+    ['write', 'non-boolean secureCookies', 'POST', { secureCookies: 'false' }],
+    ['clear', 'missing authConfig', 'POST', undefined],
+    ['clear', 'empty authConfig', 'POST', {}],
+    ['clear', 'non-boolean secureCookies', 'POST', { secureCookies: 'false' }]
+  ])('%s rejects %s', async (route, _configLabel, method, authConfig) => {
+    const response = await createCookieApp(authConfig).request(`/${route}`, { method });
+
+    expect(response.status).toBe(500);
+    expect(await response.text()).toBe('authConfig.secureCookies must be boolean');
   });
 });
