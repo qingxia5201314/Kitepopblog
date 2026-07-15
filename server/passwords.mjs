@@ -10,7 +10,7 @@ const SCRYPT_MAXMEM = 64 * 1024 * 1024;
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
 const SCRYPT_V1_PATTERN = /^scrypt\$v1\$32768\$8\$1\$([0-9a-f]{32})\$([0-9a-f]{128})$/;
-const LEGACY_PATTERN = /^([^:]+):([0-9a-f]{64})$/;
+const LEGACY_PATTERN = /^([0-9a-f]{32}):([0-9a-f]{64})$/;
 const INVALID_RESULT = Object.freeze({ valid: false, needsRehash: false });
 
 function equalHex(leftHex, rightHex) {

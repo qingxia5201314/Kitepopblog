@@ -23,7 +23,7 @@ describe('versioned password hashing', () => {
   });
 
   it('verifies legacy sha256 hashes and requests a rehash only on success', async () => {
-    const salt = 'legacy-salt';
+    const salt = '0123456789abcdef0123456789abcdef';
     const digest = createHash('sha256').update(`${salt}:secret123`).digest('hex');
     const stored = `${salt}:${digest}`;
 
@@ -32,6 +32,20 @@ describe('versioned password hashing', () => {
       needsRehash: true,
     });
     await expect(verifyPassword('wrong-password', stored)).resolves.toEqual({
+      valid: false,
+      needsRehash: false,
+    });
+  });
+
+  it.each([
+    ['non-hex', 'g'.repeat(32)],
+    ['too short', 'a'.repeat(31)],
+    ['too long', 'a'.repeat(33)],
+    ['containing an extra colon', `${'a'.repeat(16)}:${'b'.repeat(16)}`],
+  ])('rejects legacy hashes with %s salts', async (_description, salt) => {
+    const digest = createHash('sha256').update(`${salt}:secret123`).digest('hex');
+
+    await expect(verifyPassword('secret123', `${salt}:${digest}`)).resolves.toEqual({
       valid: false,
       needsRehash: false,
     });
