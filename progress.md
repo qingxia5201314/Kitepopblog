@@ -1009,3 +1009,27 @@
 
 - Local implementation, documentation, automated gates, and smoke verification are complete.
 - VPS deployment and production database migration were not executed in this task. Use the paired backup/deploy/rollback runbook before any production start.
+
+## 2026-07-16 - Task: Align production authentication with kitepop.top
+
+### What was done
+
+- Confirmed that requests from `https://kitepop.top` were rejected with `403` before credential verification because the live service still accepted `Origin: http://104.244.91.222`.
+- Confirmed through a credential-redacted control flow that the existing account remained valid, had administrator permission, could access `/api/users/me` and `/api/admin/about`, and was immediately logged out after the diagnostic.
+- Changed the checked-in canonical production origin to `https://kitepop.top` without weakening the exact-Origin CSRF boundary or secure `__Host-` Cookie contract.
+- Updated Nginx so HTTP apex/`www` redirect to HTTPS apex, HTTPS `www.kitepop.top` redirects to `https://kitepop.top`, and only the HTTPS apex block proxies to the Node service.
+- Updated the Let's Encrypt paths, service environment example, deployment runbook, user-auth documentation, SEO rollout notes, and backend refactoring summary.
+- Did not store the supplied password, a raw Cookie, or a session token in repository files or command output.
+
+### Verification
+
+- TDD RED: the production-environment tests failed while `.env.example`, Nginx, and active documentation still named the previous origin.
+- TDD GREEN: `server/apiFallback.test.mjs` passed all 11 tests after the canonical-origin updates.
+- `npm test -- --run`: passed, 87 test files and 656 tests.
+- `npm run build`: passed; TypeScript and the Vite production build completed.
+- Deployment-runbook syntax: all 7 Bash blocks and both inline Node ESM heredocs passed syntax validation.
+
+### Deployment status
+
+- Repository configuration is ready for `kitepop.top`.
+- The VPS service environment and installed Nginx site still require the documented online update and restart; a Git commit alone does not change the running server.

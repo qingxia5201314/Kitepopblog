@@ -12,11 +12,11 @@
 
 ## Deployment steps
 
-1. Point the intended blog hostname at the VPS before requesting a certificate. As of 2026-07-11, `dreamhunter2333.com` resolves to GitHub Pages rather than `104.244.91.222`.
-2. Set `SITE_URL` to the final public origin in the backend service environment.
+1. Keep `kitepop.top` and `www.kitepop.top` pointed at the VPS serving the application.
+2. Set `SITE_URL=https://kitepop.top` in the backend service environment.
 3. Obtain a Let's Encrypt certificate before enabling the TLS server block:
 
-   `certbot certonly --webroot -w /var/www/certbot -d dreamhunter2333.com -d www.dreamhunter2333.com`
+   `certbot certonly --webroot -w /var/www/certbot -d kitepop.top -d www.kitepop.top`
 
 4. Install `deploy/nginx-kitepop.conf` as the site configuration and run `nginx -t`.
 5. Reload Nginx and verify HTTP redirects to HTTPS.

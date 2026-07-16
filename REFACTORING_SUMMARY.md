@@ -173,7 +173,7 @@ The VPS deployment has not been executed as part of the local authentication imp
 - `PORT` - Server port (default: 3000)
 - `HOST` - Server host (default: 127.0.0.1)
 - `NODE_ENV=production` - Required for the production Cookie and startup preconditions
-- `SITE_URL=https://dreamhunter2333.com` - Required exact production origin
+- `SITE_URL=https://kitepop.top` - Required exact production origin
 - `TRUST_PROXY=1` - Trust the checked-in local Nginx proxy for forwarded client information
 - `POST_DB_PATH` - SQLite database path (default: ./data/blog.sqlite)
 - `UPLOAD_DIR` - File upload directory (default: ./data/uploads)

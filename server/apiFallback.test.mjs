@@ -117,6 +117,8 @@ describe('server auth wiring', () => {
 describe('production environment wiring', () => {
   it('documents the production auth and loopback server settings', async () => {
     const source = await readFile('.env.example', 'utf8');
+    const userAuth = await readFile('docs/user-auth.md', 'utf8');
+    const refactoringSummary = await readFile('REFACTORING_SUMMARY.md', 'utf8');
     const lines = source.split(/\r?\n/);
 
     expect(lines).toContain('NODE_ENV=production');
@@ -126,6 +128,11 @@ describe('production environment wiring', () => {
     expect(lines.filter((line) => line.startsWith('HOST='))).toHaveLength(1);
     expect(source).not.toContain('ADMIN_PASSWORD');
     expect(source).not.toContain('dreamhunter2333.com');
+    expect(userAuth).toContain('SITE_URL=https://kitepop.top');
+    expect(userAuth).toContain('`www.kitepop.top`');
+    expect(refactoringSummary).toContain('`SITE_URL=https://kitepop.top`');
+    expect(userAuth).not.toContain('dreamhunter2333.com');
+    expect(refactoringSummary).not.toContain('dreamhunter2333.com');
   });
 
   it('pins proxy identity headers and the backend to loopback', async () => {

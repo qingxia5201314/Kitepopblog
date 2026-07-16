@@ -29,11 +29,11 @@ Production must run behind the checked-in `deploy/nginx-kitepop.conf` with:
 
 ```dotenv
 NODE_ENV=production
-SITE_URL=https://dreamhunter2333.com
+SITE_URL=https://kitepop.top
 TRUST_PROXY=1
 ```
 
-The proxy redirects HTTPS `www.dreamhunter2333.com` requests to the canonical `https://dreamhunter2333.com` origin before serving the application, so browser `Origin` values remain consistent with `SITE_URL`.
+The proxy redirects HTTPS `www.kitepop.top` requests to the canonical `https://kitepop.top` origin before serving the application, so browser `Origin` values remain consistent with `SITE_URL`.
 
 Production login and registration responses set:
 

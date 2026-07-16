@@ -186,11 +186,11 @@ Run:
 ```powershell
 npm test -- --run
 npm run build
-rg -n "dreamhunter2333\.com|SITE_URL=http://104\.244\.91\.222" .env.example deploy docs/user-auth.md docs/admin-auth-deployment.md docs/seo-performance-notes.md REFACTORING_SUMMARY.md server/apiFallback.test.mjs
+rg -n "dreamhunter2333\.com|SITE_URL=http://104\.244\.91\.222" .env.example deploy docs/user-auth.md docs/admin-auth-deployment.md docs/seo-performance-notes.md REFACTORING_SUMMARY.md
 git diff --check
 ```
 
-Expected: all tests and the build pass; the stale production origins have no matches in active deployment files; `git diff --check` is silent.
+Expected: all tests and the build pass; the stale production origins have no matches in active deployment files; negative assertions in `server/apiFallback.test.mjs` intentionally retain the old hostname string; `git diff --check` is silent.
 
 - [ ] **Step 7: Commit the documentation and verified state**
 
