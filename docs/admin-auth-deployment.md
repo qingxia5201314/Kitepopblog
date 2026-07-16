@@ -167,12 +167,12 @@ sudo sed -i -E \
   "$SERVICE_ENV_FILE"
 printf '%s\n' \
   'NODE_ENV=production' \
-  'SITE_URL=https://dreamhunter2333.com' \
+  'SITE_URL=https://kitepop.top' \
   'TRUST_PROXY=1' \
   | sudo tee -a "$SERVICE_ENV_FILE" >/dev/null
 
 sudo grep -Fx 'NODE_ENV=production' "$SERVICE_ENV_FILE" >/dev/null
-sudo grep -Fx 'SITE_URL=https://dreamhunter2333.com' "$SERVICE_ENV_FILE" >/dev/null
+sudo grep -Fx 'SITE_URL=https://kitepop.top' "$SERVICE_ENV_FILE" >/dev/null
 sudo grep -Fx 'TRUST_PROXY=1' "$SERVICE_ENV_FILE" >/dev/null
 if sudo grep -Eq '^[[:space:]]*ADMIN_PASSWORD[[:space:]]*=' "$SERVICE_ENV_FILE"; then
   echo 'ADMIN_PASSWORD is still configured' >&2
@@ -185,8 +185,8 @@ sudo nginx -t
 sudo systemctl reload nginx
 WWW_PROBE_PATH='/api/users/me?canonical-probe=1'
 WWW_REDIRECT="$(curl --silent --show-error --output /dev/null --write-out '%{http_code} %{redirect_url}' \
-  "https://www.dreamhunter2333.com$WWW_PROBE_PATH")"
-test "$WWW_REDIRECT" = "301 https://dreamhunter2333.com$WWW_PROBE_PATH"
+  "https://www.kitepop.top$WWW_PROBE_PATH")"
+test "$WWW_REDIRECT" = "301 https://kitepop.top$WWW_PROBE_PATH"
 sudo systemctl daemon-reload
 LOG_SINCE="$(date --iso-8601=seconds)"
 sudo systemctl restart "$SERVICE"
@@ -212,7 +212,7 @@ trap 'unset READER_USERNAME READER_PASSWORD ADMIN_USERNAME ADMIN_PASSWORD_INPUT'
 node --input-type=module <<'NODE'
 import assert from 'node:assert/strict';
 
-const origin = 'https://dreamhunter2333.com';
+const origin = 'https://kitepop.top';
 const crossOrigin = 'https://cross-site.invalid';
 
 function containsTokenKey(value) {

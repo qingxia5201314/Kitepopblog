@@ -120,11 +120,12 @@ describe('production environment wiring', () => {
     const lines = source.split(/\r?\n/);
 
     expect(lines).toContain('NODE_ENV=production');
-    expect(lines).toContain('SITE_URL=https://dreamhunter2333.com');
+    expect(lines).toContain('SITE_URL=https://kitepop.top');
     expect(lines).toContain('TRUST_PROXY=1');
     expect(lines).toContain('HOST=127.0.0.1');
     expect(lines.filter((line) => line.startsWith('HOST='))).toHaveLength(1);
     expect(source).not.toContain('ADMIN_PASSWORD');
+    expect(source).not.toContain('dreamhunter2333.com');
   });
 
   it('pins proxy identity headers and the backend to loopback', async () => {
@@ -144,15 +145,17 @@ describe('production environment wiring', () => {
       .filter((block) => block.includes('listen 443 ssl http2;'));
 
     expect(httpsBlocks).toHaveLength(2);
-    const wwwBlock = httpsBlocks.find((block) => block.includes('server_name www.dreamhunter2333.com;'));
-    const apexBlock = httpsBlocks.find((block) => block.includes('server_name dreamhunter2333.com;'));
+    const wwwBlock = httpsBlocks.find((block) => block.includes('server_name www.kitepop.top;'));
+    const apexBlock = httpsBlocks.find((block) => block.includes('server_name kitepop.top;'));
 
-    expect(wwwBlock).toContain('return 301 https://dreamhunter2333.com$request_uri;');
+    expect(wwwBlock).toContain('return 301 https://kitepop.top$request_uri;');
     expect(wwwBlock).not.toContain('proxy_pass');
     expect(apexBlock).toContain('proxy_pass http://127.0.0.1:3000;');
     expect(runbook).toContain(
-      'test "$WWW_REDIRECT" = "301 https://dreamhunter2333.com$WWW_PROBE_PATH"',
+      'test "$WWW_REDIRECT" = "301 https://kitepop.top$WWW_PROBE_PATH"',
     );
+    expect(source).not.toContain('dreamhunter2333.com');
+    expect(runbook).not.toContain('dreamhunter2333.com');
   });
 
   it('checks inline authentication environment conflicts before stopping production', async () => {
