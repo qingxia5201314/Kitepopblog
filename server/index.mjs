@@ -36,6 +36,7 @@ import { apiNotFound } from './middleware/apiNotFound.mjs';
 import { hydrateAuth } from './middleware/auth.mjs';
 import { createOriginGuard } from './middleware/origin.mjs';
 import { closeServerResources, createServerTerminationController } from './serverLifecycle.mjs';
+import { registerFrontendRoutes } from './frontendRoutes.mjs';
 
 const supportedNodeEnvironments = new Set(['development', 'test', 'production']);
 const nodeEnvironment = process.env.NODE_ENV;
@@ -231,7 +232,8 @@ app.get('/', async (c) => {
     })
   );
 });
-app.get('*', serveStatic({ root: './dist', rewriteRequestPath: () => '/index.html' }));
+const serveSpaShell = serveStatic({ root: './dist', rewriteRequestPath: () => '/index.html' });
+registerFrontendRoutes(app, serveSpaShell);
 
 server = serve({ fetch: app.fetch, port, hostname: host });
 await new Promise((resolveListening, rejectListening) => {

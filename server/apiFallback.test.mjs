@@ -144,6 +144,13 @@ describe('production environment wiring', () => {
     expect(source).toContain('proxy_set_header X-Forwarded-Host $host;');
   });
 
+  it('registers only known SPA routes instead of a catch-all index fallback', async () => {
+    const source = await readFile('server/index.mjs', 'utf8');
+
+    expect(source).toContain('registerFrontendRoutes(app, serveSpaShell);');
+    expect(source).not.toContain("app.get('*', serveStatic");
+  });
+
   it('redirects the HTTPS www host to the canonical origin before proxying writes', async () => {
     const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
     const runbook = await readFile('docs/admin-auth-deployment.md', 'utf8');
