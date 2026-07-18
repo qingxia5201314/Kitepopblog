@@ -151,16 +151,48 @@ describe('production environment wiring', () => {
     expect(source).not.toContain("app.get('*', serveStatic");
   });
 
+  it('returns 404 from the default HTTP and HTTPS hosts', async () => {
+    const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
+    const blocks = source.split(/(?=^server \{)/m);
+    const defaults = [
+      blocks.find((block) => block.includes('listen 80 default_server;')),
+      blocks.find((block) => block.includes('listen 443 ssl http2 default_server;')),
+    ];
+
+    expect(defaults[0]).toBeDefined();
+    expect(defaults[1]).toBeDefined();
+    for (const block of defaults) {
+      expect(block).toContain('server_name _;');
+      expect(block).toContain('return 404;');
+      expect(block).not.toContain('proxy_pass');
+      expect(block).not.toContain('return 301');
+    }
+  });
+
+  it('logs host and request timing for site traffic', async () => {
+    const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
+    const format = source.match(/log_format kitepop_timing([\s\S]*?);/)?.[0];
+
+    expect(format).toBeDefined();
+    expect(format).toContain('$host');
+    expect(format).toContain('$request_time');
+    expect(format).toContain('$upstream_response_time');
+    expect(
+      source.match(/access_log \/var\/log\/nginx\/kitepop\.access\.log kitepop_timing;/g),
+    ).toHaveLength(5);
+  });
+
   it('redirects the HTTPS www host to the canonical origin before proxying writes', async () => {
     const source = await readFile('deploy/nginx-kitepop.conf', 'utf8');
     const runbook = await readFile('docs/admin-auth-deployment.md', 'utf8');
     const httpsBlocks = source
       .split(/(?=^server \{)/m)
       .filter((block) => block.includes('listen 443 ssl http2;'));
+    const namedHttpsBlocks = httpsBlocks.filter((block) => !block.includes('default_server'));
 
-    expect(httpsBlocks).toHaveLength(2);
-    const wwwBlock = httpsBlocks.find((block) => block.includes('server_name www.kitepop.top;'));
-    const apexBlock = httpsBlocks.find((block) => block.includes('server_name kitepop.top;'));
+    expect(namedHttpsBlocks).toHaveLength(2);
+    const wwwBlock = namedHttpsBlocks.find((block) => block.includes('server_name www.kitepop.top;'));
+    const apexBlock = namedHttpsBlocks.find((block) => block.includes('server_name kitepop.top;'));
 
     expect(wwwBlock).toContain('return 301 https://kitepop.top$request_uri;');
     expect(wwwBlock).not.toContain('proxy_pass');
