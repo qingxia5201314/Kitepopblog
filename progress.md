@@ -1033,3 +1033,24 @@
 
 - Repository configuration is ready for `kitepop.top`.
 - The VPS service environment and installed Nginx site still require the documented online update and restart; a Git commit alone does not change the running server.
+
+## 2026-08-01 - Task: Add permanent public media links
+
+### What was done
+
+- Added stable anonymous URLs for uploaded audio and video in the form `/api/files/raw/<file-id>.<original-extension>`.
+- Derived the lowercase extension from existing sanitized metadata, so previously uploaded media gains the new URL without a database migration or re-upload.
+- Kept non-media and extensionless media behind the existing signed-token access model.
+- Preserved previously issued signed media links for compatibility and retained byte-range streaming for browser seeking.
+- Rejected mismatched suffixes and files whose stored MIME type is not `audio/*` or `video/*`; deleting a file invalidates both permanent and signed links.
+- Updated file-link and preview-link responses, client types, copy feedback, delete confirmation, file-page description, generated-link label, and preview heading.
+
+### Verification
+
+- TDD RED: store tests observed tokenized media paths and a missing public-media lookup; route tests observed `404` for tokenless `.mp4` paths; page tests observed signed-link wording.
+- Focused store, route, header, API, and page tests passed after implementation.
+- `npm test -- --run`, `npm run build`, and `git diff --check` are the final delivery gates.
+
+### Rollback
+
+- Revert commits `7e30067`, `8d369e6`, and `cd49689` in that order. No database or uploaded-file migration needs rollback.
