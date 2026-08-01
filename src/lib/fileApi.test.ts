@@ -38,7 +38,7 @@ describe('file api client', () => {
       folders: [],
       files: [],
       file: uploadedFile,
-      link: { path: '/api/files/raw/file-1?token=temporary-link', token: 'temporary-link' },
+      link: { path: '/api/files/raw/file-1.mp4' },
       ok: true
     })));
     vi.stubGlobal('fetch', fetchMock);
@@ -47,8 +47,8 @@ describe('file api client', () => {
     await getFileFolderView('folder-root');
     await listUploadedFiles();
     await uploadFile(inputFile, 'folder-root');
-    await createFileLink('file-1');
-    await getFilePreviewLink('file-1');
+    const fileLink = await createFileLink('file-1');
+    const previewLink = await getFilePreviewLink('file-1');
     await deleteUploadedFile('file-1');
     await createFileFolder({ name: 'RFI', parentId: 'folder-root' });
     await renameFileFolder('folder-1', 'SRC');
@@ -92,6 +92,8 @@ describe('file api client', () => {
     });
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Authorization');
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('Bearer');
+    expect(fileLink).toEqual({ path: '/api/files/raw/file-1.mp4' });
+    expect(previewLink).toEqual({ path: '/api/files/raw/file-1.mp4' });
   });
 
   it('uses the cookie-authenticated progress uploader without auth headers', async () => {

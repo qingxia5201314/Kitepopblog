@@ -1172,7 +1172,7 @@ describe('App layout shells', () => {
     expect(pageFetchMock).toHaveBeenCalledWith('/api/files', { credentials: 'same-origin' });
   });
 
-  it('falls back when copying file links without navigator clipboard', async () => {
+  it('copies and labels permanent media links without navigator clipboard', async () => {
     window.history.pushState({}, '', '/files');
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -1188,7 +1188,7 @@ describe('App layout shells', () => {
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files/file-1/link')) {
-        return Response.json({ link: { path: '/api/files/raw/file-1?token=signed-token' } });
+        return Response.json({ link: { path: '/api/files/raw/file-1.mp4' } });
       }
       if (url.startsWith('/api/files')) {
         return Response.json({
@@ -1198,8 +1198,8 @@ describe('App layout shells', () => {
           files: [
             {
               id: 'file-1',
-              originalName: 'rfi.txt',
-              contentType: 'text/plain',
+              originalName: 'lesson.mp4',
+              contentType: 'video/mp4',
               sizeBytes: 7,
               uploadedAt: '2026-06-20T00:00:00.000Z',
               folderId: ''
@@ -1222,7 +1222,8 @@ describe('App layout shells', () => {
     copyButton!.click();
 
     expect(await waitFor(() => (execCommand.mock.calls.length ? host : null))).toBeTruthy();
-    expect(host.textContent).toContain('/api/files/raw/file-1?token=signed-token');
+    expect(host.textContent).toContain('/api/files/raw/file-1.mp4');
+    expect(host.textContent).toContain('最近生成的永久媒体链接');
   });
 
   it('shows upload progress tips for file uploads', async () => {
@@ -1627,7 +1628,7 @@ describe('App layout shells', () => {
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/files/file-1/preview-link')) {
-        return Response.json({ link: { path: '/api/files/raw/file-1?token=preview-token' } });
+        return Response.json({ link: { path: '/api/files/raw/file-1.mp4' } });
       }
       if (url.startsWith('/api/files')) {
         return Response.json({
@@ -1663,7 +1664,12 @@ describe('App layout shells', () => {
     expect(await waitFor(() => host.querySelector('.media-preview-page'))).toBeTruthy();
     expect(host.querySelector('.media-preview-shell')?.textContent).toContain('lesson.mp4');
     expect(host.querySelector('video.media-preview-player')).toBeTruthy();
-    expect(host.querySelector('video.media-preview-player')?.getAttribute('draggable')).toBe('false');
     expect(host.querySelector('.media-preview-overlay button')?.textContent).toContain('播放');
+    (host.querySelector('.media-preview-overlay button') as HTMLButtonElement).click();
+    expect(await waitFor(() => host.querySelector('video.media-preview-player')?.getAttribute('src') ? host : null)).toBeTruthy();
+    expect(host.querySelector('video.media-preview-player')?.getAttribute('src')).toBe(
+      `${window.location.origin}/api/files/raw/file-1.mp4`
+    );
+    expect(host.querySelector('video.media-preview-player')?.getAttribute('draggable')).toBe('false');
   });
 });

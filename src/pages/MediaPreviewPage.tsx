@@ -62,7 +62,7 @@ export function MediaPreviewPage() {
             返回文件仓库
           </button>
           <div>
-            <p className="eyebrow">Signed Media</p>
+            <p className="eyebrow">Public Media</p>
             <h1>{state.originalName}</h1>
             <p>{formatMediaKind(state.contentType)}</p>
           </div>

@@ -12,7 +12,7 @@ export interface UploadedFile {
 
 export interface FileLink {
   path: string;
-  token: string;
+  token?: string;
 }
 
 export interface FileFolder {

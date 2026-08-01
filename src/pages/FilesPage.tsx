@@ -18,6 +18,10 @@ import { UploadProgressTip } from '../components/UploadProgressTip';
 import { UploadProgress } from '../lib/uploadProgress';
 import { copyTextToClipboard } from '../lib/clipboard';
 
+function isMediaFile(file: UploadedFile) {
+  return file.contentType.startsWith('video/') || file.contentType.startsWith('audio/');
+}
+
 export function FilesPage() {
   const navigate = useNavigate();
   const { notify } = useApp();
@@ -35,6 +39,7 @@ export function FilesPage() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [uploadTipHidden, setUploadTipHidden] = useState(true);
   const [uploadingFileName, setUploadingFileName] = useState('');
+  const [generatedLinkIsMedia, setGeneratedLinkIsMedia] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleFileUploadWrapper = async (file?: File) => {
@@ -63,15 +68,16 @@ export function FilesPage() {
       const link = await createFileLink(file.id);
       const absoluteLink = new URL(link.path, window.location.origin).toString();
       setGeneratedFileLink(absoluteLink);
+      setGeneratedLinkIsMedia(isMediaFile(file));
       await copyTextToClipboard(absoluteLink);
-      notify('success', '签名链接已复制');
+      notify('success', isMediaFile(file) ? '永久媒体链接已复制' : '签名链接已复制');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '生成链接失败');
     }
   };
 
   const handlePreviewFile = async (file: UploadedFile) => {
-    if (!file.contentType.startsWith('video/') && !file.contentType.startsWith('audio/')) {
+    if (!isMediaFile(file)) {
       notify('info', '当前只提供音视频站内预览');
       return;
     }
@@ -91,13 +97,16 @@ export function FilesPage() {
   };
 
   const handleRemoveFile = async (file: UploadedFile) => {
-    const confirmed = window.confirm(`确认删除 ${file.originalName} 吗？删除后签名链接会立刻失效。`);
+    const confirmed = window.confirm(
+      `确认删除 ${file.originalName} 吗？删除后${isMediaFile(file) ? '永久媒体链接' : '签名链接'}会立刻失效。`
+    );
     if (!confirmed) return;
 
     try {
       await deleteUploadedFile(file.id);
       await loadFiles(activeFileFolderId);
       setGeneratedFileLink('');
+      setGeneratedLinkIsMedia(false);
       notify('success', '文件已删除');
     } catch (error) {
       notify('error', error instanceof Error ? error.message : '文件删除失败');
@@ -106,6 +115,7 @@ export function FilesPage() {
 
   const handleOpenFolder = (folderId = '') => {
     setGeneratedFileLink('');
+    setGeneratedLinkIsMedia(false);
     openFolder(folderId);
   };
 
@@ -164,7 +174,7 @@ export function FilesPage() {
           <div>
             <p className="eyebrow">Signed Storage</p>
             <h1>文件仓库</h1>
-            <p>上传后的文件默认不公开，只有生成签名链接后才能被外部访问。</p>
+            <p>音视频提供保留原始后缀的永久公开链接，其他文件通过签名链接访问。</p>
           </div>
           <button onClick={() => loadFiles(activeFileFolderId)} type="button">
             刷新列表
@@ -239,7 +249,7 @@ export function FilesPage() {
 
         {generatedFileLink ? (
           <div className="file-link-box">
-            <span>最近生成的签名链接</span>
+            <span>{generatedLinkIsMedia ? '最近生成的永久媒体链接' : '最近生成的签名链接'}</span>
             <code>{generatedFileLink}</code>
           </div>
         ) : null}
