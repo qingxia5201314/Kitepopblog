@@ -67,9 +67,16 @@ function publicFolderView(view) {
 
 app.get('/raw/:id', async (c) => {
   const fileService = c.get('fileService');
-  const id = c.req.param('id');
+  const requestedId = c.req.param('id');
   const token = c.req.query('token') || '';
-  const file = fileService.getFileForToken(id, token);
+  const extensionSeparator = requestedId.lastIndexOf('.');
+  const hasExtension = extensionSeparator > 0 && extensionSeparator < requestedId.length - 1;
+  const file = hasExtension
+    ? fileService.getPublicMedia(
+        requestedId.slice(0, extensionSeparator),
+        requestedId.slice(extensionSeparator + 1)
+      )
+    : fileService.getFileForToken(requestedId, token);
 
   if (!file) {
     return c.json({ ok: false, message: 'File not found' }, 404);

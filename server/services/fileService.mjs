@@ -15,6 +15,9 @@ export function createFileService({ fileStore }) {
     getFileForToken(id, token) {
       return fileStore.getFileForToken(id, token);
     },
+    getPublicMedia(id, extension) {
+      return fileStore.getPublicMedia(id, extension);
+    },
     removeFile(id) {
       return fileStore.removeFile(id);
     }
