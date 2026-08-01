@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import { recoverUtf8Filename } from './filenameEncoding.mjs';
 
 function rows(db, sql, params = []) {
@@ -43,6 +43,12 @@ function safeFolderName(name) {
 
 function normalizeFolderId(folderId) {
   return String(folderId || '').trim();
+}
+
+function mediaExtension(file) {
+  if (!/^(audio|video)\//i.test(file?.contentType || '')) return '';
+  const extension = extname(file.originalName || '').slice(1).toLowerCase();
+  return /^[a-z0-9]{1,16}$/.test(extension) ? extension : '';
 }
 
 function ensureColumn(db, tableName, columnName, definition) {
@@ -234,8 +240,18 @@ export function createFileStore({ database, uploadDir, publicPath = '/api/files/
     },
 
     createAccessLink(id) {
-      const file = rows(db, 'SELECT id FROM uploaded_files WHERE id = ?', [id])[0];
-      if (!file) return null;
+      const row = rows(
+        db,
+        `SELECT id, original_name, storage_name, content_type, size_bytes, uploaded_at, folder_id
+         FROM uploaded_files WHERE id = ?`,
+        [id]
+      )[0];
+      if (!row) return null;
+      const file = rowToFile(row, uploadDir);
+      const extension = mediaExtension(file);
+      if (extension) {
+        return { path: `${publicPath}/${encodeURIComponent(id)}.${encodeURIComponent(extension)}` };
+      }
       const token = randomBytes(32).toString('base64url');
       db.run('UPDATE uploaded_files SET access_token_hash = ? WHERE id = ?', [hashToken(token), id]);
       database.persist();
@@ -243,6 +259,20 @@ export function createFileStore({ database, uploadDir, publicPath = '/api/files/
         token,
         path: `${publicPath}/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`
       };
+    },
+
+    getPublicMedia(id, extension) {
+      const row = rows(
+        db,
+        `SELECT id, original_name, storage_name, content_type, size_bytes, uploaded_at, folder_id
+         FROM uploaded_files WHERE id = ?`,
+        [id]
+      )[0];
+      if (!row) return null;
+      const file = rowToFile(row, uploadDir);
+      const expectedExtension = mediaExtension(file);
+      if (!expectedExtension || expectedExtension !== String(extension || '').toLowerCase()) return null;
+      return existsSync(file.filePath) ? file : null;
     },
 
     getFileForToken(id, token) {

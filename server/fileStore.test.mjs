@@ -124,4 +124,46 @@ describe('file store', () => {
     expect(store.getFileForToken(file.id, link.token)).toBeNull();
     expect(existsSync(file.filePath)).toBe(false);
   });
+
+  it('creates permanent public links for media using the original extension', async () => {
+    const media = await store.saveFile({
+      originalName: 'lesson.MP4',
+      contentType: 'video/mp4',
+      buffer: Buffer.from('video')
+    });
+
+    expect(store.createAccessLink(media.id)).toEqual({
+      path: `/api/files/raw/${encodeURIComponent(media.id)}.mp4`
+    });
+    expect(store.getPublicMedia(media.id, 'mp4')).toMatchObject({
+      id: media.id,
+      originalName: 'lesson.MP4',
+      contentType: 'video/mp4'
+    });
+    expect(store.getPublicMedia(media.id, 'MP4')).toMatchObject({ id: media.id });
+    expect(store.getPublicMedia(media.id, 'webm')).toBeNull();
+  });
+
+  it('keeps non-media and extensionless media behind signed links', async () => {
+    const document = await store.saveFile({
+      originalName: 'notes.mp4',
+      contentType: 'text/plain',
+      buffer: Buffer.from('notes')
+    });
+    const extensionlessMedia = await store.saveFile({
+      originalName: 'recording',
+      contentType: 'audio/mpeg',
+      buffer: Buffer.from('audio')
+    });
+
+    const documentLink = store.createAccessLink(document.id);
+    const extensionlessLink = store.createAccessLink(extensionlessMedia.id);
+
+    expect(documentLink.path).toContain('?token=');
+    expect(documentLink.token).toHaveLength(43);
+    expect(extensionlessLink.path).toContain('?token=');
+    expect(extensionlessLink.token).toHaveLength(43);
+    expect(store.getPublicMedia(document.id, 'mp4')).toBeNull();
+    expect(store.getPublicMedia(extensionlessMedia.id, '')).toBeNull();
+  });
 });
