@@ -229,7 +229,7 @@ export function AdminPage() {
 
     try {
       const autosaved = await saveDraftNow();
-      const postId = autosaved?.editingId ?? editingId;
+      const postId = autosaved?.editingId ?? editingId ?? serverDraft?.editingId;
       const saved = postId ? await updatePost(postId, payload) : await createPost(payload);
       await loadPosts(true);
       notify('success', saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
