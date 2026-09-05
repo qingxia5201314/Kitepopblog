@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPostStore } from '../postStore.mjs';
 import { createSqliteDatabase } from '../sqliteDatabase.mjs';
 import { createDraftService } from './draftService.mjs';
+import { createPostService } from './postService.mjs';
 
 let tempDir;
 
@@ -48,6 +49,19 @@ describe('draft service', () => {
     expect(postStore.get(editable.id)?.title).toBe('Updated draft');
     expect(postStore.get(published.id)?.title).toBe('Published');
     expect(service.get()?.draft.title).toBe('Must not replace published');
+  });
+
+  it('publishes an autosaved draft by updating the same post', async () => {
+    const database = await createSqliteDatabase({ dbPath: join(tempDir, 'blog.sqlite') });
+    const postStore = await createPostStore({ database });
+    const draftService = createDraftService({ postStore });
+    const postService = createPostService({ store: postStore });
+
+    const snapshot = draftService.save({ editingId: null, draft });
+    const published = postService.updatePost(snapshot.editingId, { ...draft, status: 'published' });
+
+    expect(published).toMatchObject({ id: snapshot.editingId, status: 'published', title: draft.title });
+    expect(postStore.list({ includeDrafts: true }).filter((post) => post.title === draft.title)).toHaveLength(1);
   });
 
   it('persists across restart and only offers recovery for newer content that differs from the post', async () => {

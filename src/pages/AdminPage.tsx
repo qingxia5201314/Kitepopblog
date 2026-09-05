@@ -228,7 +228,9 @@ export function AdminPage() {
     };
 
     try {
-      const saved = editingId ? await updatePost(editingId, payload) : await createPost(payload);
+      const autosaved = await saveDraftNow();
+      const postId = autosaved?.editingId ?? editingId;
+      const saved = postId ? await updatePost(postId, payload) : await createPost(payload);
       await loadPosts(true);
       notify('success', saved.status === 'published' ? '文章已保存并发布' : '文章已保存为草稿');
       draftRepository.clear();

@@ -137,8 +137,9 @@ describe('App layout shells', () => {
     return null;
   }
 
-  function fillInput(input: HTMLInputElement, value: string) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+  function fillInput(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
+    const prototype = input instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
     setter?.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -574,6 +575,68 @@ describe('App layout shells', () => {
     });
     expect(adminFetchMock.mock.calls.filter(([input, init]) => String(input) === '/api/posts' && init?.method === 'POST')).toHaveLength(0);
     expect(host.querySelector('.toast')).toBeFalsy();
+  });
+
+  it('publishes an autosaved draft by updating its existing post', async () => {
+    vi.useFakeTimers();
+    window.history.pushState({}, '', '/admin');
+    const adminFetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/users/me') return Response.json(sessionFor('admin'));
+      if (url.startsWith('/api/admin/users')) return Response.json({ users: [] });
+      if (url.startsWith('/api/admin/posts/')) return Response.json({ revisions: [] });
+      if (url === '/api/admin/article-draft' && init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body));
+        return Response.json({ draft: { ...body, editingId: 'auto-draft-1', updatedAt: '2026-07-10T00:00:00.000Z' } });
+      }
+      if (url === '/api/admin/article-draft') return Response.json({ draft: null, ok: true });
+      if (url === '/api/posts/auto-draft-1' && init?.method === 'PUT') {
+        const post = JSON.parse(String(init.body));
+        return Response.json({ post: { ...post, id: 'auto-draft-1', slug: 'auto-draft-1', createdAt: '2026-07-10T00:00:00.000Z', updatedAt: '2026-07-10T00:00:01.000Z' } });
+      }
+      if (url === '/api/posts' && init?.method === 'POST') {
+        return Response.json({ ok: false, message: 'A second post must not be created' }, { status: 500 });
+      }
+      if (url.startsWith('/api/posts')) return Response.json({ posts: [] });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', adminFetchMock);
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    roots.push(root);
+    root.render(<BrowserRouter><AppProvider><BlogDataProvider><AdminAutosaveTestShell /></BlogDataProvider></AppProvider></BrowserRouter>);
+
+    const titleInput = await waitForWithTimers(() => host.querySelector('input[aria-label="文章标题"]')) as HTMLInputElement | null;
+    const summaryInput = host.querySelector('textarea:not(.content-editor)') as HTMLTextAreaElement | null;
+    const contentInput = host.querySelector('textarea.content-editor') as HTMLTextAreaElement | null;
+    const statusSelect = Array.from(host.querySelectorAll('select')).find((select) =>
+      Array.from(select.options).some((option) => option.value === 'published')
+    );
+    expect(titleInput && summaryInput && contentInput && statusSelect).toBeTruthy();
+    fillInput(titleInput!, '自动保存后发布');
+    fillInput(summaryInput!, '不会新建第二篇文章');
+    fillInput(contentInput!, '正文');
+    statusSelect!.value = 'published';
+    statusSelect!.dispatchEvent(new Event('change', { bubbles: true }));
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await waitForWithTimers(() =>
+      adminFetchMock.mock.calls.some(([input, init]) => String(input) === '/api/admin/article-draft' && init?.method === 'PUT') ? host : null
+    )).toBeTruthy();
+
+    const form = host.querySelector('form.editor-panel') as HTMLFormElement | null;
+    expect(form).toBeTruthy();
+    await act(async () => {
+      form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await Promise.resolve();
+    });
+
+    expect(await waitForWithTimers(() =>
+      adminFetchMock.mock.calls.some(([input, init]) => String(input) === '/api/posts/auto-draft-1' && init?.method === 'PUT') ? host : null
+    )).toBeTruthy();
+    expect(adminFetchMock.mock.calls.filter(([input, init]) => String(input) === '/api/posts' && init?.method === 'POST')).toHaveLength(0);
   });
 
   it('switches articles after draft recovery and always opens new articles with an empty form', async () => {
@@ -1543,23 +1606,24 @@ describe('App layout shells', () => {
     expect(errorSpy).not.toHaveBeenCalled();
   });
 
-  it('reloads accounting entries when ledger filters change', async () => {
+  it('reloads accounting entries when ledger filters or month change', async () => {
     window.history.pushState({}, '', '/accounting');
     const pageFetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith('/api/posts')) return fetchMock(input);
       if (url === '/api/users/me') return Response.json(sessionFor('admin'));
       if (url.startsWith('/api/accounting/month')) {
+        const isMay = url.includes('month=2026-05');
         return Response.json({
           entries: [
             {
               id: 'entry-1',
               type: 'expense',
-              amountCents: 2500,
+              amountCents: isMay ? 5100 : 2500,
               category: 'food',
               account: '微信',
-              spentAt: '2026-06-26',
-              note: '',
+              spentAt: isMay ? '2026-05-26' : '2026-06-26',
+              note: isMay ? '五月账单' : '',
               includeInSaving: true,
               createdAt: '2026-06-26T00:00:00.000Z',
               updatedAt: '2026-06-26T00:00:00.000Z'
@@ -1572,7 +1636,7 @@ describe('App layout shells', () => {
           settings: { monthlyBudgetCents: 0, savingGoal: null },
           summary: {
             incomeCents: 0,
-            expenseCents: 2500,
+            expenseCents: isMay ? 5100 : 2500,
             savingIncomeCents: 0,
             savingExpenseCents: 2500,
             savingNetExpenseCents: 2500,
@@ -1619,6 +1683,17 @@ describe('App layout shells', () => {
         ([input]) => String(input).includes('/api/accounting/month?month=') && String(input).includes('category=food')
       )
     ).toBe(true);
+
+    const monthInput = host.querySelector('input[type="month"]') as HTMLInputElement | null;
+    expect(monthInput).toBeTruthy();
+    fillInput(monthInput!, '2026-05');
+    expect(
+      await waitFor(() =>
+        pageFetchMock.mock.calls.some(([input]) => String(input).includes('/api/accounting/month?month=2026-05')) && host.textContent?.includes('¥51.00')
+          ? host
+          : null
+      )
+    ).toBeTruthy();
   });
 
   it('opens the in-site media preview shell for uploaded videos', async () => {

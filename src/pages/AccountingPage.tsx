@@ -110,6 +110,12 @@ export function AccountingPage() {
     void loadAccountingData(accountingMonth, accountingTypeFilter, category);
   };
 
+  const handleAccountingMonthChange = (month: string) => {
+    setAccountingMonth(month);
+    setAccountingEntriesExpanded(false);
+    void loadAccountingData(month, accountingTypeFilter, accountingCategoryFilter);
+  };
+
   return (
     <section className="accounting-page">
       <section className="accounting-hero">
@@ -122,7 +128,7 @@ export function AccountingPage() {
         <div className="accounting-actions">
           <input
             aria-label="选择月份"
-            onChange={(event) => setAccountingMonth(event.target.value)}
+            onChange={(event) => handleAccountingMonthChange(event.target.value)}
             type="month"
             value={accountingMonth}
           />
