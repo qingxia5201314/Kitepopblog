@@ -1,8 +1,9 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { recoverUtf8Filename } from './filenameEncoding.mjs';
+import { compressArticleImage } from './imageCompressor.mjs';
 
 function rows(db, sql, params = []) {
   const statement = db.prepare(sql);
@@ -130,6 +131,31 @@ export function createFileStore({ database, uploadDir, publicPath = '/api/files/
     return trail;
   }
 
+  function newFileRecord({ originalName, contentType, sizeBytes, folderId }) {
+    const id = `file-${randomUUID()}`;
+    const storageName = `${id}-${randomBytes(8).toString('hex')}.bin`;
+    return {
+      id,
+      originalName: safeOriginalName(originalName),
+      storageName,
+      contentType: String(contentType || 'application/octet-stream'),
+      sizeBytes,
+      uploadedAt: new Date().toISOString(),
+      folderId,
+      filePath: join(uploadDir, storageName)
+    };
+  }
+
+  function insertFileRecord(file) {
+    db.run(
+      `INSERT INTO uploaded_files (
+        id, original_name, storage_name, content_type, size_bytes, uploaded_at, access_token_hash, folder_id
+      ) VALUES (?, ?, ?, ?, ?, ?, '', ?)`,
+      [file.id, file.originalName, file.storageName, file.contentType, file.sizeBytes, file.uploadedAt, file.folderId]
+    );
+    database.persist();
+  }
+
   function folderNameExists(parentId, name, exceptId = '') {
     return Boolean(rows(
       db,
@@ -203,31 +229,52 @@ export function createFileStore({ database, uploadDir, publicPath = '/api/files/
       };
     },
 
+    hasFolder(folderId) {
+      const id = normalizeFolderId(folderId);
+      return !id || Boolean(getFolderRow(id));
+    },
+
     async saveFile({ originalName, contentType, buffer, folderId = '' }) {
       const normalizedFolderId = assertFolderExists(folderId);
-      const id = `file-${randomUUID()}`;
-      const bytes = Buffer.from(buffer || '');
-      const storageName = `${id}-${randomBytes(8).toString('hex')}.bin`;
-      const file = {
-        id,
-        originalName: safeOriginalName(originalName),
-        storageName,
-        contentType: String(contentType || 'application/octet-stream'),
-        sizeBytes: bytes.length,
-        uploadedAt: new Date().toISOString(),
-        folderId: normalizedFolderId,
-        filePath: join(uploadDir, storageName)
-      };
+      const rawBytes = Buffer.from(buffer || '');
+
+      // Every in-article image enters the blog through here, so this is the one
+      // place that makes compression permanent rather than a one-off cleanup.
+      // compressArticleImage fails open: on any doubt it returns the input
+      // unchanged, so an upload can never break because compression failed.
+      const optimized = await compressArticleImage(rawBytes, contentType);
+
+      const file = newFileRecord({
+        originalName,
+        contentType: optimized.contentType,
+        sizeBytes: optimized.buffer.length,
+        folderId: normalizedFolderId
+      });
 
       await mkdir(uploadDir, { recursive: true });
-      await writeFile(file.filePath, bytes);
-      db.run(
-        `INSERT INTO uploaded_files (
-          id, original_name, storage_name, content_type, size_bytes, uploaded_at, access_token_hash, folder_id
-        ) VALUES (?, ?, ?, ?, ?, ?, '', ?)`,
-        [file.id, file.originalName, file.storageName, file.contentType, file.sizeBytes, file.uploadedAt, file.folderId]
-      );
-      database.persist();
+      await writeFile(file.filePath, optimized.buffer);
+      insertFileRecord(file);
+      if (optimized.compressed) {
+        console.log(
+          `[image-compression] ${file.id} ${optimized.reason} (${optimized.contentType})`
+        );
+      }
+      return file;
+    },
+
+    async saveStoredFile({ originalName, contentType, sourcePath, folderId = '' }) {
+      const normalizedFolderId = assertFolderExists(folderId);
+      const { size } = await stat(sourcePath);
+      const file = newFileRecord({ originalName, contentType, sizeBytes: size, folderId: normalizedFolderId });
+
+      await mkdir(uploadDir, { recursive: true });
+      await rename(sourcePath, file.filePath);
+      try {
+        insertFileRecord(file);
+      } catch (error) {
+        await rm(file.filePath, { force: true });
+        throw error;
+      }
       return file;
     },
 
